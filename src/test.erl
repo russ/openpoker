@@ -58,6 +58,12 @@ all() ->
     test160(),
     test170(),
     test180(),
+    test190(),
+    test200(),
+    test210(),
+    leave_after_sb(),
+    split_pot(),
+    test220(),
     ok.
 
 %%% Create player
@@ -128,7 +134,7 @@ test40() ->
 	     after 100 ->
 		     none
 	     end,
-    ?match({packet, {?PP_NOTIFY_JOIN, GID, Player, 1, 0}}, Packet),
+    ?match({packet, {?PP_NOTIFY_JOIN, GID, Player, 1,1000, 0}}, Packet),
     player:cast(PID, {?PP_SEAT_QUERY, Game}),
     Packet1 = receive
 		  Any1 ->
@@ -136,7 +142,14 @@ test40() ->
 	      after 100 ->
 		      none
 	      end,
-    ?match({packet, {?PP_SEAT_STATE, GID, 1, ?SS_TAKEN, PID}}, Packet1),
+	Packet2 = receive
+		  Any2 ->
+		      Any2
+	      after 200 ->
+		      none
+	      end,
+	?match({packet, {?PP_NOTIFY_GAME_INPLAY, GID, Player,1000,1,1}}, Packet1),
+    ?match({packet, {?PP_SEAT_STATE, GID, 1, ?SS_TAKEN, PID}}, Packet2),
     ?differ(none, proto:write({?PP_SEAT_STATE, GID, 1, ?SS_TAKEN, PID})),
     cardgame:stop(Game),
     kill_players(Players),
@@ -309,19 +322,21 @@ test120() ->
     Game = make_game(2, [{Pid, 1}]),
     GID = cardgame:call(Game, 'ID'),
     timer:sleep(200),
-    ?match({atomic, Game}, db:get(player, ID, game)),
+    ?match({atomic, [Game]}, db:get(player, ID, games)),
     %% login twice
     ?match({ok, Pid}, login:login(Nick, "foo", Socket)),
-    ?match({atomic, Game}, db:get(player, ID, game)),
+    ?match({atomic, [Game]}, db:get(player, ID, games)),
     ?match({atomic, Socket}, db:get(player, ID, socket)),
     login:logout(ID),
     %% look for notify join
     ?match(success, ?waitmsg({packet, 
-			      {?PP_NOTIFY_JOIN, GID, Pid, 1, 0}}, 100)),
+			      {?PP_NOTIFY_JOIN, GID, Pid, 1,1000, 0}}, 100)),
     %% look for game update packets.
     %% we should have just one.
     ?match(success, ?waitmsg({packet, 
-			      {?PP_NOTIFY_JOIN, GID, Pid, 1, 0}}, 100)),
+			      {?PP_NOTIFY_GAME_INPLAY, GID, Pid, 1000,1, 1}}, 100)),
+    ?match(success, ?waitmsg({packet, 
+			      {?PP_NOTIFY_JOIN, GID, Pid, 1,1000, 0}}, 100)),
     {atomic, ok} = db:delete(player, ID),
     cardgame:stop(Game),
     ok.
@@ -357,7 +372,7 @@ test140() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port),
+    {ok, Server} = server:start(Host, Port,true),
     timer:sleep(3000),
     %% create dummy players
     Nick = "test14-1",
@@ -387,7 +402,7 @@ test150() ->
     Host = localhost, 
     Port = 10000,
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port),
+    {ok, Server} = server:start(Host, Port,true),
     timer:sleep(3000),
     %% find an empty game
     find_game(Host, Port),
@@ -402,7 +417,7 @@ test160() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port),
+    {ok, Server} = server:start(Host, Port,true),
     timer:sleep(2000),
     %% find an empty game
     GID = find_game(Host, Port),
@@ -413,6 +428,7 @@ test160() ->
 		      [{"test160-bot1", 1, ['BLIND', 'FOLD']},
 		       {"test160-bot2", 2, ['BLIND']}]),
     %% make sure game is started
+    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
     ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
     %% check balances
     ?match({atomic, 0.0}, db:get(player, ID1, balance)),
@@ -433,6 +449,43 @@ test160() ->
     server:stop(Server),
     ok.
 
+%%% Test leaving after small blind is posted
+
+empty_message_queue() ->
+    receive Any ->
+            io:format("empty_message_queue: ~w~n", [Any]),
+            empty_message_queue()
+    after 0 ->
+            ok
+    end.
+
+leave_after_sb() ->
+    Host = "localhost", 
+    Port = 10000,
+    db:delete(player),
+    db:delete(game_xref),
+    {ok, Server} = server:start(Host, Port,true),
+    timer:sleep(2000),
+    %% find an empty game
+    GID = find_game(Host, Port),
+    %% create dummy players
+    Data
+	= [{_ID2, _}, {_ID1, _}, _]
+	= setup_game(Host, Port, GID,
+		      [{"leave-after-sb-bot1", 1, ['BLIND', 'LEAVE']},
+		       {"leave-after-sb-bot2", 2, ['LEAVE']}]),
+    %% make sure game is started
+    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
+    ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
+    empty_message_queue(),
+    %% wait for game to end
+    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT * 2)),
+    %% clean up
+    timer:sleep(2000),
+    cleanup_game(Data),
+    server:stop(Server),
+    ok.
+
 %%% Start game dynamically
 
 test170() ->
@@ -440,7 +493,7 @@ test170() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port),
+    {ok, Server} = server:start(Host, Port,true),
     timer:sleep(3000),
     %% create dummy players
     Nick = pid_to_list(self()),
@@ -491,7 +544,7 @@ test180() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port),
+    {ok, Server} = server:start(Host, Port,true),
     timer:sleep(3000),
     Nick = pid_to_list(self()),
     {atomic, ID} = player:create(Nick, "foo", "", 1000.0),
@@ -525,7 +578,7 @@ test190() ->
     db:delete(player),
     db:delete(game_xref),
     multibot:create_players(),
-    {ok, Server} = server:start(Host, Port),
+    {ok, Server} = server:start(Host, Port,true),
     timer:sleep(3000),
     {atomic, Players} = db:find(player),
     test190(Host, Port, Players),
@@ -546,6 +599,212 @@ test190(Host, Port, [Player|Rest])
     ?match(success, ?waittcp({?PP_GOOD, ?PP_LOGOUT, 0}, 2000)),
     gen_tcp:close(Socket),
     test190(Host, Port, Rest).
+
+%%% Play two games in a row
+
+test200() ->
+    Host = "localhost", 
+    Port = 10000,
+    db:delete(player),
+    db:delete(game_xref),
+    {ok, Server} = server:start(Host, Port,true),
+    timer:sleep(2000),
+    %% find an empty game
+    GID = find_game(Host, Port),
+    %% create dummy players
+    Data
+	= [{_ID2, _}, {_ID1, _}, _]
+	= setup_game(Host, Port, GID, 2, % games to play
+                     [{"test200-bot1", 1, ['BLIND', 'FOLD', 'BLIND', 'FOLD']},
+                      {"test200-bot2", 2, ['BLIND', 'BLIND', 'FOLD']}]),
+    %% make sure game is started
+    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
+    ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
+    %% wait for game to end
+    ?match(success, ?waitmsg({'END', GID, _Winners}, ?PLAYER_TIMEOUT)),
+    %% and start another round
+    ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
+    ?match(success, ?waitmsg({'END', GID, _Winners}, ?PLAYER_TIMEOUT)),
+    empty_message_queue(),
+    %% clean up
+    timer:sleep(2000),
+    cleanup_game(Data),
+    server:stop(Server),
+    ok.
+
+%%% A variation on the above to test handling
+%%% of player leave during a running game.
+
+test210() ->
+    Host = "localhost", 
+    Port = 10000,
+    db:delete(player),
+    db:delete(game_xref),
+    {ok, Server} = server:start(Host, Port,true),
+    timer:sleep(2000),
+    %% find an empty game
+    GID = find_game(Host, Port),
+    %% create dummy players
+    Data
+	= [{_ID2, _}, {_ID1, _}, {_ID3, _}, _]
+	= setup_game(Host, Port, GID, 1, % games to play
+                     [{"bot1", 1, ['BLIND', 'RAISE', 'CALL', 'CHECK', 'CHECK']},
+                      {"bot2", 2, ['BLIND', 'QUIT']},
+                      {"bot3", 3, ['RAISE', 'CALL', 'CALL', 'CHECK', 'CHECK']}
+                     ]),
+    %% make sure game is started
+    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
+    ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
+    %% wait for game to end
+    ?match(success, ?waitmsg({'END', GID, _Winners}, ?PLAYER_TIMEOUT)),
+    %% clean up
+    timer:sleep(2000),
+    cleanup_game(Data),
+    server:stop(Server),
+    ok.
+
+make_winners(L) 
+  when is_list(L) ->
+    make_winners(L, gb_trees:empty()).
+
+make_winners([], Tree) ->
+    Tree;
+
+make_winners([{Seat, Amount}|T], Tree) ->
+    make_winners(T, gb_trees:insert(Seat, Amount, Tree)).
+    
+%%% Hands weren't reset at the start of each game. This caused 
+%%% the pot to "stay split" after the first time and thus cause
+%%% the same outcome regardless of cards.
+
+set_games_to_play(_, []) ->
+    ok;
+
+set_games_to_play(N, [H|T]) ->
+    gen_server:cast(H, {'GAMES TO PLAY', N}),
+    set_games_to_play(N, T).
+    
+split_pot() ->
+    Host = "localhost", 
+    Port = 10000,
+    db:delete(player),
+    db:delete(game_xref),
+    {ok, Server} = server:start(Host, Port,true),
+    timer:sleep(2000),
+    %% find an empty game
+    GID = find_game(Host, Port),
+    %% create dummy players
+    Actions1 = ['BLIND', 'CHECK', 'RAISE', 'CHECK', 'CHECK'],
+    Actions2 = ['BLIND', 'CHECK', 'CALL', 'CHECK', 'CHECK'],
+    Data = [ {_, P2}, {_, P1}, {_, Obs} ]
+	= setup_game(Host, Port, GID, 2, % games to play
+                     [{"split-pot-bot1", 1, []},
+                      {"split-pot-bot2", 2, []}
+                     ]),
+    %% make sure game is started
+    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
+    wait_for_split_pot(GID, Obs, {P1, Actions1}, {P2, Actions2}, 0),
+    N = 3,
+    set_games_to_play(N, [P1, P2, Obs]),
+    check_pot(GID, Obs, {P1, Actions1}, {P2, Actions2}, N),
+    empty_message_queue(),
+    %% clean up
+    timer:sleep(2000),
+    cleanup_game(Data),
+    server:stop(Server),
+    ok.
+
+wait_for_split_pot(_, _, _, _, 2) ->
+    ok;
+
+wait_for_split_pot(GID, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, _) ->
+    gen_server:cast(P1, {'SET ACTIONS', Actions1}),
+    gen_server:cast(P2, {'SET ACTIONS', Actions2}),
+    set_games_to_play(3, [P1, P2, Obs]),
+    ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
+    %% wait for game to end
+    Winners = receive
+                  {'END', GID, Tree} ->
+                      Tree;
+                  _ ->
+                      ?match(0, 1)
+              after ?PLAYER_TIMEOUT ->
+                      ?match(0, 2)
+              end,
+    wait_for_split_pot(GID, Obs, X, Y, gb_trees:size(Winners)).
+
+check_pot(_, _, _, _, 0) ->
+    ok;
+
+check_pot(GID, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, N) ->
+    gen_server:cast(P1, {'SET ACTIONS', Actions1}),
+    gen_server:cast(P2, {'SET ACTIONS', Actions2}),
+    ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
+    %% wait for game to end
+    Winners = receive
+                  {'END', GID, Tree} ->
+                      Tree;
+                  _ ->
+                      ?match(0, 1)
+              after ?PLAYER_TIMEOUT ->
+                      ?match(0, 2)
+              end,
+    io:format("--- Winners: ~w, ~w~n", [gb_trees:size(Winners), Winners]),
+    check_pot(GID, Obs, X, Y, N - 1).
+
+%%% Leave out of turn
+
+filter_220({?PP_GAME_STAGE, _, ?GS_RIVER, _}, Bot, Player) ->
+    io:format("Elvis #~w is leaving the building!~n", [Bot#bot.player]),
+    gen_server:cast(Player, {?PP_LEAVE, Bot#bot.game}),
+    gen_server:cast(Player, ?PP_LOGOUT),
+    {stop, Bot#bot{ done = true }};
+
+filter_220(_, Bot, _Player) ->
+    {none, Bot}.
+        
+test220() ->
+    Host = "localhost", 
+    Port = 10000,
+    db:delete(player),
+    db:delete(game_xref),
+    {ok, Server} = server:start(Host, Port,true),
+    timer:sleep(2000),
+    %% find an empty game
+    GID = find_game(Host, Port),
+    %% create dummy players
+    Data 
+        = [{_, P3}, _, _, _]
+	= setup_game(Host, Port, GID, 1, % games to play
+                     [{"test220-bot1", 1, ['BLIND', %1
+                                           'CALL', %1
+                                           'CHECK', %2
+                                           'CHECK', %3
+                                           'CHECK'
+                                          ]},
+                      {"test220-bot2", 2, ['BLIND', %1
+                                           'CALL', %1
+                                           'CHECK', %2
+                                           'CHECK', %3
+                                           'CHECK'
+                                          ]},
+                      {"test220-bot3", 3, []}
+                     ]),
+    Filter = fun(Event, Bot) ->
+                     filter_220(Event, Bot, P3)
+             end,
+    Actions = ['RAISE', 'CALL', 'CHECK', {'FILTER', Filter}],
+    gen_server:cast(P3, {'SET ACTIONS', Actions}),    
+    %% make sure game is started
+    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
+    ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
+    %% wait for game to end
+    ?match(success, ?waitmsg({'END', GID, _Winners}, ?PLAYER_TIMEOUT)),
+    %% clean up
+    timer:sleep(2000),
+    cleanup_game(Data),
+    server:stop(Server),
+    ok.
 
 %%% Populate a dummy game to test the client
 
@@ -600,11 +859,14 @@ make_test_game(Players, Context, Modules) ->
     make_test_game(length(Players), Players, Context, Modules).
 
 make_test_game(SeatCount, Players, Context, Modules) ->
+    TableName = testGame ,
+    Timeout = ?PLAYER_TIMEOUT,
+    MinPlayers = 2,
     {ok, Game} = cardgame:test_start(?GT_IRC_TEXAS, 
 				     SeatCount, 
 				     {?LT_FIXED_LIMIT, 10, 20}, 
 				     Context, 
-				     Modules),
+				     Modules, TableName, Timeout, MinPlayers),
     cardgame:cast(Game, {'TIMEOUT', 3000}),
     join_game(Game, Players),
     Game.
@@ -672,47 +934,57 @@ flush() ->
     end.
 
 connect_observer(Host, Port, GID) ->
-    connect_observer(Host, Port, GID, false).
+    connect_observer(Host, Port, GID, 1, false).
 
 connect_observer(Host, Port, GID, Trace) ->
+    connect_observer(Host, Port, GID, 1, Trace).
+
+connect_observer(Host, Port, GID, GamesToWatch, Trace) ->
     {ok, Obs} = observer:start(self()),
     gen_server:cast(Obs, {'TRACE', Trace}),
+    gen_server:cast(Obs, {'GAMES TO PLAY', GamesToWatch}),
     ok = gen_server:call(Obs, {'CONNECT', Host, Port}, 15000),
     gen_server:cast(Obs, {?PP_WATCH, GID}),
     {0, Obs}.
 
-connect_player(Nick, Host, Port, GID, SeatNum, Actions) ->
+connect_player(Nick, Host, Port, GID, SeatNum, GamesToPlay, Actions) ->
     {atomic, ID} = player:create(Nick, "foo", "", 1000),
     {ok, Bot} = bot:start(Nick, SeatNum, SeatNum, 1000),
     gen_server:cast(Bot, {'SET ACTIONS', Actions}),
+    gen_server:cast(Bot, {'GAMES TO PLAY', GamesToPlay}),
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, 15000),
     gen_server:cast(Bot, {?PP_LOGIN, Nick, "foo"}),
     gen_server:cast(Bot, {?PP_WATCH, GID}),
     {ID, Bot}.
 
-setup_game(Host, Port, GID, Bots)
+setup_game(Host, Port, GID, Bots) ->
+    setup_game(Host, Port, GID, 1, Bots).
+    
+setup_game(Host, Port, GID, GamesToPlay, Bots)
   when is_list(Host),
        is_number(Port),
        is_number(GID),
+       is_number(GamesToPlay),
        is_list(Bots) ->
-    X = connect_observer(Host, Port, GID, true),
-    setup_game(Host, Port, GID, Bots, [X]);
+    X = connect_observer(Host, Port, GID, GamesToPlay, true),
+    setup_game(Host, Port, GID, GamesToPlay, Bots, [X]);
     
-setup_game(_Host, _Port, _GID, []) ->
+setup_game(_Host, _Port, _GID, _GamesToPlay, []) ->
     [].
 
-setup_game(Host, Port, GID, [{Nick, SeatNum, Actions}|Rest], Cleanup) 
+setup_game(Host, Port, GID, Games, [{Nick, SeatNum, Actions}|Rest], Cleanup) 
   when is_list(Host),
        is_number(Port),
        is_number(GID),
        is_list(Nick),
        is_number(SeatNum),
+       is_number(Games),
        is_list(Actions),
        is_list(Cleanup) ->
-    X = connect_player(Nick, Host, Port, GID, SeatNum, Actions),
-    setup_game(Host, Port, GID, Rest, [X|Cleanup]);
+    X = connect_player(Nick, Host, Port, GID, SeatNum, Games, Actions),
+    setup_game(Host, Port, GID, Games, Rest, [X|Cleanup]);
 
-setup_game(_Host, _Port, _GID, [], Cleanup) ->
+setup_game(_Host, _Port, _GID, _GamesToPlay, [], Cleanup) ->
     Cleanup.
 
 cleanup_game([]) ->

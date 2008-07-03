@@ -12,18 +12,6 @@
 -include("common.hrl").
 -include("proto.hrl").
 
--record(bot, {
-	  nick,
-	  player,
-	  game,
-	  socket,
-	  actions,
-	  balance,
-	  seat_num,
-	  irc_game_id,
-	  done
-	 }).
-
 new(IRC_ID, Nick, SeatNum, Balance) ->
     Bot = #bot {
       nick = Nick,
@@ -32,9 +20,11 @@ new(IRC_ID, Nick, SeatNum, Balance) ->
       balance = Balance,
       socket = none,
       actions = [],
+      filters = [],
       seat_num = SeatNum,
       irc_game_id = IRC_ID,
-      done = false
+      done = false,
+      games_to_play = 1
      },
     Bot.
 
@@ -55,10 +45,10 @@ terminate(_Reason, Bot) ->
 	Socket ->
 	    if 
 		not Bot#bot.done ->
-		    error_logger:warning_report([{message, "Premature connection close"},
-						 {module, ?MODULE},
-						 {line, ?LINE},
-						 {bot, Bot}]);
+		    error_logger:info_report([{message, "Premature connection close"},
+                                              {module, ?MODULE},
+                                              {line, ?LINE},
+                                              {bot, Bot}]);
 		true ->
 		    ok
 	    end,
@@ -67,11 +57,20 @@ terminate(_Reason, Bot) ->
     ok.
 
 handle_cast({'SET ACTIONS', Actions}, Bot) ->
+    {Filters, Actions1} = extract_filters(Actions),
     Bot1 = Bot#bot {
-	     actions = Actions
+	     actions = Actions1,
+             filters = Filters
 	    },
     {noreply, Bot1};
     
+handle_cast({'GAMES TO PLAY', N}, Bot) ->
+    {noreply, Bot#bot{ games_to_play = N}};
+
+handle_cast(X = {'NOTIFY LEAVE',_,_}, Bot) ->
+    gen_server:cast(Bot#bot.player, X),
+    {noreply, Bot};
+
 handle_cast(stop, Bot) ->
     {stop, normal, Bot};
 
@@ -103,11 +102,11 @@ handle_call(Event, From, Bot) ->
 handle_info({tcp_closed, Socket}, Bot) ->
     if 
 	not Bot#bot.done ->
-	    error_logger:warning_report([{message, "Premature connection close"},
-					 {module, ?MODULE},
-					 {line, ?LINE},
-					 {socket, Socket},
-					 {bot, Bot}]);
+	    error_logger:info_report([{message, "Premature connection close"},
+                                      {module, ?MODULE},
+                                      {line, ?LINE},
+                                      {socket, Socket},
+                                      {bot, Bot}]);
 	true ->
 	    ok
     end,
@@ -118,7 +117,8 @@ handle_info({tcp, _Socket, Bin}, Bot) ->
 	none ->
 	    {noreply, Bot};
 	Event ->
-	    handle(Event, Bot)
+            Bot1 = process_filters(Event, Bot),
+	    handle(Event, Bot1)
     end;
 	    
 handle_info({'EXIT', _Pid, _Reason}, Bot) ->
@@ -143,13 +143,24 @@ handle({?PP_PID, PID}, Bot) ->
 
 handle({?PP_GAME_INFO, _GID, ?GT_IRC_TEXAS, 
 	_Expected, _Joined, _Waiting,
-	{?LT_FIXED_LIMIT, _Low, _High}}, Bot) ->
+	{_Limit, _Low, _High}}, Bot) ->
     {noreply, Bot};
 
 handle({?PP_PLAYER_INFO, _PID, _InPlay, _Nick, _Location}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_JOIN, GID, PID, _SeatNum, _Seq}, Bot) ->
+handle({?PP_NOTIFY_JOIN, GID, PID, _SeatNum,_BuyIn, _Seq}, Bot) ->
+    Bot1 = if
+	       PID == Bot#bot.player ->
+		   Bot#bot {
+		     game = GID
+		    };
+	       true ->
+		   Bot
+	   end,
+    {noreply, Bot1};
+
+handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, _GameInplay,_SeatNum, _Seq}, Bot) ->
     Bot1 = if
 	       PID == Bot#bot.player ->
 		   Bot#bot {
@@ -190,6 +201,13 @@ handle({?PP_BET_REQ, GID, Amount}, Bot) ->
 	'FOLD' ->
 	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
 	    {noreply, Bot1};
+	'LEAVE' ->
+	    handle_cast({?PP_LEAVE, Bot1#bot.game}, Bot1),
+	    {noreply, Bot1};
+	'QUIT' ->
+	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
+	    handle_cast({?PP_LEAVE , Bot1#bot.game}, Bot1),
+	    {noreply, Bot1#bot{ done = true }};
 	_ ->
 	    error_logger:error_report([{message, "Unexpected blind request, folding!"},
 				       {module, ?MODULE}, 
@@ -271,9 +289,13 @@ handle({?PP_BET_REQ, GID, Call, RaiseMin, RaiseMax}, Bot) ->
 	'FOLD' ->
 	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
 	    {noreply, Bot1};
+	'LEAVE' ->
+	    handle_cast({?PP_LEAVE , Bot1#bot.game}, Bot1),
+	    {noreply, Bot1};
 	'QUIT' ->
 	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
-	    {noreply, Bot1};
+	    handle_cast({?PP_LEAVE , Bot1#bot.game}, Bot1),
+	    {noreply, Bot1#bot{ done = true}};
 	_ ->
 	    error_logger:error_report([{message, "Unexpected bet request, folding!"},
 				       {module, ?MODULE}, 
@@ -305,7 +327,8 @@ handle({?PP_GAME_STAGE, _GID, _Stage, _Seq}, Bot) ->
 handle({?PP_NOTIFY_START_GAME, _GID, _Seq}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_END_GAME, GID, _Seq}, Bot) ->
+handle({?PP_NOTIFY_END_GAME, GID, _Seq}, Bot) 
+  when Bot#bot.games_to_play == 1 ->
     %%io:format("Bot ~w leaving ~w at ~w~n",
     %%		      [Bot#bot.player, GID, now()]),
     ok = ?tcpsend(Bot#bot.socket, {?PP_LEAVE, GID}),
@@ -314,6 +337,9 @@ handle({?PP_NOTIFY_END_GAME, GID, _Seq}, Bot) ->
 	     done = true
 	    },
     {stop, normal, Bot1};
+
+handle({?PP_NOTIFY_END_GAME, _GID, _Seq}, Bot) ->
+    {noreply, Bot#bot{ games_to_play = Bot#bot.games_to_play - 1 }};
 
 handle({?PP_NOTIFY_CANCEL_GAME, GID, _Seq}, Bot) ->
     ok = ?tcpsend(Bot#bot.socket, {?PP_JOIN, GID, 
@@ -360,6 +386,43 @@ handle(Event, Bot) ->
 			      {event, Event}]),
     {noreply, Bot}.
 
+
+%%% Filters are supplied as part of the action list
+%%% so we need to extract them out
+
+extract_filters(Actions) ->
+    extract_filters(Actions, [], []).
+
+extract_filters([], Filters, Actions) ->
+    {Filters, lists:reverse(Actions)};
+
+extract_filters([{'FILTER', Fun}|T], Filters, Actions) ->
+    extract_filters(T, [Fun|Filters], Actions);
+
+extract_filters([H|T], Filters, Actions) ->
+    extract_filters(T, Filters, [H|Actions]).
+
+process_filters(Event, Bot) ->
+    process_filters(Event, Bot, Bot#bot.filters, []).
+
+process_filters(_Event, Bot, [], Filters) ->
+    Bot#bot{ filters = Filters };
+
+process_filters(Event, Bot, [Fun|Rest], Filters) ->
+    {Filter, Bot1} = Fun(Event, Bot),
+    Filters1 = case Filter of
+                   stop ->
+                       %% this filter is finished
+                       Filters;
+                   none ->
+                       %% no events processed
+                       [Fun|Filters];
+                   true ->
+                       %% event processed
+                       %% new filter returned
+                       [Filter|Filters]
+               end,
+    process_filters(Event, Bot1, Rest, Filters1).
     
 
 

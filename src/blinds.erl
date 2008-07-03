@@ -9,12 +9,13 @@
 -export([handle_event/3, handle_info/3, 
 	 handle_sync_event/4, code_change/4]).
 
--export([small_blind/2, big_blind/2]).
+-export([small_blind/2, big_blind/2, join/6]).
 
 -include("common.hrl").
 -include("test.hrl").
 -include("texas.hrl").
 -include("proto.hrl").
+-include("schema.hrl").
 
 -record(data, {
 	  game,
@@ -145,10 +146,8 @@ small_blind({?PP_CALL, Player, Amount}, Data) ->
 	true ->
 	    %% it's us
 	    cancel_timer(Data),
-	    InPlay = gen_server:call(Player, 'INPLAY'),
 	    if 
-		(ExpAmount /= Amount) and
-		(InPlay /= Amount) ->
+		(ExpAmount /= Amount) ->
 		    timeout(Data, Player, small_blind);
 		true ->
 		    %% small blind posted
@@ -213,10 +212,8 @@ big_blind({?PP_CALL, Player, Amount}, Data) ->
 	true ->
 	    %% it's us
 	    cancel_timer(Data),
-	    InPlay = gen_server:call(Player, 'INPLAY'),
 	    if 
-		(ExpAmount /= Amount) and
-		(InPlay /= Amount) ->
+		(ExpAmount /= Amount) ->
 		    timeout(Data, Player, big_blind);
 		true ->
 		    %% big blind posted
@@ -362,6 +359,7 @@ code_change(_OldVsn, State, Data, _Extra) ->
 timeout(Data, Player, State) ->
     cancel_timer(Data),
     Game = Data#data.game,
+    util:update_timeout_history(Game,Player),
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
     case State of
 	small_blind ->
@@ -377,6 +375,7 @@ timeout(Data, Player, State) ->
     end,
     Players1 = lists:delete(Seat, Players),
     %%gen_server:cast(Game, {?PP_LEAVE, Player}), % kick player
+    io:format("Player- ~w is Sitting out in Game No- ~w ~n",[Player,Game]),
     gen_server:cast(Game, {'SET STATE', Player, ?PS_SIT_OUT}),
     if
 	length(Players1) < Expected ->
@@ -388,22 +387,25 @@ timeout(Data, Player, State) ->
 
 
 join(Data, Player, SeatNum, BuyIn, State) ->
-    Game = Data#data.game,
-    gen_server:cast(Game, {?PP_JOIN, Player, SeatNum, BuyIn, ?PS_MAKEUP_BB}),
+    join(Data, Player, SeatNum, BuyIn, State, ?PS_MAKEUP_BB).
+
+join(Data, Player, SeatNum, BuyIn, State, PlayerState) ->
+    Game = element(2, Data),
+    gen_server:cast(Game, {?PP_JOIN, Player, SeatNum, BuyIn, PlayerState}),
     {next_state, State, Data}.
 
 leave(Data, Player, State) ->
     Game = Data#data.game,
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
     if
-	%% small blind can't leave
-	%% while we are collecting
-	%% the big blind
 	(State == big_blind) and 
 	(Seat == Data#data.small_blind_seat) ->
-	    oops;
+            %% fold and leave next time 
+            %% a bet is requested from us
+	    gen_server:cast(Game, {?PP_LEAVE, Player});
 	true ->
-	    gen_server:cast(Game, {?PP_LEAVE, Player})
+            %% leave now
+	    gen_server:cast(Game, {?PP_LEAVE, Player, ?PS_ANY})
     end,
     {next_state, State, Data}.
 
@@ -453,7 +455,7 @@ cancel_timer(Data) ->
 restart_timer(Data, Msg) ->
     Timeout = gen_server:call(Data#data.game, 'TIMEOUT'),
     Data#data {
-      timer = cardgame:start_timer(Timeout, Msg)
+      timer = cardgame:start_timer(trunc(Timeout/2), Msg)
      }.
 
 %%%

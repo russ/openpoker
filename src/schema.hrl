@@ -7,6 +7,7 @@
 
 -record(player, {
 	  oid, % object id
+	  user_id, % external user id
 	  nick,
 	  password,
 	  location,
@@ -15,7 +16,7 @@
 	  login_errors = 0,
 	  pid = none, % process id
 	  socket = none, % socket process
-	  game = none, % current game
+	  games = [], % games we are playing
 	  disabled = false % player is disabled
 	 }).
 
@@ -23,23 +24,17 @@
 	  oid,
 	  pid,
 	  type,
-	  limit
+	  limit,
+          table_name,
+          seat_count,
+          timeout,
+          min_players
 	 }).
 
 -record(seat_history, {
 	  nick,
 	  hand,
 	  state
-	 }).
-
--record(game_history, {
-	  key,
-	  type,
-	  seats,
-	  limit,
-	  board,
-	  pot,
-	  events
 	 }).
 
 %% app config

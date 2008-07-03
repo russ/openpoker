@@ -9,7 +9,7 @@
 
 %% export the gen_fsm interface
 
--export([start/3, start/5, test_start/5,
+-export([start/3, start/5, start/6, test_start/8,
 	 send_event/2, sync_send_event/2, sync_send_event/3,
 	 send_all_state_event/2, sync_send_all_state_event/2,
 	 sync_send_all_state_event/3, reply/2, send_event_after/2,
@@ -54,9 +54,22 @@ behaviour_info(Other) ->
 	 }).
 
 start(GameType, SeatCount, LimitType) ->
-    start(GameType, SeatCount, LimitType, ?START_DELAY, ?PLAYER_TIMEOUT).
+
+	TableName = testGame, 
+	MinPlayers  = 2 ,	
+    start(GameType, SeatCount, LimitType, ?START_DELAY, ?PLAYER_TIMEOUT, TableName, MinPlayers).
 
 start(GameType, SeatCount, LimitType, Delay, Timeout) ->
+
+	TableName = testGame, 
+	MinPlayers  = 2 ,
+	start(GameType, SeatCount, LimitType, Delay, Timeout, TableName, MinPlayers) .
+
+%%called directly to create a new game instead of start/3
+start(GameType, SeatCount, LimitType, Timeout, TableName, MinPlayers) ->
+	start(GameType, SeatCount, LimitType, ?START_DELAY, Timeout, TableName, MinPlayers).
+
+start(GameType, SeatCount, LimitType, Delay, Timeout, TableName, MinPlayers) ->
     %% create game stack. context is used to propagate 
     %% game information from module to module, e.g. button
     %% and blinds position for texas hold'em
@@ -118,7 +131,7 @@ start(GameType, SeatCount, LimitType, Delay, Timeout) ->
     end,
     %% start the cardgame finite state machine
     case gen_fsm:start(?MODULE, [self(), GameType, SeatCount, LimitType, 
-				 Context, Modules], []) of
+				 Context, Modules, TableName,Timeout,MinPlayers], []) of
 	{ok, Pid} = X ->
 	    cardgame:cast(Pid, {'TIMEOUT', Timeout}),
 	    X;
@@ -126,9 +139,9 @@ start(GameType, SeatCount, LimitType, Delay, Timeout) ->
 	    Any
     end.
 
-test_start(GameType, SeatCount, Limit, Context, Modules) ->
+test_start(GameType, SeatCount, Limit, Context, Modules, TableName,Timeout,MinPlayers) ->
     gen_fsm:start(?MODULE, [self(), GameType, SeatCount, Limit, 
-			    Context, Modules], []).
+			    Context, Modules, TableName,Timeout,MinPlayers], []).
 %%
 %% The gen_fsm API functions
 %%
@@ -167,7 +180,7 @@ cancel_timer(Ref) ->
 %% The gen_fsm call backs
 %%
 
-init([Parent, GameType, SeatCount, LimitType, Context, Modules]) 
+init([Parent, GameType, SeatCount, LimitType, Context, Modules, TableName,Timeout,MinPlayers]) 
   when is_pid(Parent), 
        is_number(SeatCount), 
        is_tuple(LimitType),
@@ -175,7 +188,7 @@ init([Parent, GameType, SeatCount, LimitType, Context, Modules])
        is_list(Modules) ->
     process_flag(trap_exit, true),
     {Module, Args} = hd(Modules),
-    {ok, Game} = game:start(self(), GameType, SeatCount, LimitType),
+    {ok, Game} = game:start(self(), GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers),
     Ctx = #data {
       parent = Parent,
       game = Game,

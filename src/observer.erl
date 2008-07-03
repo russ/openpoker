@@ -20,7 +20,9 @@
 	  player,
 	  socket,
 	  winners,
-	  seats
+	  seats,
+          games_to_watch,
+          cancel_count
 	 }).
 
 new(Parent) ->
@@ -30,7 +32,9 @@ new(Parent) ->
      player = none,
      socket = none,
      winners = gb_trees:empty(),
-     seats = gb_trees:empty()
+     seats = gb_trees:empty(),
+     games_to_watch = 1,
+     cancel_count = -1
     }.
 
 start(Parent) ->
@@ -63,6 +67,13 @@ handle_cast({'TRACE', On}, Data) ->
 	      trace = On
 	     },
     {noreply, Data1};
+
+handle_cast({'GAMES TO PLAY', N}, Data) ->
+    {noreply, Data#data{ games_to_watch = N}};
+
+handle_cast(X = {'NOTIFY LEAVE',_, _}, Data) ->
+    gen_server:cast(Data#data.player, X),
+    {noreply, Data};
 
 handle_cast(stop, Data) ->
     {stop, normal, Data};
@@ -122,7 +133,7 @@ code_change(_OldVsn, Data, _Extra) ->
 
 handle({?PP_GAME_INFO, GID, ?GT_IRC_TEXAS, 
 	Expected, Joined, Waiting,
-	{Limit, Low, High}}, Data) ->
+	{_Limit, Low, High}}, Data) ->
     if 
 	Data#data.trace ->
 	    io:format("Game #~w, #players: ~w, joined: ~w, waiting: ~w; ",
@@ -150,7 +161,7 @@ handle({?PP_PLAYER_INFO, PID, InPlay, Nick, Location}, Data) ->
 	    {noreply, Data}
     end;
 
-handle({?PP_NOTIFY_JOIN, GID, PID, SeatNum, _Seq}, Data) ->
+handle({?PP_NOTIFY_JOIN, GID, PID, SeatNum,_BuyIn, _Seq}, Data) ->
     if
 	Data#data.trace ->
 	    io:format("~w: JOIN: ~w at seat#~w~n",
@@ -162,6 +173,16 @@ handle({?PP_NOTIFY_JOIN, GID, PID, SeatNum, _Seq}, Data) ->
 	      seats = gb_trees:insert(PID, SeatNum, Data#data.seats)
 	     },
     {noreply, Data1};
+
+handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, GameInplay,SeatNum, _Seq}, Data) ->
+    if
+	Data#data.trace ->
+	    io:format("GID#:  ~w PID#~w: At Seat No:~w GAME INPLAY: ~w  ~n",
+		      [GID, PID,SeatNum, GameInplay]);
+	true ->
+	    ok
+    end,
+   {noreply, Data};
 
 handle({?PP_NOTIFY_CHAT, GID, PID, _Seq, Message}, Data) ->
     if
@@ -297,7 +318,7 @@ handle({?PP_NOTIFY_START_GAME, GID, _Seq}, Data) ->
 	    ok
     end,
     Data#data.parent ! {'START', GID},
-    {noreply, Data};
+    {noreply, Data#data{ winners = gb_trees:empty()}};
 
 handle({?PP_NOTIFY_BUTTON, GID, SeatNum, _Seq}, Data) ->
     if
@@ -333,7 +354,15 @@ handle({?PP_NOTIFY_CANCEL_GAME, GID, _Seq}, Data) ->
 	true ->
 	    ok
     end,
-    {noreply, Data};
+    Data#data.parent ! {'CANCEL', GID},
+    N = Data#data.cancel_count,
+    if
+        N == Data#data.games_to_watch ->
+            ok = ?tcpsend(Data#data.socket, {?PP_UNWATCH, GID}),
+            {stop, normal, Data};
+        true ->
+            {noreply, Data#data{ cancel_count = N + 1}}
+    end;
 
 handle({?PP_NOTIFY_END_GAME, GID, _Seq}, Data) ->
     if
@@ -343,8 +372,14 @@ handle({?PP_NOTIFY_END_GAME, GID, _Seq}, Data) ->
 	    ok
     end,
     Data#data.parent ! {'END', GID, Data#data.winners},
-    ok = ?tcpsend(Data#data.socket, {?PP_UNWATCH, GID}),
-    {stop, normal, Data};
+    if 
+        Data#data.games_to_watch == 1 ->
+            ok = ?tcpsend(Data#data.socket, {?PP_UNWATCH, GID}),
+            {stop, normal, Data};
+        true ->
+            N = Data#data.games_to_watch,
+            {noreply, Data#data{ games_to_watch = N - 1}}
+    end;
 
 handle({?PP_GOOD, _, _}, Data) ->
     {noreply, Data};

@@ -105,7 +105,8 @@
 -define(PS_MAKEUP_BB, 16).
 -define(PS_ALL_IN, 32).
 -define(PS_BET, 64). 
--define(PS_RESERVED, 128).
+-define(PS_RESERVED, 128). % reserved seat
+-define(PS_AUTOPLAY, 256).
 
 -define(PS_ANY, 
 	?PS_PLAY bor
@@ -114,7 +115,8 @@
 	?PS_SIT_OUT bor
 	?PS_MAKEUP_BB bor
 	?PS_ALL_IN bor
-	?PS_BET).
+	?PS_BET bor 
+        ?PS_AUTOPLAY).
 
 -define(PS_ACTIVE, 
 	?PS_PLAY bor 
@@ -125,6 +127,11 @@
 	?PS_WAIT_BB bor
 	?PS_MAKEUP_BB).
 
+-define(PS_READY,
+         ?PS_STANDING bor
+         ?PS_BB_ACTIVE bor
+         ?PS_FOLD).
+
 -define(PS_SHOWDOWN, 
 	?PS_PLAY bor
 	?PS_BET bor
@@ -134,6 +141,12 @@
 	?PS_PLAY bor
 	?PS_ALL_IN bor
 	?PS_BET).
+
+-define(PS_CAN_LEAVE,
+        ?PS_FOLD bor
+        ?PS_WAIT_BB bor
+        ?PS_SIT_OUT bor
+        ?PS_MAKEUP_BB).
 
 %%% Error codes
 

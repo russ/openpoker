@@ -80,8 +80,12 @@ login(Player, client_down, [_, _, Socket]) ->
 
 login(Player, player_busy, Args) ->
     Temp = login(Player, client_down, Args),
-    cardgame:cast(Player#player.game, 
-		  {'RESEND UPDATES', Player#player.pid}),
+    Msg = {'RESEND UPDATES', Player#player.pid},
+    %% resend accumulated game updates
+    lists:foreach(fun(Game) -> 
+                          cardgame:cast(Game, Msg) 
+                  end,
+                  Player#player.games),
     Temp;
 
 login(Player, player_offline, [Nick, _, Socket]) ->
@@ -123,7 +127,7 @@ is_account_disabled(Player, _) ->
 
 is_player_busy(Player, _) ->
     {Online, _} = is_player_online(Player, []),
-    Playing = Player#player.game /= none,
+    Playing = Player#player.games /= [],
     {Online and Playing, player_busy}.
 
 is_player_online(Player, _) ->

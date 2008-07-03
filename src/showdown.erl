@@ -12,6 +12,7 @@
 -export([showdown/2, dump_pot/2]).
 
 -include("common.hrl").
+-include("schema.hrl").
 -include("test.hrl").
 -include("proto.hrl").
 
@@ -30,6 +31,7 @@ stop(Ref) ->
 
 showdown({'START', Context}, Data) ->
     Game = Data#data.game,
+    GID = gen_server:call(Game, 'ID'),
     Seats = gen_server:call(Game, {'SEATS', ?PS_SHOWDOWN}),
     N = length(Seats),
     if 
@@ -38,12 +40,15 @@ showdown({'START', Context}, Data) ->
 	    Total = gen_server:call(Game, 'POT TOTAL'),
 	    Player = gen_server:call(Game, {'PLAYER AT', hd(Seats)}),
 	    gen_server:cast(Player, {'INPLAY+', Total}),
+            gen_server:cast(Player, {'GAME INPLAY+', Total,GID}),
+            PID = gen_server:call(Player, 'ID'),
 	    Event = {?PP_NOTIFY_WIN, Player, Total},
+            PID = gen_server:call(Player, 'ID'),
 	    gen_server:cast(Game, {'BROADCAST', Event}),
 	    Winners = [{{Player, none, none, none}, Total}];
 	true ->
-	    Ranks = gen_server:call(Game, 'RANK HANDS'),
-	    Pots = gen_server:call(Game, 'POTS'),
+	    Ranks = gen_server:call(Game,'RANK HANDS'),
+	    Pots = gen_server:call(Game,'POTS'),
 	    Winners = gb_trees:to_list(winners(Ranks, Pots)),
             F1 = fun(SeatNum)->
                          P = gen_server:call(Game, {'PLAYER AT', SeatNum}),
@@ -54,14 +59,25 @@ showdown({'START', Context}, Data) ->
         lists:map(F1, Seats),
             
 	    lists:foreach(fun({{Player, _, _, _}, Amount}) ->
-				  gen_server:cast(Player, {'INPLAY+', Amount}),
-				  Event = {?PP_NOTIFY_WIN, Player, Amount},
-				  gen_server:cast(Game, {'BROADCAST', Event})
+                                  gen_server:cast(Player, {'INPLAY+', Amount}),
+                                  gen_server:cast(Player, {'GAME INPLAY+', 
+                                                           Amount,GID}),
+                                  Event = {?PP_NOTIFY_WIN, Player, Amount},
+				 gen_server:cast(Game, {'BROADCAST', Event})
 			  end, Winners)
     end,
     gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_END_GAME}}),
+    %% Update the end time for game in game_history table
+    util:update_end_time(GID),
     _Ctx = setelement(4, Context, Winners),
     {stop, {normal, restart, Context}, Data};
+
+showdown({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
+    blinds:join(Data, Player, SeatNum, BuyIn, showdown, ?PS_FOLD);
+
+showdown({?PP_LEAVE, Player}, Data) ->
+    gen_server:cast(Data#data.game, {?PP_LEAVE, Player, ?PS_ANY}),
+    {next_state, showdown, Data};
 
 showdown(Event, Data) ->
     handle_event(Event, showdown, Data).

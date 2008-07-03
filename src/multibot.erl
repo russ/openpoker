@@ -223,7 +223,7 @@ create_players([Player|Rest])
 		    ok
 	    end;
 	{atomic, []} ->
-	    player:create(Nick, "foo", "", Balance)
+	    player:create(0, Nick, "foo", "", Balance)
     end,
     create_players(Rest).
     
@@ -570,7 +570,7 @@ setup(Host) ->
     timer:sleep(1000),
     %% start server in test mode 
     %% to enable starting of test games
-    server:start(Host, 2000, true),
+    server:start(Host, 6000, false),
     gateway:start(node(), 3000, 500000),
     ok.
 
@@ -580,6 +580,7 @@ cleanup() ->
 	ok ->
 	    io:format("multibot:cleanup: deleting game info...~n"),
 	    db:delete(game_xref),
+        db:delete(timeout_history),
 	    %%io:format("multibot:cleanup: deleting player info...~n"),
 	    %%db:delete(player),
 	    %%counter:reset(player),

@@ -15,6 +15,7 @@
 -include("lang.hrl").
 -include("test.hrl").
 -include("proto.hrl").
+-include("schema.hrl").
 
 -record(data, {
 	  game,
@@ -44,12 +45,23 @@ delayed_start({'START', Context}, Data) ->
 
 delayed_start('CHECK', Data) ->
     Game = Data#data.game,
-    Active = gen_server:call(Game, {'SEATS', ?PS_ACTIVE}),
-    BBActive = gen_server:call(Game, {'SEATS', ?PS_BB_ACTIVE}),
-    ReqCount = gen_server:call(Game, 'REQUIRED'),
-    L1 = length(Active),
-    L2 = length(BBActive),
-    Start = (L1 >= ReqCount) or ((L1 > 0) and (L2 > ReqCount)),
+    Ready = gen_server:call(Game, {'SEATS', ?PS_READY}),
+    %%get the game id of the game to be started
+    GID = gen_server:call(Game,'ID'),
+    {atomic,Result} = db:find(game_xref,GID),
+    %%checking for empty list
+    	if Result == []->
+            %%if list is empty minimum players req count is set to 2
+            ReqCount = 2,
+            ok;
+        true ->
+            %%minimum players req count is obtained from game_xref table
+    		{atomic,[GameXref]} = db:find(game_xref,GID),
+             MinPlayersReq = GameXref#game_xref.min_players,
+    		ReqCount = MinPlayersReq
+        end,
+    %%ReqCount = gen_server:call(Game, 'REQUIRED'),
+    Start = (length(Ready) >= ReqCount),
     Empty = gen_server:call(Game, 'IS EMPTY'),
     if
 	Start ->
@@ -74,7 +86,7 @@ delayed_start({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
 
 delayed_start({?PP_LEAVE, Player}, Data) ->
     Game = Data#data.game,
-    gen_server:cast(Game, {?PP_LEAVE, Player}),
+    gen_server:cast(Game, {?PP_LEAVE, Player, ?PS_ANY}),
     {next_state, delayed_start, Data};
 
 delayed_start({?PP_SIT_OUT, Player}, Data) ->

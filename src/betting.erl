@@ -15,6 +15,7 @@
 -include("texas.hrl").
 -include("test.hrl").
 -include("proto.hrl").
+-include("schema.hrl").
 
 -record(data, {
 	  game,
@@ -79,6 +80,7 @@ betting({'START', Context}, Data) ->
 
 betting({?PP_CALL, Player, Amount}, Data) ->
     Game = Data#data.game,
+    GID = gen_server:call(Game,'ID'),
     {Expected, Call, _Min, _Max} = Data#data.expected,
     if 
 	Expected /= Player ->
@@ -86,28 +88,33 @@ betting({?PP_CALL, Player, Amount}, Data) ->
 	true ->
 	    %% it's us
 	    cancel_timer(Data),
-	    InPlay = gen_server:call(Player, 'INPLAY'),
+	    %% InPlay = gen_server:call(Player, 'INPLAY'),
+            GameInplay = gen_server:call(Player, {'GAME INPLAY', GID}),
 	    if 
-		Amount > InPlay ->
+		Amount > GameInplay  ->
 		    betting({?PP_FOLD, Player}, Data);
 		Amount > Call ->
 		    betting({?PP_FOLD, Player}, Data);
-		Amount == InPlay ->
+		Amount == GameInplay  ->
 		    %% all-in
+                    gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
 		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
+                    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CALL, 
+							 Player, Amount}}),
 		    next_turn(Data, Player);
 		true ->
 		    %% proper bet
 		    gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
 		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
 		    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CALL, 
-							 Player, Call}}),
+							 Player, Amount}}),
 		    next_turn(Data, Player)
 	    end
     end;
 
 betting({?PP_RAISE, Player, Amount}, Data) ->
     Game = Data#data.game,
+    GID = gen_server:call(Game, 'ID'),
     RaiseCount = Data#data.raise_count,
     {Expected, Call, Min, Max} = Data#data.expected,
     if
@@ -116,12 +123,13 @@ betting({?PP_RAISE, Player, Amount}, Data) ->
 	true ->
 	    %% it's us
 	    cancel_timer(Data),
-	    InPlay = gen_server:call(Player, 'INPLAY'),
+	    %% InPlay = gen_server:call(Player, 'INPLAY'),
+            GameInplay = gen_server:call(Player, {'GAME INPLAY', GID}),
 	    if 
-		(Amount > InPlay) or 
+		(Amount > GameInplay) or 
 		(Amount > Max) or
 		(Max == 0) or % should have sent CALL
-		((Amount < Min) and ((Amount + Call) /= InPlay)) ->
+		((Amount < Min) and ((Amount + Call) /= GameInplay)) ->
 		    betting({?PP_FOLD, Player}, Data);
 		true ->
 		    %% proper raise
@@ -134,14 +142,15 @@ betting({?PP_RAISE, Player, Amount}, Data) ->
 		    gen_server:cast(Game, {'ADD BET', Player, Amount + Call}),
 		    gen_server:cast(Game, {'RESET STATE', ?PS_BET, ?PS_PLAY}),
 		    if
-			Amount + Call == InPlay ->
+			Amount + Call == GameInplay ->
 			    ok;
 			true ->
 			    gen_server:cast(Game, 
 					    {'SET STATE', Player, ?PS_BET})
 		    end,
 		    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_RAISE, 
-							 Player, Amount}}),
+							 Player, Amount,
+                                                         Amount + Call}}),
 		    Data1 = Data#data {
 			      call = Data#data.call + Amount,
 			      raise_count = RaiseCount1
@@ -158,10 +167,6 @@ betting({?PP_FOLD, Player}, Data) ->
 	true ->
 	    cancel_timer(Data),
 	    gen_server:cast(Data#data.game, {'SET STATE', Player, ?PS_FOLD}),
-	    gen_server:cast(Data#data.game, {'BROADCAST', 
-					     {?PP_PLAYER_STATE, 
-					      Player, 
-					      ?PS_FOLD}}),
 	    next_turn(Data, Player)
     end;
 
@@ -177,7 +182,15 @@ betting({timeout, _Timer, Player}, Data) ->
 				 {seat, Seat}]),
     %%
     %%io:format("~w timed out, folding~n", [Player]),
-    betting({?PP_FOLD, Player}, Data);
+    util:update_timeout_history(Game,Player),
+    betting({?PP_FOLD, Player,1}, Data);
+
+betting({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
+    blinds:join(Data, Player, SeatNum, BuyIn, betting, ?PS_FOLD);
+
+betting({?PP_LEAVE, Player}, Data) ->
+    gen_server:cast(Data#data.game, {?PP_LEAVE, Player}),
+    {next_state, betting, Data};
 
 betting(Event, Data) ->
     handle_event(Event, betting, Data).
@@ -267,6 +280,7 @@ restart_timer(Data, Msg) ->
     Data#data {
       timer = cardgame:start_timer(Timeout, Msg)
      }.
+
     
 %%
 %% Test suite

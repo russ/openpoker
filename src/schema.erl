@@ -59,21 +59,6 @@ install(Nodes) when is_list(Nodes) ->
 				       {error, Any3},
 				       {nodes, Nodes}])
     end,
-    %% game history
-    case mnesia:create_table(game_history, 
-			     [
-			      {disc_copies, Nodes}, 
-			      {type, set}, 
-			      {attributes, record_info(fields, game_history)}
-			     ]) of
-	{atomic, ok} ->
-	    ok;
-	Any4 ->
-	    error_logger:error_report([{message, "Cannot install table"},
-				       {table, game_history},
-				       {error, Any4},
-				       {nodes, Nodes}])
-    end,
     %% cluster configuration
     case mnesia:create_table(cluster_config, 
 			     [
@@ -112,6 +97,7 @@ install(Nodes) when is_list(Nodes) ->
 				       {nodes, Nodes}])
     end,
     populate(),
+    reset_counters(),
     ok.
 
 populate() ->
@@ -122,5 +108,30 @@ populate() ->
     game:setup(?GT_TEXAS_HOLDEM, 10, 
 	       {?LT_FIXED_LIMIT, 10, 20}, 
 	       ?START_DELAY, ?PLAYER_TIMEOUT,
-	       100).
+	       50),
+    game:setup(?GT_TEXAS_HOLDEM, 10, 
+	       {?LT_NO_LIMIT, 10, 20}, 
+	       ?START_DELAY, ?PLAYER_TIMEOUT,
+	       50),
+	game:setup(?GT_TEXAS_HOLDEM, 10, 
+	       {?LT_POT_LIMIT, 10, 20}, 
+	       ?START_DELAY, ?PLAYER_TIMEOUT,
+	       50).
     
+%%Reset all the counters at the time of schema installation
+
+reset_counters()->
+    counter:reset(game),
+    counter:reset(player).
+
+
+
+
+
+
+
+
+
+
+
+

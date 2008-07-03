@@ -46,6 +46,13 @@ deal_cards({'START', Context}, Data) ->
     end,
     {stop, {normal, Context}, Data};
 
+deal_cards({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
+    blinds:join(Data, Player, SeatNum, BuyIn, deal_cards, ?PS_FOLD);
+
+deal_cards({?PP_LEAVE, Player}, Data) ->
+    gen_server:cast(Data#data.game, {?PP_LEAVE, Player}),
+    {next_state, deal_cards, Data};
+
 deal_cards({timeout, _Timer, _Player}, Data) ->
     {next_state, deal_cards, Data};
 
@@ -95,6 +102,8 @@ deal_shared(_Game, _Deck, 0) ->
 
 deal_shared(Game, Deck, N) ->
     Card = gen_server:call(Deck, 'DRAW'),
+    GID = gen_server:call(Game, 'ID'),
+    util:insert_community_cards(GID,Card),
     gen_server:cast(Game, {'DRAW SHARED', Card}),
     deal_shared(Game, Deck, N - 1).
 

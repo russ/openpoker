@@ -18,8 +18,7 @@
 	  port,
 	  host,
 	  avg,
-	  games,
-	  test_mode
+	  games
 	 }).
 
 -record(client, {
@@ -69,7 +68,7 @@ start(Host, Port, TestMode) ->
 	    Other
     end.
 
-init([Host, Port, TestMode]) ->
+init([Host, Port]) ->
     process_flag(trap_exit, true), 
     %%error_logger:logfile({open, "/tmp/" 
     %%		  ++ atom_to_list(node()) 
@@ -84,8 +83,7 @@ init([Host, Port, TestMode]) ->
       host = Host,
       port = Port,
       avg = 0,
-      games = start_games(),
-      test_mode = TestMode
+      games = start_games()
      },
     {ok, Server}.
 
@@ -122,9 +120,6 @@ handle_call('WHERE', _From, Server) ->
 handle_call('USER COUNT', _From, Server) ->
     Children = tcp_server:children(Server#server.port),
     {reply, length(Children), Server};
-
-handle_call('TEST MODE', _From, Server) ->
-    {reply, Server#server.test_mode, Server};
 
 handle_call(Event, From, Server) ->
     error_logger:info_report([{module, ?MODULE}, 
@@ -256,7 +251,7 @@ find_games(Socket,
     lists:foreach(fun(Packet) ->
 			  ?tcpsend(Socket, Packet)
 		  end, L).
-
+       
 start_games() ->
     {atomic, Games} = db:find(game_config),
     start_games(Games, []).
@@ -272,8 +267,8 @@ start_games(_Game, 0, Acc) ->
     Acc;
 
 start_games(Game, N, Acc) ->
-    {ok, Pid} = cardgame:start(Game#game_config.type, 
-			       Game#game_config.seat_count, 
+    {ok, Pid} = cardgame:start(Game#game_config.type,
+			       Game#game_config.seat_count,
 			       Game#game_config.limit,
 			       Game#game_config.start_delay,
 			       Game#game_config.player_timeout),

@@ -126,8 +126,11 @@ read(<<Cmd, GID:32, Face, Suit, Seq:16>>)
        Cmd == ?PP_NOTIFY_SHARED ->
     {Cmd, GID, {hand:face(1 bsl Face), hand:suit(Suit)}, Seq}; 
 
-read(<<?PP_NOTIFY_JOIN, GID:32, PID:32, SeatNum, Seq:16>>) -> 
-    {?PP_NOTIFY_JOIN, GID, PID, SeatNum, Seq};
+read(<<?PP_NOTIFY_JOIN, GID:32, PID:32, SeatNum, BuyIn:32, Seq:16>>) -> 
+    {?PP_NOTIFY_JOIN, GID, PID, SeatNum, BuyIn/100, Seq};
+
+read(<<?PP_NOTIFY_GAME_INPLAY, GID:32, PID:32, GameInplay:32,SeatNum,Seq:16>>) -> 
+    {?PP_NOTIFY_GAME_INPLAY, GID, PID, GameInplay/100,SeatNum,Seq};
 
 read(<<Cmd, GID:32, PID:32, Seq:16>>)
   when Cmd == ?PP_NOTIFY_PRIVATE;
@@ -340,15 +343,25 @@ write({Cmd, GID,Player,Cards, Seq})
      (hand:suit(Suit1)),
      (bits:log2(hand:face(Face2))), 
      (hand:suit(Suit2)),
-       Seq:16>>;       
+     Seq:16>>;       
 
 write({?PP_NOTIFY_JOIN, GID, Player, SeatNum,BuyIn, Seq})
 when is_number(GID),
      is_pid(Player),
      is_number(SeatNum),
+     is_number(BuyIn),
      is_number(Seq) ->
     PID = gen_server:call(Player, 'ID'),
-    <<?PP_NOTIFY_JOIN, GID:32, PID:32, SeatNum, Seq:16>>;
+    <<?PP_NOTIFY_JOIN, GID:32, PID:32, SeatNum,(trunc(BuyIn * 100)):32, Seq:16>>;
+               
+write({?PP_NOTIFY_GAME_INPLAY, GID, Player, GameInplay,SeatNum, Seq})
+when is_number(GID),
+     is_pid(Player),
+     is_number(GameInplay),
+     is_number(SeatNum),
+     is_number(Seq) ->
+    PID = gen_server:call(Player, 'ID'),
+    <<?PP_NOTIFY_GAME_INPLAY, GID:32, PID:32, (trunc(GameInplay * 100)):32,SeatNum,Seq:16>>;           
 
 write({Cmd, GID, Player, Seq}) 
   when Cmd == ?PP_NOTIFY_PRIVATE,
@@ -404,11 +417,6 @@ write({Cmd, GID, Player, Amount, Seq})
        is_pid(Player),
        is_number(Amount),
        is_number(Seq);
-       Cmd == ?PP_NOTIFY_RAISE, 
-       is_number(GID),
-       is_pid(Player),
-       is_number(Amount),
-       is_number(Seq);
        Cmd == ?PP_NOTIFY_BET, 
        is_number(GID),
        is_pid(Player),
@@ -416,6 +424,15 @@ write({Cmd, GID, Player, Amount, Seq})
        is_number(Seq) ->
     PID = gen_server:call(Player, 'ID'),
     <<Cmd, GID:32, PID:32, (trunc(Amount * 100)):32, Seq:16>>;
+
+write({Cmd, GID, Player, Amount,Total, Seq})
+  when Cmd == ?PP_NOTIFY_RAISE, 
+       is_number(GID),
+       is_pid(Player),
+       is_number(Amount),
+       is_number(Seq) ->
+    PID = gen_server:call(Player, 'ID'),
+    <<Cmd, GID:32, PID:32, (trunc(Amount * 100)):32,(trunc(Total * 100)):32, Seq:16>>;
 
 %% Player state change
 

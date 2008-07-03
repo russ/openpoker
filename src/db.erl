@@ -3,7 +3,8 @@
 -module(db).
 
 -export([test/0, set/3, get/3, inc/3, dec/3, move_amt/3]).
--export([delete/1, delete/2, find/1, find/2, find/3]).
+-export([delete/1, delete/2, find/1, find/2, find/3, find_game_xref/3]).
+-export([setValue/3]).
 
 -include("test.hrl").
 -include("schema.hrl").
@@ -103,6 +104,29 @@ set(Data, Fields, [{Field, Value}|Rest])
 	    set(Data1, Fields, Rest)
     end.
 
+%%%% this setValue method is used for Jinterface when value is updated in player account at time of login
+setValue(Table, Key, Values) 
+  when is_atom(Table),
+       is_list(Values) ->
+    Fields = mnesia:table_info(Table, attributes),
+    case find(Table, Key) of
+	{atomic, [Data]} ->
+	    setValue(Data, Fields, Values);
+	Any ->
+	    Any
+    end;
+setValue(Data, Fields, [Field, Value]) 
+  when is_tuple(Data),
+       is_list(Fields),
+       is_atom(Field) ->
+    case fieldnum(Field, Fields) of
+	none ->
+	    {atomic, {error, field_not_found}};
+	N ->
+	   Data1 = setelement(N + 1, Data, Value),
+	   mnesia:transaction(fun() -> mnesia:write(Data1) end),
+	   ok
+    end.
 %%% Retrieve value in Table 
 %%% using Key to lookup the record.
 
@@ -236,6 +260,23 @@ find(Table, Field, Value)
 		end,
 	    mnesia:transaction(F)
     end.
+    
+    %%%%% added to get table Info by passing the table name 
+
+find_game_xref(Table, Field, Value) 
+  when is_atom(Table),
+       is_atom(Field) ->
+    Fields = mnesia:table_info(Table, attributes),
+    case fieldnum(Field, Fields) of
+	none ->
+	    {atomic, {error, field_not_found}};
+	N ->
+	    F = fun() -> 
+			mnesia:index_read(Table, Value, N + 1) 
+		end,
+	    {atomic,Result}= mnesia:transaction(F),
+	    Result
+    end.
 
 %%% 
 %%% Test harness
@@ -254,7 +295,7 @@ test1() ->
     ?match(3, fieldnum(baz, [foo, bar, baz])).
 
 test2() ->
-    ?match({game_xref, '_', '_', '_', '_'}, 
+    ?match({game_xref, '_', '_', '_', '_','_','_','_','_'}, 
 	   makepat(game_xref)).
 
 test3() ->

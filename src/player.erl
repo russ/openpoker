@@ -16,7 +16,9 @@
 -record(data, {
 	  oid,
 	  socket = none,
-	  inplay = 0
+	  inplay = 0,
+      %% game to inplay cross-reference for this player
+	  inplay_xref = gb_trees:empty()   
 	 }).
 
 new(OID) ->
@@ -56,9 +58,16 @@ terminate(_Reason, Data) ->
     ok.
 
 handle_cast('LOGOUT', Data) ->
-    spawn(fun() -> 
-		  login:logout(Data#data.oid) 
-	  end),
+    ID = Data#data.oid,
+    {atomic, Games} = db:get(player, ID, games),
+    if
+        %% not playing anymore, can log out
+        Games == [] ->
+            spawn(fun() -> login:logout(ID) end);
+        true ->
+            %% delay until we leave our last game
+            db:set(player, Data#data.oid, {socket, none})
+    end,
     {noreply, Data};
 
 handle_cast('DISCONNECT', Data) ->
@@ -87,7 +96,79 @@ handle_cast({'INPLAY+', Amount}, Data)
 	      inplay = Data#data.inplay + Amount
 	     },
     {noreply, Data1};
+
+%%called back to add game specific inplay for a player when the player joins a game                                                                      
+handle_cast({'ADD GAME INPLAY', Amount,Game}, Data) 
+  when Amount >= 0 ->
+    Xref = Data#data.inplay_xref,
+    Xref1= gb_trees:enter(Game,Amount,Xref),
+	Data1 = Data#data {
+      inplay_xref = Xref1},
+    {noreply, Data1};
+                 
+%%called back to increase game specific inplay for a player                       
+handle_cast({'GAME INPLAY+', Amount,Game}, Data) 
+  when  Amount >= 0 ->
+    Xref = Data#data.inplay_xref,
+    PrevAmount = gb_trees:get(Game,Xref),
+    NewAmount = PrevAmount + Amount,
+    Xref1 = gb_trees:enter(Game,NewAmount,Xref),
+    Data1 = Data#data {
+      inplay_xref = Xref1},
+    {noreply, Data1}; 
+
+%%called back to decrease game specific inplay for a player                                   
+handle_cast({'GAME INPLAY-', Amount,Game}, Data) 
+  when Amount >= 0 ->
+    Xref = Data#data.inplay_xref,
+    PrevAmount = gb_trees:get(Game,Xref),
+    NewAmount = PrevAmount - Amount,
+    Xref1 = gb_trees:enter(Game,NewAmount,Xref),
+    Data1 = Data#data {
+      inplay_xref = Xref1},
+    {noreply, Data1};                                                                     
     
+handle_cast({'NOTIFY LEAVE',GID, Game}, Data) ->
+    ID = Data#data.oid,
+    %% update player
+    {atomic, Games} = db:get(player, ID, games),
+    Games1 = lists:filter(fun(X) -> X /= Game end, Games),
+    db:set(player, ID, {games, Games1}),
+    Xref = Data#data.inplay_xref,
+    TreeDefined = gb_trees:is_defined(GID,Xref),
+    case TreeDefined of
+        true->
+            InplayAmount = gb_trees:get(GID,Xref);
+        %%could not get the gb_tree for this game
+        false->
+            InplayAmount = 0
+    end,
+    InplayNow = Data#data.inplay,
+    Data1 = Data#data {inplay = InplayNow - InplayAmount},
+    {atomic, ok} = db:inc(player,ID,{balance,InplayAmount}),
+    
+    Data2 = if
+                %% not playing anymore
+                Games1 == [] ->
+                    %% move inplay amount back to balance
+                    {atomic, ok} = db:set(player, ID, 
+                                          {inplay, Data1#data.inplay}),
+                    {atomic, ok} = db:move_amt(player, ID, 
+                                               {inplay, balance, Data1#data.inplay}),
+                    {atomic, Sock} = db:get(player, ID, socket),
+                    if 
+                        %% player requested logout previously
+                        Sock == none ->
+                            spawn(fun() -> login:logout(ID) end);
+                        true ->
+                            ok
+                    end,
+                    Data1#data { inplay = 0 };
+                true ->
+                    Data1
+            end,
+    {noreply, Data2};
+
 handle_cast({?PP_WATCH, Game}, Data) 
   when is_pid(Game) ->
     cardgame:cast(Game, {?PP_WATCH, self()}),
@@ -110,17 +191,7 @@ handle_cast({?PP_JOIN, Game, SeatNum, BuyIn}, Data) ->
 
 handle_cast({?PP_LEAVE, Game}, Data) ->
     cardgame:send_event(Game, {?PP_LEAVE, self()}),
-    %% move inplay amount back to balance
-    {atomic, ok} = db:set(player, 
-			  Data#data.oid, 
-			  {inplay, Data#data.inplay}),
-    {atomic, ok} = db:move_amt(player, 
-			       Data#data.oid, 
-			       {inplay, balance, Data#data.inplay}),
-    Data1 = Data#data {
-	      inplay = 0
-	     },
-    {noreply, Data1};
+    {noreply, Data};
 
 handle_cast({Event, Game}, Data) 
   when Event == ?PP_FOLD;
@@ -207,6 +278,19 @@ handle_call('ID', _From, Data) ->
 
 handle_call('INPLAY', _From, Data) ->
     {reply, Data#data.inplay, Data};
+
+%%called back to get game specific inplay for a player
+handle_call({'GAME INPLAY',Game}, _From, Data) ->
+    Xref = Data#data.inplay_xref,
+    TreeDefined = gb_trees:is_defined(Game,Xref),
+    case TreeDefined of
+        true->
+            InplayAmount = gb_trees:get(Game,Xref);
+        %%could not get the gb_tree for this game
+        false->
+            InplayAmount = 0
+    end,
+	{reply, InplayAmount, Data};
 
 handle_call(Event, From, Data) ->
     error_logger:info_report([{module, ?MODULE}, 
