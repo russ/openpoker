@@ -1,6 +1,6 @@
 %%% Copyright (C) 2005-2008 Wager Labs, SA
 
--module(fixed_limit).
+-module(pot_limit).
 -behaviour(gen_server).
 
 -export([init/1, handle_call/3, handle_cast/2, 
@@ -11,23 +11,24 @@
 -include("test.hrl").
 -include("common.hrl").
 -include("proto.hrl").
+-include("schema.hrl").
 
--record(fixed_limit, {
+-record(pot_limit, {
 	  high,
 	  low
 	 }).
 
 new(Low, High) ->
-    #fixed_limit {
+    #pot_limit {
      high = High,
      low = Low
     }.
 
 start(Low, High) ->
-    gen_server:start(fixed_limit, [Low, High], []).
+    gen_server:start(pot_limit, [Low, High], []).
 
 start_link(Low, High) ->
-    gen_server:start_link(fixed_limit, [Low, High], []).
+    gen_server:start_link(pot_limit, [Low,High], []).
 
 init([Low, High]) ->
     process_flag(trap_exit, true),
@@ -50,15 +51,15 @@ handle_cast(Event, Limit) ->
     {noreply, Limit}.
 
 handle_call('INFO', _From, Limit) ->
-    {reply, {?LT_FIXED_LIMIT, 
-	     Limit#fixed_limit.low,
-	     Limit#fixed_limit.high}, Limit};
+    {reply, {?LT_POT_LIMIT, 
+	     Limit#pot_limit.low,
+	     Limit#pot_limit.high}, Limit};
 
-handle_call({'RAISE SIZE', _GID, _PotSize, _Player, Stage}, _From, Limit) ->
-    {reply, raise_size(Limit, Stage), Limit};
+handle_call({'RAISE SIZE', _GID, PotSize, _Player, Stage}, _From, Limit) ->
+    {reply, raise_size(Limit, PotSize, Stage), Limit};
 
 handle_call('BLINDS', _From, Limit) ->
-    {reply, {(Limit#fixed_limit.low / 2), Limit#fixed_limit.low}, Limit};
+    {reply, {Limit#pot_limit.low, Limit#pot_limit.high}, Limit};
 
 handle_call(Event, From, Limit) ->
     error_logger:info_report([{module, ?MODULE}, 
@@ -82,12 +83,12 @@ handle_info(Info, Limit) ->
 code_change(_OldVsn, Limit, _Extra) ->
     {ok, Limit}.
 
-raise_size(Limit, Stage) when ?GS_PREFLOP =:= Stage; 
-			      ?GS_FLOP =:= Stage ->
-    {Limit#fixed_limit.low, Limit#fixed_limit.low};
+raise_size(Limit, PotSize, Stage) when ?GS_PREFLOP =:= Stage; 
+                                       ?GS_FLOP =:= Stage ->
+    {Limit#pot_limit.low, PotSize};
 
-raise_size(Limit, _Stage) ->
-    {Limit#fixed_limit.high, Limit#fixed_limit.high}.
+raise_size(Limit, PotSize, _Stage) ->
+    {Limit#pot_limit.high, PotSize}.
 
 test() ->
     ok.

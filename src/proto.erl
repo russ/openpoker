@@ -109,11 +109,8 @@ read(<<?PP_SEAT_STATE, GID:32, SeatNum, State, PID:32>>) ->
 read(<<?PP_GAME_INFO, GID:32, GameType,
       Expected, Joined, Waiting,
       LimitType, Bin/binary>>) ->
-    case LimitType of 
-	?LT_FIXED_LIMIT ->
-	    <<Low:32, High:32>> = Bin,
-	    Limit = {?LT_FIXED_LIMIT, Low / 100, High / 100}
-    end,
+    <<Low:32, High:32>> = Bin,
+    Limit = {LimitType, Low / 100, High / 100},
     {?PP_GAME_INFO, GID, GameType, Expected, Joined, Waiting, Limit};
 	    
 read(<<?PP_PLAYER_INFO, PID:32, InPlay:32, Bin/binary>>) ->
@@ -165,11 +162,8 @@ read(<<?PP_GAME_STAGE, GID:32, Stage, Seq:16>>) ->
     {?PP_GAME_STAGE, GID, Stage, Seq};
 
 read(<<?PP_NEW_GAME_REQ, GameType, Expected, LimitType, Bin/binary>>) ->
-    case LimitType of 
-	?LT_FIXED_LIMIT ->
-	    <<Low:32, High:32>> = Bin,
-	    Limit = {?LT_FIXED_LIMIT, Low / 100, High / 100}
-    end,
+    <<Low:32, High:32>> = Bin,
+    Limit = {LimitType, Low / 100, High / 100},
     {?PP_NEW_GAME_REQ, GameType, Expected, Limit};
 	    
 read(<<?PP_BALANCE_INFO, Balance:32, Inplay:32>>) ->
@@ -270,23 +264,18 @@ write({?PP_SEAT_STATE, GID, SeatNum, State, PID})
     <<?PP_SEAT_STATE, GID:32, SeatNum, State, PID:32>>;
 
 write({?PP_NEW_GAME_REQ, GameType, Expected, LimitType}) ->
-    case LimitType of 
-	{?LT_FIXED_LIMIT, Low, High} ->
-	    <<?PP_NEW_GAME_REQ, 
-	     GameType, 
-	     Expected,
-	     ?LT_FIXED_LIMIT, 
-	     (trunc(Low * 100)):32,
-	     (trunc(High * 100)):32>>;
-	_ ->
-	    none
-    end;
+    <<?PP_NEW_GAME_REQ, 
+     GameType, 
+     Expected,
+     LimitType, 
+     (trunc(Low * 100)):32,
+     (trunc(High * 100)):32>>;
 
 %%% Server -> Client
 
 write({?PP_GAME_INFO, GID, GameType, 
        Expected, Joined, Waiting,
-       {?LT_FIXED_LIMIT, Low, High}})
+       {LimitType, Low, High}})
   when is_number(GID),
        is_number(GameType),
        is_number(Expected), 
@@ -296,10 +285,10 @@ write({?PP_GAME_INFO, GID, GameType,
        is_number(High) ->
     <<?PP_GAME_INFO, GID:32, 
      GameType, Expected, Joined, Waiting,
-     ?LT_FIXED_LIMIT, 
+     LimitType, 
      (trunc(Low * 100)):32, 
      (trunc(High * 100)):32>>;
-
+       
 write({?PP_PLAYER_INFO, Player, InPlay, Nick, Location})
   when is_pid(Player),
        is_number(InPlay),

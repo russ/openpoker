@@ -122,7 +122,7 @@ code_change(_OldVsn, Data, _Extra) ->
 
 handle({?PP_GAME_INFO, GID, ?GT_IRC_TEXAS, 
 	Expected, Joined, Waiting,
-	{?LT_FIXED_LIMIT, Low, High}}, Data) ->
+	{Limit, Low, High}}, Data) ->
     if 
 	Data#data.trace ->
 	    io:format("Game #~w, #players: ~w, joined: ~w, waiting: ~w; ",

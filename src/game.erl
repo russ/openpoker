@@ -42,7 +42,9 @@
 	  %% seats tuple
 	  seats,
 	  %% fixed, pot, no limit, etc. process
-	  limit, 
+	  limit,
+      %% fixed, pot, no limit, etc. 
+	  limit_type, 
 	  %% card deck process
 	  deck, 
 	  %% shared cards list
@@ -69,9 +71,14 @@
 new(OID, FSM, GameType, SeatCount, LimitType) ->
     {ok, Deck} = deck:start_link(),
     {ok, Pot} = pot:start_link(),
+    {TypeOfGame,_,_} = LimitType, 
     {ok, Limit} = case LimitType of
 		      {?LT_FIXED_LIMIT, Low, High} ->
-			  fixed_limit:start_link(Low, High)
+			  fixed_limit:start_link(Low, High);
+                      {?LT_NO_LIMIT, Low, High} ->
+			  no_limit:start_link(Low, High);
+                      {?LT_POT_LIMIT, Low, High} ->
+			  pot_limit:start_link(Low, High)
 		  end,
     _ = #game {
       oid = OID,
@@ -80,7 +87,8 @@ new(OID, FSM, GameType, SeatCount, LimitType) ->
       deck = Deck,
       pot = Pot,
       seats = create_seats(SeatCount),
-      limit = Limit
+      limit = Limit,
+      limit_type = TypeOfGame
      }.
 
 start(FSM, GameType, SeatCount, LimitType) ->
@@ -391,8 +399,10 @@ handle_call('BLINDS', _From, Game) ->
     {reply, gen_server:call(Game#game.limit,'BLINDS'), Game};
 
 handle_call({'RAISE SIZE', Player, Stage}, _From, Game) ->
+    GID = Game#game.oid,
+    PotSize = gen_server:call(Game#game.pot, 'TOTAL'),
     Reply = gen_server:call(Game#game.limit,
-			    {'RAISE SIZE', self(), Player, Stage}),
+                            {'RAISE SIZE', GID, PotSize, Player, Stage}),
     {reply, Reply, Game};
 
 handle_call({'STATE', Player}, _From, Game) ->

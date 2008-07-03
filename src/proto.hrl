@@ -79,6 +79,8 @@
 %%% Limit type
 
 -define(LT_FIXED_LIMIT, 1).
+-define(LT_NO_LIMIT, 2).
+-define(LT_POT_LIMIT, 3).
 
 %%% Seat state
 
