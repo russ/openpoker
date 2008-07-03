@@ -45,6 +45,14 @@ showdown({'START', Context}, Data) ->
 	    Ranks = gen_server:call(Game, 'RANK HANDS'),
 	    Pots = gen_server:call(Game, 'POTS'),
 	    Winners = gb_trees:to_list(winners(Ranks, Pots)),
+            F1 = fun(SeatNum)->
+                         P = gen_server:call(Game, {'PLAYER AT', SeatNum}),
+                         C = gen_server:call(Game, {'PRIVATE CARDS', P}),
+                         gen_server:cast(Game, {'BROADCAST', 
+                                                {?PP_NOTIFY_PRIVATE_CARDS, P, C}})
+                 end,
+        lists:map(F1, Seats),
+            
 	    lists:foreach(fun({{Player, _, _, _}, Amount}) ->
 				  gen_server:cast(Player, {'INPLAY+', Amount}),
 				  Event = {?PP_NOTIFY_WIN, Player, Amount},

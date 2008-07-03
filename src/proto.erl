@@ -337,8 +337,22 @@ write({Cmd, GID, {Face, Suit}, Seq})
     <<Cmd, GID:32, 
      (bits:log2(hand:face(Face))), 
      (hand:suit(Suit)), Seq:16>>;
+       
+write({Cmd, GID,Player,Cards, Seq})
+  when Cmd == ?PP_NOTIFY_PRIVATE_CARDS, 
+       is_number(GID), 
+       is_list(Cards), 
+       is_number(Seq) ->
+       [{Face1, Suit1}, {Face2, Suit2}] = Cards,
+       PID = gen_server:call(Player,'ID'),
+    <<Cmd, GID:32, PID:32, 
+     (bits:log2(hand:face(Face1))), 
+     (hand:suit(Suit1)),
+     (bits:log2(hand:face(Face2))), 
+     (hand:suit(Suit2)),
+       Seq:16>>;       
 
-write({?PP_NOTIFY_JOIN, GID, Player, SeatNum, Seq})
+write({?PP_NOTIFY_JOIN, GID, Player, SeatNum,BuyIn, Seq})
 when is_number(GID),
      is_pid(Player),
      is_number(SeatNum),

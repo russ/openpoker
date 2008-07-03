@@ -54,6 +54,8 @@
 -define(PP_BALANCE_INFO, 43).
 -define(PP_NOTIFY_SB, 44).
 -define(PP_NOTIFY_BB, 45).
+-define(PP_NOTIFY_PRIVATE_CARDS, 46).
+-define(PP_NOTIFY_GAME_INPLAY, 47).
 
 -define(PP_MAKE_TEST_GAME, 252).
 -define(PP_PONG, 253).
