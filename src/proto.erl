@@ -263,7 +263,8 @@ write({?PP_SEAT_STATE, GID, SeatNum, State, PID})
        State == ?SS_TAKEN ->
     <<?PP_SEAT_STATE, GID:32, SeatNum, State, PID:32>>;
 
-write({?PP_NEW_GAME_REQ, GameType, Expected, LimitType}) ->
+write({?PP_NEW_GAME_REQ, GameType, Expected, Limit}) ->
+    {LimitType, Low, High} = Limit,
     <<?PP_NEW_GAME_REQ, 
      GameType, 
      Expected,
