@@ -253,8 +253,7 @@ ask_for_bet(Data, Seat) ->
     Bet = gen_server:call(Game, {'BET TOTAL', Player}),
     Call = Data#data.call - Bet,
     {Min, Max} = gen_server:call(Game, {'RAISE SIZE', Player, Stage}),
-    Parent = gen_server:call(Data#data.game, 'FSM'),
-    gen_server:cast(Player, {?PP_BET_REQ, Parent, Call, Min, Max}),
+    gen_server:cast(Game, {'REQUEST BET', Seat, Call, Min, Max}),
     Data1 = restart_timer(Data, Player),
     Data1#data {
       expected = {Player, Call, Min, Max}

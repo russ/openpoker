@@ -362,6 +362,32 @@ handle_cast({'ADD BET', Player, Amount}, Game) when Amount >= 0 ->
 	    {noreply, Game2}
     end;
 
+handle_cast({'REQUEST BET', SeatNum, Call, RaiseMin, RaiseMax}, Game) ->
+    if 
+        %% huh?
+        SeatNum > size(Game#game.seats) ->
+            {noreply, Game};
+        true ->
+            Seat = element(SeatNum, Game#game.seats),
+            if 
+                %% auto-play enabled
+                Seat#seat.cmd_que /= [] ->
+                    Seat1 = process_autoplay(Game, Seat),
+                    Game1 = Game#game {
+                              seats = setelement(SeatNum,
+                                                 Game#game.seats,
+                                                 Seat1)
+                              },
+                    {noreply, Game1};
+                %% regular bet request
+                true ->
+                    FSM = Game#game.fsm,
+                    Msg = {?PP_BET_REQ, FSM, Call, RaiseMin, RaiseMax},
+                    gen_server:cast(Seat#seat.player, Msg),
+                    {noreply, Game}
+            end
+    end;
+    
 handle_cast({'RESEND UPDATES', Player}, Game) ->
     resend_updates(Game, Player),
     {noreply, Game};

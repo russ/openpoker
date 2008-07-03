@@ -440,9 +440,8 @@ advance_button(Data) ->
 
 ask_for_blind(Data, Seat, Amount) ->
     Game = Data#data.game,
-    FSM = gen_server:call(Game, 'FSM'),
     Player = gen_server:call(Game, {'PLAYER AT', Seat}),
-    gen_server:cast(Player, {?PP_BET_REQ, FSM, Amount, 0, 0}),
+    gen_server:cast(Game, {'REQUEST BET', Seat, Amount, 0, 0}),
     Data1 = restart_timer(Data, Player),
     Data1#data {
       expected = {Player, Seat, Amount}
