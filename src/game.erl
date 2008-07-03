@@ -28,7 +28,9 @@
 	  %% game update packet accepted by this player.
 	  %% meant to track the last packet sent 
 	  %% over the network connection.
-	  seqnum = 0
+	  seqnum = 0,
+          %% auto-play queue
+          cmd_que = []
 	 }).
 	
 -record(game, {
@@ -531,7 +533,8 @@ create_seats(Seats, I) ->
       player = none,
       bet = 0,
       hand = Hand,
-      state = ?PS_EMPTY
+      state = ?PS_EMPTY,
+      cmd_que = []
      },
     NewSeats = setelement(I, Seats, Seat),
     create_seats(NewSeats, I - 1).
@@ -614,7 +617,8 @@ reset_state(Game, Count) ->
 			seats = setelement(Count,
 					   Game#game.seats,
 					   Seat#seat {
-					     state = ?PS_PLAY
+					     state = ?PS_PLAY,
+                                             cmd_que = []
 					    })
 		       };
 		  true ->
@@ -742,7 +746,8 @@ join_player(Game, Player, SeatNum, State) ->
 			 Seats,
 			 Seat#seat {
 			   player = Player,
-			   state = State
+			   state = State,
+                           cmd_que = []
 			  }),
       observers = Observers
      }.
@@ -808,6 +813,39 @@ setup(GameType, SeatCount, Limit, Delay, Timeout, Max) ->
     F = fun() -> mnesia:write(Game) end,
     mnesia:transaction(F).
     
+%%% Use stored commands instead of asking player
+
+process_autoplay(Game, Seat) ->
+    Que = Seat#seat.cmd_que,
+    process_autoplay(Game, Seat, Que).
+
+process_autoplay(_Game, Seat, []) ->
+    Seat;
+
+process_autoplay(Game, Seat, [H|T]) ->
+    autoplay(Game#game.fsm, Seat#seat.player, H),
+    Seat#seat{ cmd_que = T }.
+
+autoplay(_FSM, _Player, []) ->
+    ok;
+
+autoplay(FSM, Player, [H|T]) ->
+    Msg = build_message(Player, H),
+    %% forward action as if coming from us
+    spawn(fun() -> cardgame:send_event(FSM, Msg) end),
+    autoplay(FSM, Player, T).
+
+build_message(Player, Action) 
+  when is_number(Action) ->
+    build_message(Player, [Action]);
+
+build_message(Player, Action) 
+  when is_tuple(Action) ->
+    build_message(Player, tuple_to_list(Action));
+
+build_message(Player, [Cmd|Rest]) ->
+    list_to_tuple([Cmd, Player|Rest]).
+
 %% 
 %%
 %% Test suite
