@@ -58,7 +58,7 @@ handle_call({'RAISE SIZE', _Game, _Player, Stage}, _From, Limit) ->
     {reply, raise_size(Limit, Stage), Limit};
 
 handle_call('BLINDS', _From, Limit) ->
-    {reply, {Limit#fixed_limit.low div 2, Limit#fixed_limit.low}, Limit};
+    {reply, {(Limit#fixed_limit.low / 2), Limit#fixed_limit.low}, Limit};
 
 handle_call(Event, From, Limit) ->
     error_logger:info_report([{module, ?MODULE}, 
