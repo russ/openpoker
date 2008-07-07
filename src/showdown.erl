@@ -67,8 +67,6 @@ showdown({'START', Context}, Data) ->
 			  end, Winners)
     end,
     gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_END_GAME}}),
-    %% Update the end time for game in game_history table
-    util:update_end_time(GID),
     _Ctx = setelement(4, Context, Winners),
     {stop, {normal, restart, Context}, Data};
 

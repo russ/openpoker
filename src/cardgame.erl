@@ -539,7 +539,6 @@ start_next_module(Ctx, Modules) ->
 
 	{ok, State, Data, Timeout} ->
 	    NewCtx = Ctx#data {
-	      game = game:start(),
 	      stack = Modules,
 	      state = State,
 	      statedata = Data

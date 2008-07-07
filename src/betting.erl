@@ -182,7 +182,6 @@ betting({timeout, _Timer, Player}, Data) ->
 				 {seat, Seat}]),
     %%
     %%io:format("~w timed out, folding~n", [Player]),
-    util:update_timeout_history(Game,Player),
     betting({?PP_FOLD, Player,1}, Data);
 
 betting({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->

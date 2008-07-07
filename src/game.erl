@@ -544,6 +544,9 @@ handle_call({'SEATS', StartFrom, Mask}, _From, Game) ->
 handle_call({'SEATS', Mask}, _From, Game) ->
     {reply, get_seats(Game, Mask), Game};
 
+handle_call('SEAT QUERY', _From, Game) ->
+    {reply, seat_query(Game), Game};
+
 handle_call(Event, From, Game) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},

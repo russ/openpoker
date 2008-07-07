@@ -28,7 +28,7 @@ new_side_pot(AllInAmt, Members) ->
      },
     SidePot.
     
-new_side_pot(AllInAmt) when number(AllInAmt) ->
+new_side_pot(AllInAmt) when is_number(AllInAmt) ->
     new_side_pot(AllInAmt, gb_trees:empty());
 
 new_side_pot(Pot) when record(Pot, side_pot) ->

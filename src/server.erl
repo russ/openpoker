@@ -6,7 +6,7 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 
--export([start/1, start/2, start/3, stop/1, test/0]).
+-export([start/1, start/2, stop/1, test/0]).
 
 -include("common.hrl").
 -include("proto.hrl").
@@ -34,13 +34,10 @@ start([Port, Host])
     start(Host1, Port1).
 
 start(Host, Port) ->
-    start(Host, Port, false).
-
-start(Host, Port, TestMode) ->
     mnesia:start(),
     case mnesia:wait_for_tables([game_config, game_xref], 10000) of 
 	ok ->
-	    case gen_server:start(server, [Host, Port, TestMode], []) of
+	    case gen_server:start(server, [Host, Port], []) of
 		{ok, Pid} ->
 		    %%io:format("server:start: pid ~w~n", [Pid]),
 		    pg2:create(?GAME_SERVERS),

@@ -359,7 +359,6 @@ code_change(_OldVsn, State, Data, _Extra) ->
 timeout(Data, Player, State) ->
     cancel_timer(Data),
     Game = Data#data.game,
-    util:update_timeout_history(Game,Player),
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
     case State of
 	small_blind ->

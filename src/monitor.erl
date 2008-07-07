@@ -59,7 +59,7 @@ handle_info({timeout, _, _}, Data) ->
     {Time, {ok, Sock}} = timer:tc(tcp_server, 
 				  start_client, 
 				  [Data#data.host, Data#data.port, 1024]),
-    tcp_server:send(Sock, proto:write(?PP_PING)),
+    gen_tcp:send(Sock, proto:write(?PP_PING)),
     AvgTime = Data#data.avg_connect_time,
     Data1 = Data#data {
 	      socket = Sock,

@@ -223,7 +223,7 @@ create_players([Player|Rest])
 		    ok
 	    end;
 	{atomic, []} ->
-	    player:create(0, Nick, "foo", "", Balance)
+	    player:create(Nick, "foo", "", Balance)
     end,
     create_players(Rest).
     
@@ -500,9 +500,7 @@ find_server(Host, Port) ->
 						  {where, find_server},
 						  {self, self()}, 
 						  {message, Reason}]),
-			Parent ! {find_server, none};
-		    Any ->
-			Parent ! {find_server, Any}
+			Parent ! {find_server, none}
 		end
 	end,
     spawn(F),
@@ -570,7 +568,7 @@ setup(Host) ->
     timer:sleep(1000),
     %% start server in test mode 
     %% to enable starting of test games
-    server:start(Host, 6000, false),
+    server:start(Host, 6000),
     gateway:start(node(), 3000, 500000),
     ok.
 
@@ -632,9 +630,7 @@ start_game(Host, Port, Game, Delay)
 						  {where, start_game},
 						  {self, self()}, 
 						  {message, Reason}]),
-			Parent ! {start_game, none};
-		    Any ->
-			Parent ! {start_game, Any}
+			Parent ! {start_game, none}
 		end
 	end,
     spawn(F),

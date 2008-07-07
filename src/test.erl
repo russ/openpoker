@@ -372,7 +372,7 @@ test140() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(3000),
     %% create dummy players
     Nick = "test14-1",
@@ -402,7 +402,7 @@ test150() ->
     Host = localhost, 
     Port = 10000,
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(3000),
     %% find an empty game
     find_game(Host, Port),
@@ -417,7 +417,7 @@ test160() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(2000),
     %% find an empty game
     GID = find_game(Host, Port),
@@ -464,7 +464,7 @@ leave_after_sb() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(2000),
     %% find an empty game
     GID = find_game(Host, Port),
@@ -493,7 +493,7 @@ test170() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(3000),
     %% create dummy players
     Nick = pid_to_list(self()),
@@ -544,7 +544,7 @@ test180() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(3000),
     Nick = pid_to_list(self()),
     {atomic, ID} = player:create(Nick, "foo", "", 1000.0),
@@ -578,7 +578,7 @@ test190() ->
     db:delete(player),
     db:delete(game_xref),
     multibot:create_players(),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(3000),
     {atomic, Players} = db:find(player),
     test190(Host, Port, Players),
@@ -607,7 +607,7 @@ test200() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(2000),
     %% find an empty game
     GID = find_game(Host, Port),
@@ -640,7 +640,7 @@ test210() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(2000),
     %% find an empty game
     GID = find_game(Host, Port),
@@ -689,7 +689,7 @@ split_pot() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(2000),
     %% find an empty game
     GID = find_game(Host, Port),
@@ -768,7 +768,7 @@ test220() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    {ok, Server} = server:start(Host, Port,true),
+    {ok, Server} = server:start(Host, Port),
     timer:sleep(2000),
     %% find an empty game
     GID = find_game(Host, Port),

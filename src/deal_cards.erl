@@ -102,8 +102,6 @@ deal_shared(_Game, _Deck, 0) ->
 
 deal_shared(Game, Deck, N) ->
     Card = gen_server:call(Deck, 'DRAW'),
-    GID = gen_server:call(Game, 'ID'),
-    util:insert_community_cards(GID,Card),
     gen_server:cast(Game, {'DRAW SHARED', Card}),
     deal_shared(Game, Deck, N - 1).
 
