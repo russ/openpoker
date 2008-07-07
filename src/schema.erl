@@ -2,11 +2,14 @@
 
 -module(schema).
 
--export([install/1, populate/0]).
+-export([install/1, install/0, populate/0]).
 
 -include("schema.hrl").
 -include("common.hrl").
 -include("proto.hrl").
+
+install() ->
+    install([node()]).
 
 install(Nodes) when is_list(Nodes) ->
     mnesia:stop(),
