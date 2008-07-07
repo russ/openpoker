@@ -157,7 +157,7 @@ GAME_QUERY:
 
 OP: 0 - ignore, 1 - equals, 2 - less, 3 - greater.
 
-See GAME for details.
+See GAME_SUMMARY for details.
 
 0    1        2        3    4        5    6        7    8         9
 +----+--------+--------+----+--------+----+--------+----+---------+
@@ -184,7 +184,7 @@ Ask for a PLAYER packet for this PID.
 
 CREATE_GAME:
 
-Create a new game. See GAME for field descriptions.
+Create a new game. See GAME_SUMMARY for field descriptions.
 GOOD will be sent by the server if successful and EXTRA will contain the GID, BAD will be sent otherwise.
 
 0    1        2        3        4      8     12
@@ -253,7 +253,7 @@ GAME_SUMMARY:
 Game summary information. The server will send one message per game running. 
 
 G.Type: Game type. Currently 1 for Texas Hold'em.
-L.Type: Limit type. Currently 1 for fixed limit.
+L.Type: Limit type. Currently 1 for fixed limit, 2 for no limit and 3 for pot limit.
 #Seats: Number of players required to start the game, the number of seats.
 Joined: Number of players joined.
 Waiting: Number of players on the wait list.
