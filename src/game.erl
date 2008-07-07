@@ -946,8 +946,7 @@ broadcast_inplay(Game)->
 broadcast_inplay(_Game, _Seats, 0) ->
     ok;
 
-broadcast_inplay(Game, Seats, Current) ->
-    SeatNum = Current - 1,
+broadcast_inplay(Game, Seats, SeatNum) ->
     Seat = element(SeatNum, Seats),
     Player = Seat#seat.player,
     GID = Game#game.oid,
@@ -959,7 +958,7 @@ broadcast_inplay(Game, Seats, Current) ->
             broadcast(Game, {?PP_NOTIFY_GAME_INPLAY,
                              Player, GameInplay, SeatNum})
     end,
-    broadcast_inplay(Game, Seats, SeatNum).
+    broadcast_inplay(Game, Seats, SeatNum - 1).
 
 %% 
 %%
