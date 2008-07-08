@@ -354,10 +354,10 @@ handle({?PP_NOTIFY_CANCEL_GAME, GID, _Seq}, Data) ->
 	true ->
 	    ok
     end,
-    Data#data.parent ! {'CANCEL', GID},
     N = Data#data.cancel_count,
     if
         N == Data#data.games_to_watch ->
+            Data#data.parent ! {'CANCEL', GID},
             ok = ?tcpsend(Data#data.socket, {?PP_UNWATCH, GID}),
             {stop, normal, Data};
         true ->

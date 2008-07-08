@@ -6,7 +6,7 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 
--export([start/1, start/2, stop/1, test/0]).
+-export([start/1, start/2, start/3, stop/1, test/0]).
 
 -include("common.hrl").
 -include("proto.hrl").
@@ -18,7 +18,8 @@
 	  port,
 	  host,
 	  avg,
-	  games
+	  games,
+	  test_mode
 	 }).
 
 -record(client, {
@@ -34,10 +35,13 @@ start([Port, Host])
     start(Host1, Port1).
 
 start(Host, Port) ->
+    start(Host, Port, false).
+
+start(Host, Port, TestMode) ->
     mnesia:start(),
     case mnesia:wait_for_tables([game_config, game_xref], 10000) of 
 	ok ->
-	    case gen_server:start(server, [Host, Port], []) of
+	    case gen_server:start(server, [Host, Port, TestMode], []) of
 		{ok, Pid} ->
 		    %%io:format("server:start: pid ~w~n", [Pid]),
 		    pg2:create(?GAME_SERVERS),
@@ -65,7 +69,7 @@ start(Host, Port) ->
 	    Other
     end.
 
-init([Host, Port]) ->
+init([Host, Port, TestMode]) ->
     process_flag(trap_exit, true), 
     %%error_logger:logfile({open, "/tmp/" 
     %%		  ++ atom_to_list(node()) 
@@ -80,7 +84,8 @@ init([Host, Port]) ->
       host = Host,
       port = Port,
       avg = 0,
-      games = start_games()
+      games = start_games(),
+      test_mode = TestMode
      },
     {ok, Server}.
 
@@ -117,6 +122,9 @@ handle_call('WHERE', _From, Server) ->
 handle_call('USER COUNT', _From, Server) ->
     Children = tcp_server:children(Server#server.port),
     {reply, length(Children), Server};
+
+handle_call('TEST MODE', _From, Server) ->
+    {reply, Server#server.test_mode, Server};
 
 handle_call(Event, From, Server) ->
     error_logger:info_report([{module, ?MODULE}, 
@@ -248,7 +256,7 @@ find_games(Socket,
     lists:foreach(fun(Packet) ->
 			  ?tcpsend(Socket, Packet)
 		  end, L).
-       
+
 start_games() ->
     {atomic, Games} = db:find(game_config),
     start_games(Games, []).
@@ -264,8 +272,8 @@ start_games(_Game, 0, Acc) ->
     Acc;
 
 start_games(Game, N, Acc) ->
-    {ok, Pid} = cardgame:start(Game#game_config.type,
-			       Game#game_config.seat_count,
+    {ok, Pid} = cardgame:start(Game#game_config.type, 
+			       Game#game_config.seat_count, 
 			       Game#game_config.limit,
 			       Game#game_config.start_delay,
 			       Game#game_config.player_timeout),
