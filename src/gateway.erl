@@ -26,7 +26,7 @@ start(Node, Port, MaxPlayers) ->
 	    case wait_for_game_servers(10) of
 		ok ->
 		    F = fun(Sock) -> handoff(Sock, MaxPlayers) end, 
-		    tcp_server:start_raw_server(Port, F, 1000, 2048);
+		    tcp_server:start_raw_server(Port, F, 10240, 2048);
 		_ ->
 		    io:format("No game servers found, exiting.~n")
 	    end;
