@@ -7,9 +7,7 @@ and switch to that directory. Retrieve http://wagerlabs.com/ircdb.dat.gz and unp
 
 3. Pick a name for your Mnesia Master node. Lets assume master1. Recompile your files.
 
-erlc cardgame.erl
-erlc betting.erl blinds.erl
-erlc ... (the rest of your files)
+erl -make
 
 4. Figure out your fully qualified host name. You can get this 
 by running hostname on Unix.

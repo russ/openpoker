@@ -168,6 +168,39 @@ handle_info({'END', GID, Winners}, Data) ->
 	    {noreply, Data2}
     end;
     
+handle_info({'CANCEL', GID}, Data) ->
+    Games = Data#data.games,
+    Game = gb_trees:get(GID, Games),
+    if
+	Data#data.trace ->
+	    io:format("CANCEL: ~w~n", [GID]);
+	true ->
+	    ok
+    end,
+    Games1 = gb_trees:delete(GID, Games),
+    Data1 = Data#data {
+              failed = [Game#test_game.irc_id|Data#data.failed],
+	      finished = Data#data.finished + 1,
+	      games = Games1
+	     },
+    if 
+	(Data1#data.finished rem 50) == 0 ->
+	    io:format("~w games finished~n", [Data1#data.finished]);
+	true ->
+	    ok
+    end,
+    if
+	Data1#data.finished == Data1#data.started ->
+	    if 
+		Data1#data.failed /= [] ->
+		    {stop, {failed, Data1#data.failed}, Data1};
+		true ->
+		    {stop, normal, Data1}
+	    end;
+	true ->
+	    {noreply, Data1}
+    end;
+
 handle_info(Info, Data) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},
@@ -234,13 +267,16 @@ update_players(Game)
 test(Host, Port, MaxGames) ->
     test(Host, Port, MaxGames, ?START_DELAY, false).
 
-test(Host, Port, MaxGames, Delay) ->
-    test(Host, Port, MaxGames, Delay, false).
+test(Host, Port, MaxGames, Delay) when is_number(Delay) ->
+    test(Host, Port, MaxGames, Delay, false);
+
+test(Host, Port, MaxGames, Trace) ->
+    test(Host, Port, MaxGames, ?START_DELAY, Trace).
 
 test(Host, Port, MaxGames, Delay, Trace) 
   when is_list(Host), is_number(Port);
        is_atom(Host), is_number(Port) ->
-    io:format("Simulating gameplay...~n"),
+    io:format("Simulating gameplay with ~p games...~n", [MaxGames]),
     DB = opendb(),
     {ok, MultiBot} = start(),
     erlang:monitor(process, MultiBot),
@@ -248,18 +284,19 @@ test(Host, Port, MaxGames, Delay, Trace)
     Key = dets:first(DB),
     spawn(fun() -> test(DB, Key, MultiBot, MaxGames, 
 			Host, Port, Trace, Delay) end),
-    io:format("Waiting for game to end...~n"),
+    io:format("Waiting for games to end...~n"),
     receive
 	{'DOWN', _, _, MultiBot, normal} ->
 	    T2 = erlang:now(),
 	    Elapsed = timer:now_diff(T2, T1) / 1000 / 1000,
-	    io:format("MultiBot exited, ~w seconds elapsed~n", 
+	    io:format("MultiBot exited successfully, ~w seconds elapsed~n", 
 		      [Elapsed]);
 	Other ->
 	    erlang:display(Other)
     end.
 
 test(DB, '$end_of_table', _MultiBot, _Max, _Host, _Port, _Trace, _Delay) ->
+    io:format("End of database reached. No more games to launch!~n"),
     closedb(DB);
 
 test(DB, _Key, _MultiBot, 0, _Host, _Port, _Trace, _Delay) ->
@@ -279,7 +316,7 @@ test(DB, Key, MultiBot, Max, Host, Port, Trace, Delay) ->
 
 setup_players(Game, GID, Host, Port) ->
     Players = lists:reverse(tuple_to_list(Game#irc_game.players)),
-    setup_players(Game#test_game.irc_id, GID, Host, Port, 
+    setup_players(Game#irc_game.id, GID, Host, Port, 
 		  Players, size(Game#irc_game.players), []).
 
 setup_players(_IRC_ID, _GID, _Host, _Port, _Players, 0, Acc) ->
@@ -568,7 +605,7 @@ setup(Host) ->
     timer:sleep(1000),
     %% start server in test mode 
     %% to enable starting of test games
-    server:start(Host, 6000),
+    server:start(Host, 6000, true),
     gateway:start(node(), 3000, 500000),
     ok.
 
