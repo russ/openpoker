@@ -428,7 +428,6 @@ test160() ->
 		      [{"test160-bot1", 1, ['BLIND', 'FOLD']},
 		       {"test160-bot2", 2, ['BLIND']}]),
     %% make sure game is started
-    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
     ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
     %% check balances
     ?match({atomic, 0.0}, db:get(player, ID1, balance)),
@@ -475,11 +474,8 @@ leave_after_sb() ->
 		      [{"leave-after-sb-bot1", 1, ['BLIND', 'LEAVE']},
 		       {"leave-after-sb-bot2", 2, ['LEAVE']}]),
     %% make sure game is started
-    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
     ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
     empty_message_queue(),
-    %% wait for game to end
-    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT * 2)),
     %% clean up
     timer:sleep(2000),
     cleanup_game(Data),
@@ -618,7 +614,6 @@ test200() ->
                      [{"test200-bot1", 1, ['BLIND', 'FOLD', 'BLIND', 'FOLD']},
                       {"test200-bot2", 2, ['BLIND', 'BLIND', 'FOLD']}]),
     %% make sure game is started
-    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
     ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
     %% wait for game to end
     ?match(success, ?waitmsg({'END', GID, _Winners}, ?PLAYER_TIMEOUT)),
@@ -653,7 +648,6 @@ test210() ->
                       {"bot3", 3, ['RAISE', 'CALL', 'CALL', 'CHECK', 'CHECK']}
                      ]),
     %% make sure game is started
-    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
     ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
     %% wait for game to end
     ?match(success, ?waitmsg({'END', GID, _Winners}, ?PLAYER_TIMEOUT)),
@@ -702,7 +696,6 @@ split_pot() ->
                       {"split-pot-bot2", 2, []}
                      ]),
     %% make sure game is started
-    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
     wait_for_split_pot(GID, Obs, {P1, Actions1}, {P2, Actions2}, 0),
     N = 3,
     set_games_to_play(N, [P1, P2, Obs]),
@@ -796,7 +789,6 @@ test220() ->
     Actions = ['RAISE', 'CALL', 'CHECK', {'FILTER', Filter}],
     gen_server:cast(P3, {'SET ACTIONS', Actions}),    
     %% make sure game is started
-    ?match(success, ?waitmsg({'CANCEL', GID}, ?PLAYER_TIMEOUT)),
     ?match(success, ?waitmsg({'START', GID}, ?START_DELAY * 2)),
     %% wait for game to end
     ?match(success, ?waitmsg({'END', GID, _Winners}, ?PLAYER_TIMEOUT)),
