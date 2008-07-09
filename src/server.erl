@@ -79,7 +79,7 @@ init([Host, Port, TestMode]) ->
      },
     F = fun(Sock) -> parse_packet(Sock, Client) end, 
     tcp_server:stop(Port),
-    {ok, _} = tcp_server:start_raw_server(Port, F, 10240, 2048),
+    {ok, _} = tcp_server:start_raw_server(Port, F, 10240, 10240),
     Server = #server {
       host = Host,
       port = Port,
