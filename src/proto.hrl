@@ -154,3 +154,10 @@
 -define(ERR_BAD_LOGIN, 1).
 -define(ERR_ACCOUNT_DISABLED, 2).
 -define(ERR_START_DISABLED, 3).
+
+%%% Tournaments
+
+-define(?TT_SIT_GO, 1). % starts when N players register
+-define(?TT_NORMAL, 2). % starts at a given time
+
+

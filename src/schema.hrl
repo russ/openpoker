@@ -59,3 +59,19 @@
 	  enable_dynamic_games = false
 	 }).
 
+-record(tourney_config, {
+          id,
+          type, % normal or sit&go
+          max_players,
+          max_players_per_table,
+          start_date_time,
+          buy_in,
+          chips_per_player,
+          time_per_level, % minutes
+          blind_bump_per_level, % multiplier
+          level_1_blinds, % e.g. {10, 20}
+          ante_start_level,
+          time_per_break, % minutes
+          break_frequency % number
+         }).
+

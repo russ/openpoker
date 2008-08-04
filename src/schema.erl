@@ -99,6 +99,20 @@ install(Nodes) when is_list(Nodes) ->
 				       {error, Any6},
 				       {nodes, Nodes}])
     end,
+    case mnesia:create_table(tourney_config, 
+			     [
+			      {disc_copies, Nodes}, 
+			      {type, set}, 
+			      {attributes, record_info(fields, tourney_config)}
+			     ]) of
+	{atomic, ok} ->
+	    ok;
+	Any7 ->
+	    error_logger:error_report([{message, "Cannot install table"},
+				       {table, tourney_config},
+				       {error, Any7},
+				       {nodes, Nodes}])
+    end,
     populate(),
     reset_counters(),
     ok.
@@ -121,20 +135,6 @@ populate() ->
 	       ?START_DELAY, ?PLAYER_TIMEOUT,
 	       50).
     
-%%Reset all the counters at the time of schema installation
-
 reset_counters()->
     counter:reset(game),
     counter:reset(player).
-
-
-
-
-
-
-
-
-
-
-
-
