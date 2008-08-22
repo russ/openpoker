@@ -6,7 +6,7 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 
--export([start/0, stop/1, setup/1, cleanup/0]).
+-export([start/0, stop/1, setup/1, setup/0, cleanup/0]).
 
 -export([remove/1, print/1, filter/0, create_players/0,
 	 test/0, test/3, test/4, test/5, count/0]).
@@ -278,41 +278,41 @@ test(Host, Port, MaxGames, Delay, Trace)
        is_atom(Host), is_number(Port) ->
     io:format("Simulating gameplay with ~p games...~n", [MaxGames]),
     DB = opendb(),
-    {ok, MultiBot} = start(),
-    erlang:monitor(process, MultiBot),
+    {ok, Mb} = start(),
+    erlang:monitor(process, Mb),
     T1 = erlang:now(),
     Key = dets:first(DB),
-    spawn(fun() -> test(DB, Key, MultiBot, MaxGames, 
+    spawn(fun() -> test(DB, Key, Mb, MaxGames, 
 			Host, Port, Trace, Delay) end),
     io:format("Waiting for games to end...~n"),
     receive
-	{'DOWN', _, _, MultiBot, normal} ->
+	{'DOWN', _, _, Mb, normal} ->
 	    T2 = erlang:now(),
 	    Elapsed = timer:now_diff(T2, T1) / 1000 / 1000,
-	    io:format("MultiBot exited successfully, ~w seconds elapsed~n", 
+	    io:format("Mb exited successfully, ~w seconds elapsed~n", 
 		      [Elapsed]);
 	Other ->
 	    erlang:display(Other)
     end.
 
-test(DB, '$end_of_table', _MultiBot, _Max, _Host, _Port, _Trace, _Delay) ->
+test(DB, '$end_of_table', _Mb, _Max, _Host, _Port, _Trace, _Delay) ->
     io:format("End of database reached. No more games to launch!~n"),
     closedb(DB);
 
-test(DB, _Key, _MultiBot, 0, _Host, _Port, _Trace, _Delay) ->
+test(DB, _Key, _Mb, 0, _Host, _Port, _Trace, _Delay) ->
     closedb(DB);
 
-test(DB, Key, MultiBot, Max, Host, Port, Trace, Delay) ->
+test(DB, Key, Mb, Max, Host, Port, Trace, Delay) ->
     %%F = fun() ->
     {Host1, Port1} =  find_server(Host, Port),
     [Game] = dets:lookup(DB, Key),
     Game1 = fix_nicks(Game),
     update_players(Game1),
-    gen_server:cast(MultiBot, {'RUN', Game1, Host1, Port1, Trace, Delay}),
+    gen_server:cast(Mb, {'RUN', Game1, Host1, Port1, Trace, Delay}),
     %%	end,
     %%spawn(F),
     Key1 = dets:next(DB, Key),
-    test(DB, Key1, MultiBot, Max - 1, Host, Port, Trace, Delay).
+    test(DB, Key1, Mb, Max - 1, Host, Port, Trace, Delay).
 
 setup_players(Game, GID, Host, Port) ->
     Players = lists:reverse(tuple_to_list(Game#irc_game.players)),
@@ -324,10 +324,9 @@ setup_players(_IRC_ID, _GID, _Host, _Port, _Players, 0, Acc) ->
 
 setup_players(IRC_ID, GID, Host, Port, [Player|Rest], N, Acc) ->
     %% start bot
-    {ok, Bot} = bot:start(IRC_ID, Player#irc_player.nick, 
-			  N, Player#irc_player.balance),
-    Nick = Player#irc_player.nick,
-    Pass = "foo",
+    Nick = list_to_binary(Player#irc_player.nick),
+    {ok, Bot} = bot:start(IRC_ID, Nick, N, Player#irc_player.balance),
+    Pass = <<"foo">>,
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, 15000),
     gen_server:cast(Bot, {'SET ACTIONS', Player#irc_player.actions}),
     gen_server:cast(Bot, {?PP_LOGIN, Nick, Pass}),
@@ -553,8 +552,7 @@ find_server(Sock) ->
 	{tcp, Sock, Bin} ->
 	    case proto:read(Bin) of 
 		{?PP_HANDOFF, Port, Host} ->
-		    io:format("Gotta go to ~s:~w~n", [Host, Port]),
-		    {Host, Port}
+		    {binary_to_list(Host), Port}
 	    end;
 	{error, closed} ->
 	    io:format("Error retrieving gateway reply~n"),
@@ -608,6 +606,14 @@ setup(Host) ->
     server:start(Host, 6000, true),
     gateway:start(node(), 3000, 500000),
     ok.
+
+setup() ->
+    schema:install(),
+    mb:create_players(),
+    mb:setup(localhost).
+
+test() ->
+    mb:test(localhost, 3000, 10).
 
 cleanup() ->
     mnesia:start(),
@@ -679,12 +685,11 @@ start_game(Host, Port, Game, Delay)
     end.
 
 start_game(Sock, Packet) ->
-    L = [?PP_MAKE_TEST_GAME] ++ binary_to_list(term_to_binary(Packet)),
-    Bin = list_to_binary(L),
-    ok = gen_tcp:send(Sock, Bin),
+    T = {?PP_MAKE_TEST_GAME, term_to_binary(Packet)},
+    ok = gen_tcp:send(Sock, proto:write(T)),
     receive
-	{tcp, Sock, Bin1} ->
-	    case proto:read(Bin1) of 
+	{tcp, Sock, Bin} ->
+	    case proto:read(Bin) of 
 		{?PP_GOOD, ?PP_MAKE_TEST_GAME, GID} ->
 		    GID;
 		Any ->
@@ -701,8 +706,3 @@ start_game(Sock, Packet) ->
 	    none
     end.
 
-test() ->
-    schema:install(),
-    multibot:create_players(),
-    multibot:setup(localhost),
-    multibot:test(localhost, 3000, 10).
