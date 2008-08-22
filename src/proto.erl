@@ -203,6 +203,11 @@ write({?PP_BAD, Cmd, Error}) ->
 
 write({?PP_HANDOFF, Port, Host}) 
   when is_number(Port),
+       is_atom(Host) ->
+    write({?PP_HANDOFF, Port, atom_to_list(Host)});
+
+write({?PP_HANDOFF, Port, Host}) 
+  when is_number(Port),
        is_list(Host) ->
     L = [?PP_HANDOFF, <<Port:16>>, length(Host)|Host],
     list_to_binary(L);
@@ -513,6 +518,9 @@ write({Cmd, GID, SeatNum, Seq})
        Cmd == ?PP_NOTIFY_SB;
        Cmd == ?PP_NOTIFY_BB ->
     <<Cmd, GID:32, SeatNum, Seq:16>>;
+
+write({Cmd = ?PP_MAKE_TEST_GAME, Bin}) ->
+    <<Cmd, Bin/binary>>;
 
 write(Tuple) 
   when is_tuple(Tuple) ->
