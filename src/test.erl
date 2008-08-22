@@ -377,7 +377,7 @@ test140() ->
     timer:sleep(3000),
     %% create dummy players
     Nick = <<"test14-1">>,
-    {atomic, ID} = player:create(Nick, <<"foo">>, <<"">>, 1000.0),
+    {atomic, ID} = player:create(Nick, <<"foo">>, <<"foo">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, {?PP_LOGIN, Nick, <<"@#%^@#">>}),
     ?match(success, ?waittcp({?PP_BAD, ?PP_LOGIN, ?ERR_BAD_LOGIN}, 2000)),
