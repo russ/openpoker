@@ -145,7 +145,7 @@ handle_cast({'NOTIFY LEAVE',GID, Game}, Data) ->
             InplayAmount = gb_trees:get(GID,Xref);
         %%could not get the gb_tree for this game
         false->
-            InplayAmount = 0
+            InplayAmount = 0.0
     end,
     InplayNow = Data#data.inplay,
     Data1 = Data#data {inplay = InplayNow - InplayAmount},
@@ -167,7 +167,7 @@ handle_cast({'NOTIFY LEAVE',GID, Game}, Data) ->
                         true ->
                             ok
                     end,
-                    Data1#data { inplay = 0 };
+                    Data1#data { inplay = 0.0 };
                 true ->
                     Data1
             end,
@@ -292,7 +292,7 @@ handle_call({'GAME INPLAY',Game}, _From, Data) ->
             InplayAmount = gb_trees:get(Game,Xref);
         %%could not get the gb_tree for this game
         false->
-            InplayAmount = 0
+            InplayAmount = 0.0
     end,
 	{reply, InplayAmount, Data};
 
