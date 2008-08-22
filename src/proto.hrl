@@ -157,7 +157,9 @@
 
 %%% Tournaments
 
--define(?TT_SIT_GO, 1). % starts when N players register
--define(?TT_NORMAL, 2). % starts at a given time
+-define(TT_SIT_GO, 1). % starts when N players register
+-define(TT_NORMAL, 2). % starts at a given time
+-define(TT_REBUY, 3). 
+
 
 
