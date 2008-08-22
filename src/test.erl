@@ -134,7 +134,7 @@ test40() ->
 	     after 100 ->
 		     none
 	     end,
-    ?match({packet, {?PP_NOTIFY_JOIN, GID, Player, 1,1000, 0}}, Packet),
+    ?match({packet, {?PP_NOTIFY_JOIN, GID, Player, 1,1000.0, 0}}, Packet),
     player:cast(PID, {?PP_SEAT_QUERY, Game}),
     Packet1 = receive
 		  Any1 ->
@@ -148,7 +148,7 @@ test40() ->
 	      after 200 ->
 		      none
 	      end,
-	?match({packet, {?PP_NOTIFY_GAME_INPLAY, GID, Player,1000,1,1}}, Packet1),
+	?match({packet, {?PP_NOTIFY_GAME_INPLAY, GID, Player,1000.0,1,1}}, Packet1),
     ?match({packet, {?PP_SEAT_STATE, GID, 1, ?SS_TAKEN, PID}}, Packet2),
     ?differ(none, proto:write({?PP_SEAT_STATE, GID, 1, ?SS_TAKEN, PID})),
     cardgame:stop(Game),
@@ -224,7 +224,7 @@ test80() ->
     counter:reset(player),
     {atomic, Max} = db:get(cluster_config, 0, max_login_errors),
     Nick = pid_to_list(self()),
-    {atomic, ID} = player:create(Nick, "foo", "", 1000),
+    {atomic, ID} = player:create(Nick, "foo", "", 1000.0),
     test80_1(Nick, Max),
     ?match({atomic, Max}, db:get(player, ID, login_errors)),
     {atomic, ok} = db:delete(player, ID),
@@ -237,7 +237,7 @@ test80_1(Nick, 0) ->
     
 test80_1(Nick, N) ->
     ?match({error, ?ERR_BAD_LOGIN}, login:login(Nick, "@#%@#%", self())), 
-    {atomic, [Player]} = db:find(player, nick, Nick),
+    {atomic, [Player]} = db:find(player, nick, list_to_binary(Nick)),
     Disabled = N == 0,
     ?match(Disabled, Player#player.disabled),
     test80_1(Nick, N - 1).
@@ -248,7 +248,7 @@ test90() ->
     db:delete(player),
     counter:reset(player),
     Nick = pid_to_list(self()),
-    {atomic, ID} = player:create(Nick, "foo", "", 1000),
+    {atomic, ID} = player:create(Nick, "foo", "", 1000.0),
     {atomic, ok} = db:set(player, ID, {disabled, true}),
     ?match({error, ?ERR_ACCOUNT_DISABLED}, 
 	   login:login(Nick, "@#%@#%", self())), 
@@ -271,6 +271,7 @@ test100() ->
     ?match({atomic, Socket}, db:get(player, ID, socket)),
     ?match(true, util:is_process_alive(Pid)),
     login:logout(ID),
+    timer:sleep(1000),
     ?match(false, util:is_process_alive(Pid)),
     ?match({atomic, none}, db:get(player, ID, pid)),
     ?match({atomic, none}, db:get(player, ID, socket)),
@@ -330,13 +331,13 @@ test120() ->
     login:logout(ID),
     %% look for notify join
     ?match(success, ?waitmsg({packet, 
-			      {?PP_NOTIFY_JOIN, GID, Pid, 1,1000, 0}}, 100)),
+			      {?PP_NOTIFY_JOIN, GID, Pid, 1,1000.0, 0}}, 100)),
     %% look for game update packets.
     %% we should have just one.
     ?match(success, ?waitmsg({packet, 
-			      {?PP_NOTIFY_GAME_INPLAY, GID, Pid, 1000,1, 1}}, 100)),
+			      {?PP_NOTIFY_GAME_INPLAY, GID, Pid, 1000.0,1, 1}}, 100)),
     ?match(success, ?waitmsg({packet, 
-			      {?PP_NOTIFY_JOIN, GID, Pid, 1,1000, 0}}, 100)),
+			      {?PP_NOTIFY_JOIN, GID, Pid, 1,1000.0, 0}}, 100)),
     {atomic, ok} = db:delete(player, ID),
     cardgame:stop(Game),
     ok.
@@ -375,18 +376,18 @@ test140() ->
     {ok, Server} = server:start(Host, Port),
     timer:sleep(3000),
     %% create dummy players
-    Nick = "test14-1",
-    {atomic, ID} = player:create(Nick, "foo", "", 1000),
+    Nick = <<"test14-1">>,
+    {atomic, ID} = player:create(Nick, <<"foo">>, <<"">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
-    ?tcpsend(Socket, {?PP_LOGIN, Nick, "@#%^@#"}),
+    ?tcpsend(Socket, {?PP_LOGIN, Nick, <<"@#%^@#">>}),
     ?match(success, ?waittcp({?PP_BAD, ?PP_LOGIN, ?ERR_BAD_LOGIN}, 2000)),
-    ?tcpsend(Socket, {?PP_LOGIN, Nick, "foo"}),
+    ?tcpsend(Socket, {?PP_LOGIN, Nick, <<"foo">>}),
     ?match(success, ?waittcp({?PP_PID, ID}, 2000)),
     %% disconnect without logging out
     gen_tcp:close(Socket),
     %% login again
     {ok, Socket1} = tcp_server:start_client(Host, Port, 1024),
-    ?tcpsend(Socket1, {?PP_LOGIN, Nick, "foo"}),
+    ?tcpsend(Socket1, {?PP_LOGIN, Nick, <<"foo">>}),
     ?match(success, ?waittcp({?PP_PID, ID}, 2000)),
     ?tcpsend(Socket1, ?PP_LOGOUT),
     ?match(success, ?waittcp({?PP_GOOD, ?PP_LOGOUT, 0}, 2000)),
@@ -492,10 +493,10 @@ test170() ->
     {ok, Server} = server:start(Host, Port),
     timer:sleep(3000),
     %% create dummy players
-    Nick = pid_to_list(self()),
-    {atomic, ID} = player:create(Nick, "foo", "", 1000),
+    Nick = list_to_binary(pid_to_list(self())),
+    {atomic, ID} = player:create(Nick, <<"foo">>, <<"">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
-    ?tcpsend(Socket, {?PP_LOGIN, Nick, "foo"}),
+    ?tcpsend(Socket, {?PP_LOGIN, Nick, <<"foo">>}),
     ?match(success, ?waittcp({?PP_PID, ID}, 2000)),
     Packet = {?PP_NEW_GAME_REQ, ?GT_IRC_TEXAS, 1,
 	      {?LT_FIXED_LIMIT, 10, 20}},
@@ -542,10 +543,10 @@ test180() ->
     db:delete(game_xref),
     {ok, Server} = server:start(Host, Port),
     timer:sleep(3000),
-    Nick = pid_to_list(self()),
-    {atomic, ID} = player:create(Nick, "foo", "", 1000.0),
+    Nick = list_to_binary(pid_to_list(self())),
+    {atomic, ID} = player:create(Nick, <<"foo">>, <<"">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
-    ?tcpsend(Socket, {?PP_LOGIN, Nick, "foo"}),
+    ?tcpsend(Socket, {?PP_LOGIN, Nick, <<"foo">>}),
     ?match(success, ?waittcp({?PP_PID, ID}, 2000)),
     %% balance check 
     ?tcpsend(Socket, ?PP_BALANCE_REQ),
@@ -589,7 +590,7 @@ test190(Host, Port, [Player|Rest])
     Nick = Player#player.nick,
     ID = Player#player.oid,
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
-    ?tcpsend(Socket, {?PP_LOGIN, Nick, "foo"}),
+    ?tcpsend(Socket, {?PP_LOGIN, Nick, <<"foo">>}),
     ?match(success, ?waittcp({?PP_PID, ID}, 2000)),
     ?tcpsend(Socket, ?PP_LOGOUT),
     ?match(success, ?waittcp({?PP_GOOD, ?PP_LOGOUT, 0}, 2000)),
@@ -832,7 +833,7 @@ make_player(Nick)
 
 make_player(Nick) 
   when is_list(Nick) ->
-    {atomic, _ID} = player:create(Nick, "foo", "", 1000),
+    {atomic, _ID} = player:create(Nick, "foo", "", 1000.0),
     {ok, Pid} = player:start(Nick),
     Pid.
 
@@ -877,7 +878,7 @@ join_game(_Game, []) ->
     ok;
 
 join_game(Game, [{Player, SeatNum}|Rest]) ->
-    cardgame:cast(Game, {?PP_JOIN, Player, SeatNum, 1000, ?PS_PLAY}),
+    cardgame:cast(Game, {?PP_JOIN, Player, SeatNum, 1000.0, ?PS_PLAY}),
     join_game(Game, Rest).
     
 install_trigger(Fun, State, Pids) when is_list(Pids) ->
@@ -940,12 +941,13 @@ connect_observer(Host, Port, GID, GamesToWatch, Trace) ->
     {0, Obs}.
 
 connect_player(Nick, Host, Port, GID, SeatNum, GamesToPlay, Actions) ->
-    {atomic, ID} = player:create(Nick, "foo", "", 1000),
-    {ok, Bot} = bot:start(Nick, SeatNum, SeatNum, 1000),
+    Nick1 = list_to_binary(Nick),
+    {atomic, ID} = player:create(Nick1, <<"foo">>, <<"">>, 1000.0),
+    {ok, Bot} = bot:start(Nick, SeatNum, SeatNum, 1000.0),
     gen_server:cast(Bot, {'SET ACTIONS', Actions}),
     gen_server:cast(Bot, {'GAMES TO PLAY', GamesToPlay}),
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, 15000),
-    gen_server:cast(Bot, {?PP_LOGIN, Nick, "foo"}),
+    gen_server:cast(Bot, {?PP_LOGIN, Nick1, <<"foo">>}),
     gen_server:cast(Bot, {?PP_WATCH, GID}),
     {ID, Bot}.
 
@@ -958,7 +960,7 @@ setup_game(Host, Port, GID, GamesToPlay, Bots)
        is_number(GID),
        is_number(GamesToPlay),
        is_list(Bots) ->
-    X = connect_observer(Host, Port, GID, GamesToPlay, true),
+    X = connect_observer(Host, Port, GID, GamesToPlay, false),
     setup_game(Host, Port, GID, GamesToPlay, Bots, [X]);
     
 setup_game(_Host, _Port, _GID, _GamesToPlay, []) ->
@@ -989,4 +991,15 @@ cleanup_game([{ID, Player}|Rest]) ->
     gen_server:cast(Player, stop),
     {atomic, ok} = db:delete(player, ID),
     cleanup_game(Rest).
+
+%%% 
+
+profile() ->
+    schema:install(),
+    profile(all).
+
+profile(Test) ->
+    fprof:apply(test, Test, []),
+    fprof:profile([{dump, []}]),
+    fprof:analyse([{dest, []}]). 
 
