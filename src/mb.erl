@@ -1,6 +1,6 @@
 %%% Copyright (C) 2005-2008 Wager Labs, SA
 
--module(multibot).
+-module(mb).
 -behaviour(gen_server).
 
 -export([init/1, handle_call/3, handle_cast/2, 
@@ -9,7 +9,7 @@
 -export([start/0, stop/1, setup/1, cleanup/0]).
 
 -export([remove/1, print/1, filter/0, create_players/0,
-	 test/3, test/4, test/5, count/0]).
+	 test/0, test/3, test/4, test/5, count/0]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -45,7 +45,7 @@ new() ->
     }.
     
 start() ->
-    gen_server:start(multibot, [], []).
+    gen_server:start(mb, [], []).
 
 init([]) ->
     process_flag(trap_exit, true),
@@ -553,7 +553,7 @@ find_server(Sock) ->
 	{tcp, Sock, Bin} ->
 	    case proto:read(Bin) of 
 		{?PP_HANDOFF, Port, Host} ->
-		    %%io:format("Gotta go to ~s:~w~n", [Host, Port]),
+		    io:format("Gotta go to ~s:~w~n", [Host, Port]),
 		    {Host, Port}
 	    end;
 	{error, closed} ->
@@ -601,7 +601,7 @@ player_cards(Players, Deck, N, Count, Acc) ->
     player_cards(Players, Deck, N, Count - 1, [Card|Acc]).
 
 setup(Host) ->
-    multibot:cleanup(),
+    mb:cleanup(),
     timer:sleep(1000),
     %% start server in test mode 
     %% to enable starting of test games
@@ -613,16 +613,16 @@ cleanup() ->
     mnesia:start(),
     case mnesia:wait_for_tables([game_config], 10000) of 
 	ok ->
-	    io:format("multibot:cleanup: deleting game info...~n"),
+	    io:format("mb:cleanup: deleting game info...~n"),
 	    db:delete(game_xref),
         db:delete(timeout_history),
-	    %%io:format("multibot:cleanup: deleting player info...~n"),
+	    %%io:format("mb:cleanup: deleting player info...~n"),
 	    %%db:delete(player),
 	    %%counter:reset(player),
 	    counter:reset(game),
 	    db:set(cluster_config, 0, {enable_dynamic_games, true});
 	Any ->
-	    io:format("multibot:cleanup: mnesia error ~w~n", [Any])
+	    io:format("mb:cleanup: mnesia error ~w~n", [Any])
     end,
     ok.
 
@@ -700,3 +700,9 @@ start_game(Sock, Packet) ->
 	    io:format("start_game: timeout, exiting~n"),
 	    none
     end.
+
+test() ->
+    schema:install(),
+    multibot:create_players(),
+    multibot:setup(localhost),
+    multibot:test(localhost, 3000, 10).

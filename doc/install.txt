@@ -77,12 +77,12 @@ ok
 
 then 
 
-(master@bigdaddy)2> multibot:create_players().
-(master@bigdaddy)3> multibot:setup("bigdaddy").
-multibot:cleanup: deleting game info...
-multibot:cleanup: deleting player info...
-multibot:cleanup: deleting game info...
-multibot:cleanup: deleting player info...
+(master@bigdaddy)2> mb:create_players().
+(master@bigdaddy)3> mb:setup("bigdaddy").
+mb:cleanup: deleting game info...
+mb:cleanup: deleting player info...
+mb:cleanup: deleting game info...
+mb:cleanup: deleting player info...
 Starting a port server on 2000...
 gateway:start(master@bigdaddy, 3000, 1000)
 Waiting for game servers...
@@ -93,7 +93,7 @@ ok
 
 In my case:
 
-(master@bigdaddy)4> multibot:test(localhost, 3000, 10).
+(master@bigdaddy)4> mb:test(localhost, 3000, 10).
 gateway: 0.352000ms
 gateway: 0.354000ms
 gateway: 0.551000ms
@@ -121,17 +121,17 @@ ok
 
 9. Arguments to the distributed testing harness
 
-The first argument to multibot:test() is the host where the gateway
+The first argument to mb:test() is the host where the gateway
 is running. The second is the port that the gateway is listening on
  and the third argument is the number of games
 to run simultaneously. You can also add "true" as a fourth parameter,
 to get lots of tracing output:
 
-multibot:test(localhost, 3000, 10, true).
+mb:test(localhost, 3000, 10, true).
 
 Multibot launches the given number of games simultaneously
 and an "observer" bot is launched to watch each game. 
-Passing true as the fourth parameter to multibot:test()
+Passing true as the fourth parameter to mb:test()
 tells the observer to print what it sees.
 
 Note that the default installation is limited to 100 simultaneous games.
