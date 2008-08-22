@@ -2,6 +2,16 @@
 
 -module(proto).
 
+%%  t:t([{proto, read}, {proto, write}, {rfc4627, encode}]).
+
+%%  t:t([{proto, write_check}, {rfc4627, encode}]).
+
+%%  t:t([{proto, read_check}]).
+
+%%  t:t([{proto, write_check}]).
+
+%% t:t([{gen_fsm, send_event}]).
+
 -export([read/1, write/1, test/0]).
 
 -include("test.hrl").
@@ -11,538 +21,157 @@
 
 %%% Client -> Server
 
-read(<<?PP_GOOD, Cmd, Extra:32>>) ->
-    {?PP_GOOD, Cmd, Extra};
+read(Data) ->
+    {ok, L, []} = rfc4627:decode(Data),
+    T = read_check(deep_list_to_tuple(L)),
+    read(T, size(T)).
 
-read(<<?PP_BAD, Cmd, Error>>) ->
-    {?PP_BAD, Cmd, Error};
+read(Data, 1) ->
+    element(1, Data);
 
-read(<<?PP_LOGIN, Bin/binary>>) ->
-    {Nick, Bin1} = read_string(Bin),
-    {Pass, _} = read_string(Bin1),
-    {?PP_LOGIN, Nick, Pass};
+read(Data, _) ->
+    Data.
 
-read(<<Cmd>>) 
-  when Cmd == ?PP_PING;
-       Cmd == ?PP_PONG;
-       Cmd == ?PP_LOGOUT;
-       Cmd == ?PP_BALANCE_REQ ->
-    Cmd;
+write(Data) when not is_tuple(Data) ->
+    write({Data});
 
-read(<<?PP_HANDOFF, Port:16, Bin/binary>>) ->
-    {Host, _} = read_string(Bin),
-    {?PP_HANDOFF, Port, Host};
+write(Data) ->
+    rfc4627:encode(deep_tuple_to_list(write_check(Data))).
 
-read(<<?PP_PID, PID:32>>) ->
-    {?PP_PID, PID};
+read_check(Data) ->
+    Data1 = game_id_to_pid(Data),
+    data_to_card(Data1).
 
-read(<<?PP_JOIN, GID:32, SeatNum, BuyIn:32>>) ->
-    case find_game(GID) of
+write_check(Data) ->
+    Data1 = card_to_data(Data),
+    Data2 = pid_to_player_id(Data1),
+    pid_to_game_id(Data2).
+
+game_id_to_pid(Cmd) 
+  when element(1, Cmd) == ?PP_WATCH; 
+       element(1, Cmd) == ?PP_UNWATCH;
+       element(1, Cmd) == ?PP_SIT_OUT;
+       element(1, Cmd) == ?PP_COME_BACK;
+       element(1, Cmd) == ?PP_FOLD;
+       element(1, Cmd) == ?PP_LEAVE;
+       element(1, Cmd) == ?PP_JOIN;
+       element(1, Cmd) == ?PP_CALL;
+       element(1, Cmd) == ?PP_RAISE;
+       element(1, Cmd) == ?PP_CHAT;
+       element(1, Cmd) == ?PP_SEAT_QUERY;
+       element(1, Cmd) == ?PP_NOTIFY_PRIVATE_CARDS ->
+    case find_game(element(2, Cmd)) of
 	Pid when is_pid(Pid) ->
-	    {?PP_JOIN, Pid, SeatNum, BuyIn / 100};
-	Any ->
-	    io:format("JOIN ~w: ~w~n", [GID, Any]),
-	    Any
-    end;
-
-read(<<Cmd, GID:32>>) 
-  when Cmd == ?PP_WATCH; 
-       Cmd == ?PP_UNWATCH;
-       Cmd == ?PP_SIT_OUT;
-       Cmd == ?PP_COME_BACK;
-       Cmd == ?PP_FOLD;
-       Cmd == ?PP_LEAVE ->
-    case find_game(GID) of
-	Pid when is_pid(Pid) ->
-	    {Cmd, Pid};
+            setelement(2, Cmd, Pid);
 	Any ->
 	    Any
     end;
 
-read(<<Cmd, GID:32, Amount:32>>) 
-  when Cmd == ?PP_CALL;
-       Cmd == ?PP_RAISE ->
-    case find_game(GID) of
-	Pid when is_pid(Pid) ->
-	    {Cmd, Pid, Amount / 100};
-	Any ->
-	    Any
-    end;
+game_id_to_pid(Cmd) ->
+    Cmd.
 
-read(<<?PP_CHAT, GID:32, Bin/binary>>) ->
-    {Message, _} = read_string(Bin),
-    case find_game(GID) of
-	Pid when is_pid(Pid) ->
-	    {?PP_CHAT, Pid, Message};
-	Any ->
-	    Any
-    end;
+pid_to_game_id(Cmd) 
+  when element(1, Cmd) == ?PP_BET_REQ ->
+    GID = cardgame:call(element(2, Cmd), 'ID'),
+    setelement(2, Cmd, GID);
 
-read(<<?PP_GAME_QUERY, 
-      GameType, LimitType,
-      ExpOp, Expected, 
-      JoinOp, Joined,
-      WaitOp, Waiting>>) ->
-    {?PP_GAME_QUERY, 
-     GameType, LimitType,
-     ExpOp, Expected, 
-     JoinOp, Joined,
-     WaitOp, Waiting};
+pid_to_game_id(Cmd) ->
+    Cmd.
 
-read(<<?PP_SEAT_QUERY, GID:32>>) ->
-    case find_game(GID) of
-	Pid when is_pid(Pid) ->
-	    {?PP_SEAT_QUERY, Pid};
-	Any ->
-	    io:format("PLAYER_QUERY ~w: ~w~n", [GID, Any]),
-	    Any
-    end;
-
-read(<<?PP_PLAYER_INFO_REQ, PID:32>>) ->
-    {?PP_PLAYER_INFO_REQ, PID};
-
-read(<<?PP_SEAT_STATE, GID:32, SeatNum, State, PID:32>>) ->
-    {?PP_SEAT_STATE, GID, SeatNum, State, PID};
-
-%%% Server -> Client
-
-read(<<?PP_GAME_INFO, GID:32, GameType,
-      Expected, Joined, Waiting,
-      LimitType, Bin/binary>>) ->
-    <<Low:32, High:32>> = Bin,
-    Limit = {LimitType, Low / 100, High / 100},
-    {?PP_GAME_INFO, GID, GameType, Expected, Joined, Waiting, Limit};
-	    
-read(<<?PP_PLAYER_INFO, PID:32, InPlay:32, Bin/binary>>) ->
-    {Nick, Bin1} = read_string(Bin),
-    {Location, _} = read_string(Bin1),
-    {?PP_PLAYER_INFO, PID, InPlay / 100, Nick, Location};
-
-read(<<?PP_BET_REQ, GID:32, Call:32, Min:32, Max:32>>) ->
-    {?PP_BET_REQ, GID, Call / 100, Min / 100, Max / 100};
-
-read(<<Cmd, GID:32, Face, Suit, Seq:16>>)
+data_to_card({Cmd, GID, Face, Suit, Seq}) 
   when Cmd == ?PP_NOTIFY_DRAW;
        Cmd == ?PP_NOTIFY_SHARED ->
-    {Cmd, GID, {hand:face(1 bsl Face), hand:suit(Suit)}, Seq}; 
+    {Cmd, GID, {hand:face(1 bsl Face), hand:suit(Suit)}, Seq};
 
-read(<<?PP_NOTIFY_JOIN, GID:32, PID:32, SeatNum, BuyIn:32, Seq:16>>) -> 
-    {?PP_NOTIFY_JOIN, GID, PID, SeatNum, BuyIn/100, Seq};
+data_to_card(Cmd) ->
+    Cmd.
 
-read(<<?PP_NOTIFY_GAME_INPLAY, GID:32, PID:32, GameInplay:32,SeatNum,Seq:16>>) -> 
-    {?PP_NOTIFY_GAME_INPLAY, GID, PID, GameInplay/100,SeatNum,Seq};
-
-read(<<Cmd, GID:32, PID:32, Seq:16>>)
-  when Cmd == ?PP_NOTIFY_PRIVATE;
-       Cmd == ?PP_NOTIFY_LEAVE ->
-    {Cmd, GID, PID, Seq};
-
-read(<<?PP_NOTIFY_CHAT, GID:32, PID:32, Seq:16, Bin/binary>>) ->
-    {Message, _} = read_string(Bin),
-    {?PP_NOTIFY_CHAT, GID, PID, Seq, Message};
-    
-read(<<Cmd, GID:32, Seq:16>>)
-  when Cmd == ?PP_NOTIFY_START_GAME;
-       Cmd == ?PP_NOTIFY_CANCEL_GAME;
-       Cmd == ?PP_NOTIFY_END_GAME ->
-    {Cmd, GID, Seq};
-
-read(<<Cmd, GID:32, PID:32, Amount:32, Seq:16>>)
-  when Cmd == ?PP_NOTIFY_WIN;
-       Cmd == ?PP_NOTIFY_CALL;
-       Cmd == ?PP_NOTIFY_RAISE;
-       Cmd == ?PP_NOTIFY_BET ->
-    {Cmd, GID, PID, Amount / 100, Seq};
-
-%% Player state change
-
-read(<<?PP_PLAYER_STATE, GID:32, PID:32, State, Seq:16>>) ->
-    {?PP_PLAYER_STATE, GID, PID, State, Seq};
-    
-%% Game stage
-
-read(<<?PP_GAME_STAGE, GID:32, Stage, Seq:16>>) ->
-    {?PP_GAME_STAGE, GID, Stage, Seq};
-
-read(<<?PP_NEW_GAME_REQ, GameType, Expected, LimitType, Bin/binary>>) ->
-    <<Low:32, High:32>> = Bin,
-    Limit = {LimitType, Low / 100, High / 100},
-    {?PP_NEW_GAME_REQ, GameType, Expected, Limit};
-	    
-read(<<?PP_BALANCE_INFO, Balance:32, Inplay:32>>) ->
-    {?PP_BALANCE_INFO, Balance / 100, Inplay / 100};
-
-read(<<Cmd, GID:32, SeatNum, Seq:16>>) 
-  when Cmd == ?PP_NOTIFY_BUTTON;
-       Cmd == ?PP_NOTIFY_SB;
-       Cmd == ?PP_NOTIFY_BB ->
-    {Cmd, GID, SeatNum, Seq};
-
-read(<<?PP_MAKE_TEST_GAME, Bin/binary>>) ->
-    {?PP_MAKE_TEST_GAME, Bin};
-	    
-%% Catch-all
-
-read(Bin) when is_binary(Bin) ->
-    none.
-
-%%% Client -> Server
-
-write(Cmd) 
-  when Cmd == ?PP_LOGOUT;
-       Cmd == ?PP_PING;
-       Cmd == ?PP_PONG;
-       Cmd == ?PP_BALANCE_REQ ->
-    <<Cmd>>;
-
-write({?PP_GOOD, Cmd, Extra}) ->
-    <<?PP_GOOD, Cmd, Extra:32>>;
-
-write({?PP_BAD, Cmd, Error}) ->
-    <<?PP_BAD, Cmd, Error>>;
-
-write({?PP_HANDOFF, Port, Host}) 
-  when is_number(Port),
-       is_atom(Host) ->
-    write({?PP_HANDOFF, Port, atom_to_list(Host)});
-
-write({?PP_HANDOFF, Port, Host}) 
-  when is_number(Port),
-       is_list(Host) ->
-    L = [?PP_HANDOFF, <<Port:16>>, length(Host)|Host],
-    list_to_binary(L);
-
-write({?PP_HANDOFF, Port, Host}) 
-  when is_number(Port),
-       is_binary(Host) ->
-    L = [?PP_HANDOFF, <<Port:16>>, size(Host)|Host],
-    list_to_binary(L);
-
-write({?PP_LOGIN, Nick, Pass})
-  when is_list(Nick), 
-       is_list(Pass) ->
-    L1 = [length(Pass)|Pass],
-    L2 = [?PP_LOGIN, length(Nick), Nick|L1],
-    list_to_binary(L2);
-
-write({?PP_LOGIN, Nick, Pass})
-  when is_binary(Nick), 
-       is_binary(Pass) ->
-    L1 = [size(Pass)|Pass],
-    L2 = [?PP_LOGIN, size(Nick), Nick|L1],
-    list_to_binary(L2);
-
-write({?PP_PID, PID}) 
-  when is_number(PID) ->
-    <<?PP_PID, PID:32>>;
-
-write({?PP_JOIN, GID, SeatNum, BuyIn})
-  when is_number(GID), 
-       is_number(SeatNum) ->
-    <<?PP_JOIN, GID:32, SeatNum, (trunc(BuyIn * 100)):32>>;
-
-write({Cmd, GID}) 
-  when Cmd == ?PP_WATCH, is_number(GID);
-       Cmd == ?PP_UNWATCH, is_number(GID);
-       Cmd == ?PP_SIT_OUT, is_number(GID);
-       Cmd == ?PP_COME_BACK, is_number(GID);
-       Cmd == ?PP_JOIN, is_number(GID);
-       Cmd == ?PP_FOLD, is_number(GID);
-       Cmd == ?PP_LEAVE, is_number(GID) ->
-    <<Cmd, GID:32>>;
-
-write({Cmd, GID, Amount}) 
-  when Cmd == ?PP_CALL, is_number(GID);
-       Cmd == ?PP_RAISE, is_number(GID) ->
-    <<Cmd, GID:32, (trunc(Amount * 100)):32>>;
-
-write({?PP_CHAT, GID, Msg})
-  when is_number(GID), 
-       is_list(Msg) ->
-    list_to_binary([?PP_CHAT, <<GID:32>>, length(Msg)|Msg]);
-    
-write({?PP_CHAT, GID, Msg})
-  when is_number(GID), 
-       is_binary(Msg) ->
-    list_to_binary([?PP_CHAT, <<GID:32>>, size(Msg)|Msg]);
-    
-write({?PP_GAME_QUERY, 
-       GameType, LimitType,
-       ExpOp, Expected, 
-       JoinOp, Joined,
-       WaitOp, Waiting}) ->
-    <<?PP_GAME_QUERY, 
-     GameType, LimitType,
-     ExpOp, Expected, 
-     JoinOp, Joined,
-     WaitOp, Waiting>>;
-
-write({?PP_SEAT_QUERY, GID}) ->
-    <<?PP_SEAT_QUERY, GID:32>>;
-
-write({?PP_PLAYER_INFO_REQ, PID}) ->
-    <<?PP_PLAYER_INFO_REQ, PID:32>>;
-
-write({?PP_SEAT_STATE, GID, SeatNum, State, PID}) 
-  when State == ?SS_EMPTY;
-       State == ?SS_RESERVED;
-       State == ?SS_TAKEN ->
-    <<?PP_SEAT_STATE, GID:32, SeatNum, State, PID:32>>;
-
-write({?PP_NEW_GAME_REQ, GameType, Expected, Limit}) ->
-    {LimitType, Low, High} = Limit,
-    <<?PP_NEW_GAME_REQ, 
-     GameType, 
-     Expected,
-     LimitType, 
-     (trunc(Low * 100)):32,
-     (trunc(High * 100)):32>>;
-
-%%% Server -> Client
-
-write({?PP_GAME_INFO, GID, GameType, 
-       Expected, Joined, Waiting,
-       {LimitType, Low, High}})
-  when is_number(GID),
-       is_number(GameType),
-       is_number(Expected), 
-       is_number(Joined),
-       is_number(Waiting),
-       is_number(Low),
-       is_number(High) ->
-    <<?PP_GAME_INFO, GID:32, 
-     GameType, Expected, Joined, Waiting,
-     LimitType, 
-     (trunc(Low * 100)):32, 
-     (trunc(High * 100)):32>>;
+card_to_data({Cmd, GID, {Face, Suit}, Seq})
+  when Cmd == ?PP_NOTIFY_DRAW;
+       Cmd == ?PP_NOTIFY_SHARED ->
+    {Cmd, GID, (bits:log2(hand:face(Face))), (hand:suit(Suit)), Seq};
        
-write({?PP_PLAYER_INFO, Player, InPlay, Nick, Location})
-  when is_pid(Player),
-       is_number(InPlay),
-       is_list(Nick),
-       is_list(Location) ->     
-    PID = gen_server:call(Player, 'ID'),
-    L1 = [length(Location)|Location],
-    L2 = [?PP_PLAYER_INFO, <<PID:32>>, 
-	  <<(trunc(InPlay * 100)):32>>, 
-	  length(Nick), Nick|L1],
-    list_to_binary(L2);
+card_to_data({Cmd, GID, Player, Cards, Seq})
+  when Cmd == ?PP_NOTIFY_PRIVATE_CARDS ->
+    [{Face1, Suit1}, {Face2, Suit2}] = Cards,
+    PID = gen_server:call(Player,'ID'),
+    {Cmd, GID, PID, [{ (bits:log2(hand:face(Face1))), 
+                       (hand:suit(Suit1)) },
+                     { (bits:log2(hand:face(Face2))), 
+                       (hand:suit(Suit2)) }],
+     Seq};
 
-write({?PP_PLAYER_INFO, Player, InPlay, Nick, Location})
-  when is_pid(Player),
-       is_number(InPlay),
-       is_binary(Nick),
-       is_binary(Location) ->     
-    PID = gen_server:call(Player, 'ID'),
-    L1 = [size(Location)|Location],
-    L2 = [?PP_PLAYER_INFO, <<PID:32>>, 
-	  <<(trunc(InPlay * 100)):32>>, 
-	  size(Nick), Nick|L1],
-    list_to_binary(L2);
+card_to_data(Cmd) ->
+    Cmd.
 
-write({?PP_BET_REQ, Game, Call, Min, Max})
-  when is_pid(Game),
-       is_number(Call),
-       is_number(Min),
-       is_number(Max) ->
-    GID = cardgame:call(Game, 'ID'),
-    <<?PP_BET_REQ, GID:32, 
-     (trunc(Call * 100)):32, 
-     (trunc(Min * 100)):32, 
-     (trunc(Max * 100)):32>>;
+pid_to_player_id(Cmd) 
+  when element(1, Cmd) == ?PP_NOTIFY_CHAT ->
+    Player = element(3, Cmd),
+    PID = if
+              is_pid(Player) ->
+                  gen_server:call(Player, 'ID');
+              true ->
+                  Player
+          end,
+    setelement(3, Cmd, PID);
 
-write({Cmd, GID, {Face, Suit}, Seq})
-  when Cmd == ?PP_NOTIFY_DRAW, 
-       is_number(GID), 
-       is_atom(Face), 
-       is_atom(Suit),
-       is_number(Seq);
-       Cmd == ?PP_NOTIFY_SHARED, 
-       is_number(GID), 
-       is_atom(Face), 
-       is_atom(Suit),
-       is_number(Seq) ->
-    <<Cmd, GID:32, 
-     (bits:log2(hand:face(Face))), 
-     (hand:suit(Suit)), Seq:16>>;
-       
-write({Cmd, GID,Player,Cards, Seq})
-  when Cmd == ?PP_NOTIFY_PRIVATE_CARDS, 
-       is_number(GID), 
-       is_list(Cards), 
-       is_number(Seq) ->
-       [{Face1, Suit1}, {Face2, Suit2}] = Cards,
-       PID = gen_server:call(Player,'ID'),
-    <<Cmd, GID:32, PID:32, 
-     (bits:log2(hand:face(Face1))), 
-     (hand:suit(Suit1)),
-     (bits:log2(hand:face(Face2))), 
-     (hand:suit(Suit2)),
-     Seq:16>>;       
+pid_to_player_id(Cmd) 
+  when element(1, Cmd) == ?PP_NOTIFY_JOIN;
+       element(1, Cmd) == ?PP_NOTIFY_GAME_INPLAY;
+       element(1, Cmd) == ?PP_NOTIFY_PRIVATE;
+       element(1, Cmd) == ?PP_NOTIFY_LEAVE;
+       element(1, Cmd) == ?PP_NOTIFY_CHAT;
+       element(1, Cmd) == ?PP_NOTIFY_WIN;
+       element(1, Cmd) == ?PP_NOTIFY_CALL;
+       element(1, Cmd) == ?PP_NOTIFY_BET;
+       element(1, Cmd) == ?PP_NOTIFY_RAISE;
+       element(1, Cmd) == ?PP_PLAYER_STATE ->
+    PID = gen_server:call(element(3, Cmd), 'ID'),
+    setelement(3, Cmd, PID);
 
-write({?PP_NOTIFY_JOIN, GID, Player, SeatNum,BuyIn, Seq})
-when is_number(GID),
-     is_pid(Player),
-     is_number(SeatNum),
-     is_number(BuyIn),
-     is_number(Seq) ->
-    PID = gen_server:call(Player, 'ID'),
-    <<?PP_NOTIFY_JOIN, GID:32, PID:32, SeatNum,(trunc(BuyIn * 100)):32, Seq:16>>;
-               
-write({?PP_NOTIFY_GAME_INPLAY, GID, Player, GameInplay,SeatNum, Seq})
-when is_number(GID),
-     is_pid(Player),
-     is_number(GameInplay),
-     is_number(SeatNum),
-     is_number(Seq) ->
-    PID = gen_server:call(Player, 'ID'),
-    <<?PP_NOTIFY_GAME_INPLAY, GID:32, PID:32, (trunc(GameInplay * 100)):32,SeatNum,Seq:16>>;           
+pid_to_player_id(Cmd) ->
+    Cmd.
 
-write({Cmd, GID, Player, Seq}) 
-  when Cmd == ?PP_NOTIFY_PRIVATE,
-       is_number(GID),
-       is_pid(Player),
-       is_number(Seq);
-       Cmd == ?PP_NOTIFY_LEAVE,
-       is_number(GID),
-       is_pid(Player),
-       is_number(Seq) ->
-    PID = gen_server:call(Player, 'ID'),
-    <<Cmd, GID:32, PID:32, Seq:16>>;
+deep_tuple_to_list(L) when is_list(L) ->
+    deep_tuple_to_list(L, []);
 
-write({?PP_NOTIFY_CHAT, GID, Player, Seq, Msg})
-  when is_number(GID),
-       is_pid(Player),
-       is_number(Seq),
-       is_list(Msg) ->
-    PID = gen_server:call(Player, 'ID'),
-    L1 = [length(Msg)|Msg],
-    L2 = [?PP_NOTIFY_CHAT, <<GID:32>>, <<PID:32>>, <<Seq:16>>|L1],
-    list_to_binary(L2);
+deep_tuple_to_list(T) when is_tuple(T) -> 
+    deep_tuple_to_list(T, size(T), []);
+
+deep_tuple_to_list(T) ->
+    T.
+
+deep_tuple_to_list([H|T], Acc) ->
+    deep_tuple_to_list(T, [deep_tuple_to_list(H)|Acc]);
     
-write({?PP_NOTIFY_CHAT, GID, Player, Seq, Msg})
-  when is_number(GID),
-       is_pid(Player),
-       is_number(Seq),
-       is_binary(Msg) ->
-    PID = gen_server:call(Player, 'ID'),
-    L1 = [size(Msg)|Msg],
-    L2 = [?PP_NOTIFY_CHAT, <<GID:32>>, <<PID:32>>, <<Seq:16>>|L1],
-    list_to_binary(L2);
+deep_tuple_to_list([], Acc) ->
+    lists:reverse(Acc).
 
-write({?PP_NOTIFY_CHAT, GID, 0, Seq, Msg})
-  when is_number(GID),
-       is_number(Seq),
-       is_list(Msg) ->
-    PID = 0,
-    L1 = [length(Msg)|Msg],
-    L2 = [?PP_NOTIFY_CHAT, <<GID:32>>, <<PID:32>>, <<Seq:16>>|L1],
-    list_to_binary(L2);
-    
-write({?PP_NOTIFY_CHAT, GID, 0, Seq, Msg})
-  when is_number(GID),
-       is_number(Seq),
-       is_binary(Msg) ->
-    PID = 0,
-    L1 = [size(Msg)|Msg],
-    L2 = [?PP_NOTIFY_CHAT, <<GID:32>>, <<PID:32>>, <<Seq:16>>|L1],
-    list_to_binary(L2);
-    
-write({Cmd, GID, Seq}) 
-  when Cmd == ?PP_NOTIFY_START_GAME, 
-       is_number(GID),
-       is_number(Seq);
-       Cmd == ?PP_NOTIFY_CANCEL_GAME, 
-       is_number(GID),
-       is_number(Seq);       
-       Cmd == ?PP_NOTIFY_END_GAME,
-       is_number(GID),
-       is_number(Seq) ->
-    <<Cmd, GID:32, Seq:16>>;
+deep_tuple_to_list(_, 0, Acc) ->
+    Acc;
 
-write({Cmd, GID, Player, Amount, Seq})
-  when Cmd == ?PP_NOTIFY_WIN, 
-       is_number(GID),
-       is_pid(Player),
-       is_number(Amount),
-       is_number(Seq);
-       Cmd == ?PP_NOTIFY_CALL, 
-       is_number(GID),
-       is_pid(Player),
-       is_number(Amount),
-       is_number(Seq);
-       Cmd == ?PP_NOTIFY_BET, 
-       is_number(GID),
-       is_pid(Player),
-       is_number(Amount),
-       is_number(Seq) ->
-    PID = gen_server:call(Player, 'ID'),
-    <<Cmd, GID:32, PID:32, (trunc(Amount * 100)):32, Seq:16>>;
+deep_tuple_to_list(T, Size, Acc) ->
+    E = element(Size, T),
+    deep_tuple_to_list(T, Size - 1, [deep_tuple_to_list(E)|Acc]).
 
-write({Cmd, GID, Player, Amount,Total, Seq})
-  when Cmd == ?PP_NOTIFY_RAISE, 
-       is_number(GID),
-       is_pid(Player),
-       is_number(Amount),
-       is_number(Seq) ->
-    PID = gen_server:call(Player, 'ID'),
-    <<Cmd, GID:32, PID:32, (trunc(Amount * 100)):32,(trunc(Total * 100)):32, Seq:16>>;
+deep_list_to_tuple(L) when is_list(L) ->
+    deep_list_to_tuple(L, []);
 
-%% Player state change
+deep_list_to_tuple(L) ->
+    L.
 
-write({?PP_PLAYER_STATE, GID, Player, State, Seq})
-  when is_number(State),
-       is_number(GID),
-       is_pid(Player),
-       is_number(Seq) ->
-    PID = gen_server:call(Player, 'ID'),
-    <<?PP_PLAYER_STATE, GID:32, PID:32, State, Seq:16>>;
-    
-%% Game stage
+deep_list_to_tuple([], Acc) ->
+    list_to_tuple(lists:reverse(Acc));
 
-write({?PP_GAME_STAGE, GID, Stage, Seq})
-  when is_number(GID),
-       is_number(Stage),
-       is_number(Seq) ->
-    <<?PP_GAME_STAGE, GID:32, Stage, Seq:16>>;
-
-%% Player balance
-
-write({?PP_BALANCE_INFO, Balance, Inplay}) ->
-    <<?PP_BALANCE_INFO, 
-     (trunc(Balance * 100)):32,
-     (trunc(Inplay * 100)):32>>;
-
-write({Cmd, GID, SeatNum, Seq}) 
-  when Cmd == ?PP_NOTIFY_BUTTON;
-       Cmd == ?PP_NOTIFY_SB;
-       Cmd == ?PP_NOTIFY_BB ->
-    <<Cmd, GID:32, SeatNum, Seq:16>>;
-
-write({Cmd = ?PP_MAKE_TEST_GAME, Bin}) ->
-    <<Cmd, Bin/binary>>;
-
-write(Tuple) 
-  when is_tuple(Tuple) ->
-    none.
-
-read_string(Bin) ->
-    <<Len, _/binary>> = Bin,
-    <<Len, Str:Len/binary-unit:8, Rest/binary>> = Bin,
-    {Str, Rest}.
+deep_list_to_tuple([H|T], Acc) ->
+    deep_list_to_tuple(T, [deep_list_to_tuple(H)|Acc]).
 
 find_game(GID) ->
     case db:find(game_xref, GID) of
 	{atomic, [XRef]} ->
-	    XRef#game_xref.pid;
+	    XRef#game_xref.proc_id;
 	Any ->
 	    io:format("find_game(~w): ~w~n", [GID, Any]),
 	    none
     end.
 
-%%%
-%%% Test suite
-%%%
-
-test() ->
-    ok.
