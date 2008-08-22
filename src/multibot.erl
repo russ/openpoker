@@ -243,7 +243,7 @@ create_players([]) ->
 
 create_players([Player|Rest])
   when is_record(Player, irc_player) ->
-    Nick = Player#irc_player.nick,
+    Nick = list_to_binary(Player#irc_player.nick),
     Balance = Player#irc_player.balance,
     case db:find(player, nick, Nick) of
 	{atomic, [Player1]} ->
@@ -256,7 +256,7 @@ create_players([Player|Rest])
 		    ok
 	    end;
 	{atomic, []} ->
-	    player:create(Nick, "foo", "", Balance)
+	    player:create(Nick, <<"foo">>, <<"">>, Balance)
     end,
     create_players(Rest).
     

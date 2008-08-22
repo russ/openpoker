@@ -28,10 +28,14 @@ new(OID) ->
 
 start(Nick) 
   when is_list(Nick) ->
+    start(list_to_binary(Nick));
+
+start(Nick) 
+  when is_binary(Nick) ->
     gen_server:start(player, [Nick], []).
 
 init([Nick]) 
-  when is_list(Nick) ->
+  when is_binary(Nick) ->
     process_flag(trap_exit, true),
     %% make sure we exist
     case db:find(player, nick, Nick) of
@@ -338,6 +342,16 @@ create(Nick, Pass, Location, Balance)
   when is_list(Nick),
        is_list(Pass),
        is_list(Location),
+       is_number(Balance) ->
+    create(list_to_binary(Nick),
+           list_to_binary(Pass),
+           list_to_binary(Location),
+           Balance);
+
+create(Nick, Pass, Location, Balance)
+  when is_binary(Nick),
+       is_binary(Pass),
+       is_binary(Location),
        is_number(Balance) ->
     OID = counter:bump(player),
     Player = #player {

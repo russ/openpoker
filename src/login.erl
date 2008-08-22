@@ -40,7 +40,12 @@ login({atomic, [Player]}, [_Nick, Pass|_] = Args)
 
 login(Nick, Pass, Socket) 
   when is_list(Nick),
-       is_list(Pass),
+       is_list(Pass) ->
+    login(list_to_binary(Nick), list_to_binary(Pass), Socket);
+
+login(Nick, Pass, Socket) 
+  when is_binary(Nick),
+       is_binary(Pass),
        is_pid(Socket) -> % socket handler process
     login(db:find(player, nick, Nick), [Nick, Pass, Socket]);
 
