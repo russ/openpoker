@@ -207,11 +207,24 @@ write({?PP_HANDOFF, Port, Host})
     L = [?PP_HANDOFF, <<Port:16>>, length(Host)|Host],
     list_to_binary(L);
 
+write({?PP_HANDOFF, Port, Host}) 
+  when is_number(Port),
+       is_binary(Host) ->
+    L = [?PP_HANDOFF, <<Port:16>>, size(Host)|Host],
+    list_to_binary(L);
+
 write({?PP_LOGIN, Nick, Pass})
   when is_list(Nick), 
        is_list(Pass) ->
     L1 = [length(Pass)|Pass],
     L2 = [?PP_LOGIN, length(Nick), Nick|L1],
+    list_to_binary(L2);
+
+write({?PP_LOGIN, Nick, Pass})
+  when is_binary(Nick), 
+       is_binary(Pass) ->
+    L1 = [size(Pass)|Pass],
+    L2 = [?PP_LOGIN, size(Nick), Nick|L1],
     list_to_binary(L2);
 
 write({?PP_PID, PID}) 
@@ -242,6 +255,11 @@ write({?PP_CHAT, GID, Msg})
   when is_number(GID), 
        is_list(Msg) ->
     list_to_binary([?PP_CHAT, <<GID:32>>, length(Msg)|Msg]);
+    
+write({?PP_CHAT, GID, Msg})
+  when is_number(GID), 
+       is_binary(Msg) ->
+    list_to_binary([?PP_CHAT, <<GID:32>>, size(Msg)|Msg]);
     
 write({?PP_GAME_QUERY, 
        GameType, LimitType,
@@ -303,6 +321,18 @@ write({?PP_PLAYER_INFO, Player, InPlay, Nick, Location})
     L2 = [?PP_PLAYER_INFO, <<PID:32>>, 
 	  <<(trunc(InPlay * 100)):32>>, 
 	  length(Nick), Nick|L1],
+    list_to_binary(L2);
+
+write({?PP_PLAYER_INFO, Player, InPlay, Nick, Location})
+  when is_pid(Player),
+       is_number(InPlay),
+       is_binary(Nick),
+       is_binary(Location) ->     
+    PID = gen_server:call(Player, 'ID'),
+    L1 = [size(Location)|Location],
+    L2 = [?PP_PLAYER_INFO, <<PID:32>>, 
+	  <<(trunc(InPlay * 100)):32>>, 
+	  size(Nick), Nick|L1],
     list_to_binary(L2);
 
 write({?PP_BET_REQ, Game, Call, Min, Max})
@@ -385,12 +415,31 @@ write({?PP_NOTIFY_CHAT, GID, Player, Seq, Msg})
     L2 = [?PP_NOTIFY_CHAT, <<GID:32>>, <<PID:32>>, <<Seq:16>>|L1],
     list_to_binary(L2);
     
+write({?PP_NOTIFY_CHAT, GID, Player, Seq, Msg})
+  when is_number(GID),
+       is_pid(Player),
+       is_number(Seq),
+       is_binary(Msg) ->
+    PID = gen_server:call(Player, 'ID'),
+    L1 = [size(Msg)|Msg],
+    L2 = [?PP_NOTIFY_CHAT, <<GID:32>>, <<PID:32>>, <<Seq:16>>|L1],
+    list_to_binary(L2);
+
 write({?PP_NOTIFY_CHAT, GID, 0, Seq, Msg})
   when is_number(GID),
        is_number(Seq),
        is_list(Msg) ->
     PID = 0,
     L1 = [length(Msg)|Msg],
+    L2 = [?PP_NOTIFY_CHAT, <<GID:32>>, <<PID:32>>, <<Seq:16>>|L1],
+    list_to_binary(L2);
+    
+write({?PP_NOTIFY_CHAT, GID, 0, Seq, Msg})
+  when is_number(GID),
+       is_number(Seq),
+       is_binary(Msg) ->
+    PID = 0,
+    L1 = [size(Msg)|Msg],
     L2 = [?PP_NOTIFY_CHAT, <<GID:32>>, <<PID:32>>, <<Seq:16>>|L1],
     list_to_binary(L2);
     
