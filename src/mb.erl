@@ -9,7 +9,9 @@
 -export([start/0, stop/1, setup/1, setup/0, cleanup/0]).
 
 -export([remove/1, print/1, filter/0, create_players/0,
-	 test/0, test/3, test/4, test/5, count/0]).
+	 test/0, test/1, test/3, test/4, test/5, count/0]).
+
+-export([profile/0, profile/1]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -552,7 +554,7 @@ find_server(Sock) ->
 	{tcp, Sock, Bin} ->
 	    case proto:read(Bin) of 
 		{?PP_HANDOFF, Port, Host} ->
-		    {binary_to_list(Host), Port}
+		    {Host, Port}
 	    end;
 	{error, closed} ->
 	    io:format("Error retrieving gateway reply~n"),
@@ -613,7 +615,10 @@ setup() ->
     mb:setup(localhost).
 
 test() ->
-    mb:test(localhost, 3000, 10).
+    test(10).
+
+test(N) ->
+    mb:test(localhost, 3000, N).
 
 cleanup() ->
     mnesia:start(),
@@ -706,3 +711,11 @@ start_game(Sock, Packet) ->
 	    none
     end.
 
+profile() ->
+    profile(5).
+
+profile(N) ->
+    setup(),
+    fprof:apply(mb, test, [localhost, 3000, N]),
+    fprof:profile([{dump, []}]),
+    fprof:analyse([{dest, []}, {cols, 150}, {totals, true}]). 

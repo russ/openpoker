@@ -574,7 +574,7 @@ test190() ->
     Port = 10000,
     db:delete(player),
     db:delete(game_xref),
-    multibot:create_players(),
+    mb:create_players(),
     {ok, Server} = server:start(Host, Port),
     timer:sleep(3000),
     {atomic, Players} = db:find(player),
@@ -1001,5 +1001,5 @@ profile() ->
 profile(Test) ->
     fprof:apply(test, Test, []),
     fprof:profile([{dump, []}]),
-    fprof:analyse([{dest, []}]). 
+    fprof:analyse([{dest, []}, {cols, 150}, {totals, true}]). 
 
