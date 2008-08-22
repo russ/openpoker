@@ -350,14 +350,19 @@ handle({?PP_NOTIFY_CANCEL_GAME, GID, _Seq}, Bot) ->
 handle({Cmd, _GID, _PID, _Amount, _Seq}, Bot)
   when Cmd == ?PP_NOTIFY_WIN;
        Cmd == ?PP_NOTIFY_CALL;
-       Cmd == ?PP_NOTIFY_RAISE;
        Cmd == ?PP_NOTIFY_BET ->
+    {noreply, Bot};
+
+handle({?PP_NOTIFY_RAISE, _GID, _PID, _Amount, _AmtPlusCall, _Seq}, Bot) ->
     {noreply, Bot};
 
 handle({?PP_NOTIFY_DRAW, _GID, _Card, _Seq}, Bot) ->
     {noreply, Bot};
 
 handle({?PP_NOTIFY_PRIVATE, _GID, _PID, _Seq}, Bot) ->
+    {noreply, Bot};
+
+handle({?PP_NOTIFY_PRIVATE_CARDS, _GID, _Player, _Cards, _Seq}, Bot) ->
     {noreply, Bot};
 
 handle({?PP_NOTIFY_BUTTON, _GID, _SeatNum, _Seq}, Bot) ->

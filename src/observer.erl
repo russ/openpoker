@@ -224,6 +224,17 @@ handle({?PP_NOTIFY_PRIVATE, GID, PID, _Seq}, Data) ->
     end,
     {noreply, Data};
 
+handle({?PP_NOTIFY_PRIVATE_CARDS, GID, PID, Cards, _Seq}, Data) ->
+    if
+	Data#data.trace ->
+	    io:format("~w: ~w WON WITH CARDS: ~w~n",
+		      [GID, PID, Cards]);
+	true ->
+	    ok
+    end,
+    {noreply, Data};
+
+
 handle({?PP_GAME_STAGE, GID, Stage, _Seq}, Data) ->
     if
 	Data#data.trace ->
@@ -254,11 +265,11 @@ handle({?PP_NOTIFY_CALL, GID, PID, Amount, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_RAISE, GID, PID, Amount, _Seq}, Data) ->
+handle({?PP_NOTIFY_RAISE, GID, PID, Amount, AmtPlusCall, _Seq}, Data) ->
     if
 	Data#data.trace ->
-	    io:format("~w: RAISE: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount]);
+	    io:format("~w: RAISE: ~w, ~-14.2. f, ~-14.2. f~n",
+		      [GID, PID, Amount, AmtPlusCall]);
 	true ->
 	    ok
     end,
