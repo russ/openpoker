@@ -527,9 +527,9 @@ write(Tuple)
     none.
 
 read_string(Bin) ->
-    <<Len, Bin1/binary>> = Bin,
-    <<Str:Len/binary-unit:8, Rest/binary>> = Bin1,
-    {binary_to_list(Str), Rest}.
+    <<Len, _/binary>> = Bin,
+    <<Len, Str:Len/binary-unit:8, Rest/binary>> = Bin,
+    {Str, Rest}.
 
 find_game(GID) ->
     case db:find(game_xref, GID) of
