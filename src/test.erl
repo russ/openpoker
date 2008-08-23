@@ -833,7 +833,11 @@ make_player(Nick)
 
 make_player(Nick) 
   when is_list(Nick) ->
-    {atomic, _ID} = player:create(Nick, "foo", "", 1000.0),
+    make_player(list_to_binary(Nick));
+
+make_player(Nick) 
+  when is_binary(Nick) ->
+    {atomic, _ID} = player:create(Nick, <<"foo">>, <<"">>, 1000.0),
     {ok, Pid} = player:start(Nick),
     Pid.
 
