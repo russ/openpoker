@@ -62,6 +62,114 @@ terminate(_Reason, Data) ->
     ok.
 
 handle_cast('LOGOUT', Data) ->
+    handle_cast_logout(Data);
+
+handle_cast('DISCONNECT', Data) ->
+    handle_cast_disconnect(Data);
+
+handle_cast({'SOCKET', Socket}, Data) ->
+    handle_cast_socket(Socket, Data);
+
+handle_cast({'INPLAY-', Amount}, Data)
+  when is_number(Amount), Amount >= 0 ->
+    handle_cast_inplay_minus(Amount, Data);
+
+handle_cast({'INPLAY+', Amount}, Data) 
+  when is_number(Amount), Amount > 0 ->
+    handle_cast_inplay_plus(Amount, Data);
+
+handle_cast({'ADD GAME INPLAY', Amount, Game}, Data) 
+  when Amount >= 0 ->
+    handle_cast_add_game_inplay(Amount, Game, Data);
+
+handle_cast({'GAME INPLAY+', Amount, Game}, Data) 
+  when  Amount >= 0 ->
+    handle_cast_game_inplay_plus(Amount, Game, Data);
+
+handle_cast({'GAME INPLAY-', Amount, Game}, Data) 
+  when Amount >= 0 ->
+    handle_cast_game_play_plus(Amount, Game, Data);
+    
+handle_cast({'NOTIFY LEAVE', GID, Game}, Data) ->
+    handle_cast_notify_leave(GID, Game, Data);
+
+handle_cast({?PP_WATCH, Game}, Data) 
+  when is_pid(Game) ->
+    handle_cast_watch(Game, Data);
+
+handle_cast({?PP_UNWATCH, Game}, Data) 
+  when is_pid(Game) ->
+    handle_cast_unwatch(Game, Data);
+
+handle_cast({Event, Game, Amount}, Data)
+  when Event == ?PP_CALL;
+       Event == ?PP_RAISE ->
+    handle_cast_call_raise(Event, Game, Amount, Data);
+
+handle_cast({?PP_JOIN, Game, SeatNum, BuyIn}, Data) ->
+    handle_cast_join(Game, SeatNum, BuyIn, Data);
+
+handle_cast({?PP_LEAVE, Game}, Data) ->
+    handle_cast_leave(Game, Data);
+
+handle_cast({Event, Game}, Data) 
+  when Event == ?PP_FOLD;
+       Event == ?PP_SIT_OUT;
+       Event == ?PP_COME_BACK ->
+    handle_cast_fold_etc(Event, Game, Data);
+
+handle_cast({?PP_CHAT, Game, Message}, Data) ->
+    handle_cast_chat(Game, Message, Data);
+
+handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
+    handle_cast_seat_query(Game, Data);
+
+handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
+    handle_cast_player_info_req(PID, Data);
+
+handle_cast({?PP_NEW_GAME_REQ, GameType, Expected, Limit}, Data) ->
+    handle_cast_new_game_req(GameType, Expected, Limit, Data);
+
+handle_cast(?PP_BALANCE_REQ, Data) ->
+    handle_cast_balance_req(Data);
+
+handle_cast(stop, Data) ->
+    handle_cast_stop(Data);
+
+handle_cast(Event, Data) ->
+    handle_cast_other(Event, Data).
+
+handle_call('ID', _From, Data) ->
+    handle_call_id(Data);
+
+handle_call('INPLAY', _From, Data) ->
+    handle_call_inplay(Data);
+
+handle_call({'GAME INPLAY',Game}, _From, Data) ->
+    handle_call_game_inplay(Game, Data);
+
+handle_call(Event, From, Data) ->
+    handle_call_other(Event, From, Data).
+
+handle_info({'EXIT', _Pid, _Reason}, Data) ->
+    %% child exit?
+    {noreply, Data};
+
+handle_info(Info, Data) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {self, self()}, 
+			      {message, Info}]),
+    {noreply, Data}.
+
+code_change(_OldVsn, Data, _Extra) ->
+    {ok, Data}.
+
+%%%
+%%% Handlers
+%%% 
+
+handle_cast_logout(Data) ->
     ID = Data#data.oid,
     {atomic, Games} = db:get(player, ID, games),
     if
@@ -72,67 +180,57 @@ handle_cast('LOGOUT', Data) ->
             %% delay until we leave our last game
             db:set(player, Data#data.oid, {socket, none})
     end,
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast('DISCONNECT', Data) ->
+handle_cast_disconnect(Data) ->
     %% ignore
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast({'SOCKET', Socket}, Data) 
-  when is_pid(Socket) ->
+handle_cast_socket(Socket, Data) when is_pid(Socket) ->
     Data1 = Data#data {
 	      socket = Socket
 	     },
-    {noreply, Data1};
+    {noreply, Data1}.
     
-handle_cast({'INPLAY-', Amount}, Data)
-  when is_number(Amount), Amount >= 0 ->
+handle_cast_inplay_minus(Amount, Data) ->
     %%db:dec(player, Data#data.oid, {inplay, Amount}),
     Data1 = Data#data {
 	      inplay = Data#data.inplay - Amount
 	     },
-    {noreply, Data1};
+    {noreply, Data1}.
     
-handle_cast({'INPLAY+', Amount}, Data) 
-  when is_number(Amount), Amount > 0 ->
+handle_cast_inplay_plus(Amount, Data) ->
     %%db:dec(player, Data#data.oid, {inplay, Amount}),
     Data1 = Data#data {
 	      inplay = Data#data.inplay + Amount
 	     },
-    {noreply, Data1};
+    {noreply, Data1}.
 
-%%called back to add game specific inplay for a player when the player joins a game                                                                      
-handle_cast({'ADD GAME INPLAY', Amount,Game}, Data) 
-  when Amount >= 0 ->
+handle_cast_add_game_inplay(Amount, Game, Data) ->
     Xref = Data#data.inplay_xref,
     Xref1= gb_trees:enter(Game,Amount,Xref),
 	Data1 = Data#data {
       inplay_xref = Xref1},
-    {noreply, Data1};
+    {noreply, Data1}.
                  
-%%called back to increase game specific inplay for a player                       
-handle_cast({'GAME INPLAY+', Amount,Game}, Data) 
-  when  Amount >= 0 ->
+handle_cast_game_inplay_plus(Amount, Game, Data) ->
     Xref = Data#data.inplay_xref,
     PrevAmount = gb_trees:get(Game,Xref),
     NewAmount = PrevAmount + Amount,
     Xref1 = gb_trees:enter(Game,NewAmount,Xref),
     Data1 = Data#data {
       inplay_xref = Xref1},
-    {noreply, Data1}; 
+    {noreply, Data1}.
 
-%%called back to decrease game specific inplay for a player                                   
-handle_cast({'GAME INPLAY-', Amount,Game}, Data) 
-  when Amount >= 0 ->
+handle_cast_game_play_plus(Amount, Game, Data) ->
     Xref = Data#data.inplay_xref,
     PrevAmount = gb_trees:get(Game,Xref),
     NewAmount = PrevAmount - Amount,
     Xref1 = gb_trees:enter(Game,NewAmount,Xref),
     Data1 = Data#data {
       inplay_xref = Xref1},
-    {noreply, Data1};                                                                     
-    
-handle_cast({'NOTIFY LEAVE',GID, Game}, Data) ->
+    {noreply, Data1}.                                                                     
+handle_cast_notify_leave(GID, Game, Data) ->
     ID = Data#data.oid,
     %% update player
     {atomic, Games} = db:get(player, ID, games),
@@ -171,44 +269,37 @@ handle_cast({'NOTIFY LEAVE',GID, Game}, Data) ->
                 true ->
                     Data1
             end,
-    {noreply, Data2};
+    {noreply, Data2}.
 
-handle_cast({?PP_WATCH, Game}, Data) 
-  when is_pid(Game) ->
+handle_cast_watch(Game, Data) ->
     cardgame:cast(Game, {?PP_WATCH, self()}),
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast({?PP_UNWATCH, Game}, Data) 
-  when is_pid(Game) ->
+handle_cast_unwatch(Game, Data) ->
     cardgame:cast(Game, {?PP_UNWATCH, self()}),
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast({Event, Game, Amount}, Data)
-  when Event == ?PP_CALL;
-       Event == ?PP_RAISE ->
+handle_cast_call_raise(Event, Game, Amount, Data) ->
     cardgame:send_event(Game, {Event, self(), Amount}),
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast({?PP_JOIN, Game, SeatNum, BuyIn}, Data) ->
+handle_cast_join(Game, SeatNum, BuyIn, Data) ->
     cardgame:send_event(Game, {?PP_JOIN, self(), SeatNum, BuyIn}),
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast({?PP_LEAVE, Game}, Data) ->
+handle_cast_leave(Game, Data) ->
     cardgame:send_event(Game, {?PP_LEAVE, self()}),
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast({Event, Game}, Data) 
-  when Event == ?PP_FOLD;
-       Event == ?PP_SIT_OUT;
-       Event == ?PP_COME_BACK ->
+handle_cast_fold_etc(Event, Game, Data) ->
     cardgame:send_event(Game, {Event, self()}),
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast({?PP_CHAT, Game, Message}, Data) ->
+handle_cast_chat(Game, Message, Data) ->
     cardgame:cast(Game, {?PP_CHAT, self(), Message}),
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
+handle_cast_seat_query(Game, Data) ->
     GID = cardgame:call(Game, 'ID'),
     L = cardgame:call(Game, 'SEAT QUERY'),
     F = fun({SeatNum, State, Player}) -> 
@@ -223,9 +314,9 @@ handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
 		handle_cast({?PP_SEAT_STATE, GID, SeatNum, State, PID}, Data) 
 	end,
     lists:foreach(F, L),
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
+handle_cast_player_info_req(PID, Data) ->
     case db:find(player, PID) of
 	{atomic, [Player]} ->
 	    handle_cast({?PP_PLAYER_INFO, 
@@ -236,9 +327,9 @@ handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
 	_ ->
 	    oops
     end,
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast({?PP_NEW_GAME_REQ, GameType, Expected, Limit}, Data) ->
+handle_cast_new_game_req(GameType, Expected, Limit, Data) ->
     {atomic, DynamicGames} = db:get(cluster_config, 0, enable_dynamic_games),
     if
 	DynamicGames ->
@@ -252,9 +343,9 @@ handle_cast({?PP_NEW_GAME_REQ, GameType, Expected, Limit}, Data) ->
 	true ->
 	    handle_cast({?PP_BAD, ?PP_NEW_GAME_REQ, ?ERR_START_DISABLED}, Data)
     end,
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast(?PP_BALANCE_REQ, Data) ->
+handle_cast_balance_req(Data) ->
     case db:find(player, Data#data.oid) of
 	{atomic, [Player]} ->
 	    handle_cast({?PP_BALANCE_INFO, 
@@ -263,12 +354,12 @@ handle_cast(?PP_BALANCE_REQ, Data) ->
 	_ ->
 	    oops
     end,
-    {noreply, Data};
+    {noreply, Data}.
 
-handle_cast(stop, Data) ->
-    {stop, normal, Data};
+handle_cast_stop(Data) ->
+    {stop, normal, Data}.
 
-handle_cast(Event, Data) ->
+handle_cast_other(Event, Data) ->
     if 
 	Data#data.socket /= none ->
 	    Data#data.socket ! {packet, Event};
@@ -277,14 +368,13 @@ handle_cast(Event, Data) ->
     end,
     {noreply, Data}.
 
-handle_call('ID', _From, Data) ->
-    {reply, Data#data.oid, Data};
+handle_call_id(Data) ->
+    {reply, Data#data.oid, Data}.
 
-handle_call('INPLAY', _From, Data) ->
-    {reply, Data#data.inplay, Data};
+handle_call_inplay(Data) ->
+    {reply, Data#data.inplay, Data}.
 
-%%called back to get game specific inplay for a player
-handle_call({'GAME INPLAY',Game}, _From, Data) ->
+handle_call_game_inplay(Game, Data) ->
     Xref = Data#data.inplay_xref,
     TreeDefined = gb_trees:is_defined(Game,Xref),
     case TreeDefined of
@@ -294,29 +384,15 @@ handle_call({'GAME INPLAY',Game}, _From, Data) ->
         false->
             InplayAmount = 0.0
     end,
-	{reply, InplayAmount, Data};
+	{reply, InplayAmount, Data}.
 
-handle_call(Event, From, Data) ->
+handle_call_other(Event, From, Data) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},
 			      {self, self()}, 
 			      {message, Event}, 
 			      {from, From}]),
     {noreply, Data}.
-
-handle_info({'EXIT', _Pid, _Reason}, Data) ->
-    %% child exit?
-    {noreply, Data};
-
-handle_info(Info, Data) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {self, self()}, 
-			      {message, Info}]),
-    {noreply, Data}.
-
-code_change(_OldVsn, Data, _Extra) ->
-    {ok, Data}.
 
 %%%
 %%% Utility

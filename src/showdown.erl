@@ -30,6 +30,57 @@ stop(Ref) ->
     cardgame:send_all_state_event(Ref, stop).
 
 showdown({'START', Context}, Data) ->
+    showdown_handle_start(Context, Data);
+
+showdown({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
+    showdown_handle_join(Player, SeatNum, BuyIn, Data);
+
+showdown({?PP_LEAVE, Player}, Data) ->
+    showdown_handle_leave(Player, Data);
+
+showdown(Event, Data) ->
+    showdown_handle_other(Event, Data).
+
+handle_event(stop, _State, Data) ->    
+    {stop, normal, Data};
+
+handle_event(Event, State, Data) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {message, Event}, 
+			       {self, self()},
+			       {game, Data#data.game}]),
+    {next_state, State, Data}.
+        
+handle_sync_event(Event, From, State, Data) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {message, Event}, 
+			       {from, From},
+			       {self, self()},
+			       {game, Data#data.game}]),
+    {next_state, State, Data}.
+        
+handle_info(Info, State, Data) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {message, Info}, 
+			       {self, self()},
+			       {game, Data#data.game}]),
+    {next_state, State, Data}.
+
+terminate(_Reason, _State, _Data) -> 
+    ok.
+
+code_change(_OldVsn, State, Data, _Extra) ->
+    {ok, State, Data}.
+
+
+%%%
+%%% Handlers
+%%%
+
+showdown_handle_start(Context, Data) ->
     Game = Data#data.game,
     GID = gen_server:call(Game, 'ID'),
     Seats = gen_server:call(Game, {'SEATS', ?PS_SHOWDOWN}),
@@ -68,55 +119,22 @@ showdown({'START', Context}, Data) ->
     end,
     gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_END_GAME}}),
     _Ctx = setelement(4, Context, Winners),
-    {stop, {normal, restart, Context}, Data};
+    {stop, {normal, restart, Context}, Data}.
 
-showdown({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    blinds:join(Data, Player, SeatNum, BuyIn, showdown, ?PS_FOLD);
+showdown_handle_join(Player, SeatNum, BuyIn, Data) ->
+    blinds:join(Data, Player, SeatNum, BuyIn, showdown, ?PS_FOLD).
 
-showdown({?PP_LEAVE, Player}, Data) ->
+showdown_handle_leave(Player, Data) ->
     gen_server:cast(Data#data.game, {?PP_LEAVE, Player, ?PS_ANY}),
-    {next_state, showdown, Data};
+    {next_state, showdown, Data}.
 
-showdown(Event, Data) ->
+showdown_handle_other(Event, Data) ->
     handle_event(Event, showdown, Data).
 
-handle_event(stop, _State, Data) ->
-    {stop, normal, Data};
 
-handle_event(Event, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Event}, 
-			       {self, self()},
-			       {game, Data#data.game}]),
-    {next_state, State, Data}.
-        
-handle_sync_event(Event, From, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Event}, 
-			       {from, From},
-			       {self, self()},
-			       {game, Data#data.game}]),
-    {next_state, State, Data}.
-        
-handle_info(Info, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Info}, 
-			       {self, self()},
-			       {game, Data#data.game}]),
-    {next_state, State, Data}.
-
-terminate(_Reason, _State, _Data) -> 
-    ok.
-
-code_change(_OldVsn, State, Data, _Extra) ->
-    {ok, State, Data}.
-
-%%
-%% Utility
-%%
+%%%
+%%% Utility
+%%%
 
 winners(Ranks, Pots) ->
     winners(Ranks, Pots, gb_trees:empty()).

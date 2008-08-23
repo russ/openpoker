@@ -45,6 +45,71 @@ stop(Ref) ->
     cardgame:send_all_state_event(Ref, stop).
 
 betting({'START', Context}, Data) ->
+    betting_handle_start(Context, Data);
+
+betting({?PP_CALL, Player, Amount}, Data) ->
+    betting_handle_call(Player, Amount, Data);
+
+betting({?PP_RAISE, Player, Amount}, Data) ->
+    betting_handle_raise(Player, Amount, Data);
+
+betting({?PP_FOLD, Player}, Data) ->
+    betting_handle_fold(Player, Data);
+
+betting({timeout, _Timer, Player}, Data) ->
+    betting_handle_timeout(Player, Data);
+
+betting({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
+    betting_handle_join(Player, SeatNum, BuyIn, Data);
+
+betting({?PP_LEAVE, Player}, Data) ->
+    betting_handle_leave(Player, Data);
+
+betting(Event, Data) ->
+    betting_handle_rest(Event, Data).
+
+handle_event(stop, _State, Data) ->
+    {stop, normal, Data};
+
+handle_event(Event, State, Data) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {message, Event}, 
+			       {self, self()},
+			       {game, Data#data.game},
+			       {expected, Data#data.expected}]),
+    {next_state, State, Data}.
+        
+handle_sync_event(Event, From, State, Data) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {message, Event}, 
+			       {from, From},
+			       {self, self()},
+			       {game, Data#data.game},
+			       {expected, Data#data.expected}]),
+    {next_state, State, Data}.
+        
+handle_info(Info, State, Data) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {message, Info}, 
+			       {self, self()},
+			       {game, Data#data.game},
+			       {expected, Data#data.expected}]),
+    {next_state, State, Data}.
+
+terminate(_Reason, _State, _Data) -> 
+    ok.
+
+code_change(_OldVsn, State, Data, _Extra) ->
+    {ok, State, Data}.
+
+%%%
+%%% Handlers
+%%%
+
+betting_handle_start(Context, Data) ->
     Game = Data#data.game,
     %% assume that we are given a record
     Button = element(2, Context),
@@ -76,9 +141,9 @@ betting({'START', Context}, Data) ->
 		     },
 	    Data2 = ask_for_bet(Data1, Player),
 	    {next_state, betting, Data2}
-    end;
+    end.
 
-betting({?PP_CALL, Player, Amount}, Data) ->
+betting_handle_call(Player, Amount, Data) ->
     Game = Data#data.game,
     GID = gen_server:call(Game,'ID'),
     {Expected, Call, _Min, _Max} = Data#data.expected,
@@ -110,9 +175,9 @@ betting({?PP_CALL, Player, Amount}, Data) ->
 							 Player, Amount}}),
 		    next_turn(Data, Player)
 	    end
-    end;
+    end.
 
-betting({?PP_RAISE, Player, Amount}, Data) ->
+betting_handle_raise(Player, Amount, Data) ->
     Game = Data#data.game,
     GID = gen_server:call(Game, 'ID'),
     RaiseCount = Data#data.raise_count,
@@ -157,9 +222,9 @@ betting({?PP_RAISE, Player, Amount}, Data) ->
 			     },
 		    next_turn(Data1, Player)
 	    end
-    end;
+    end.
 
-betting({?PP_FOLD, Player}, Data) ->
+betting_handle_fold(Player, Data) ->
     {Expected, _Call, _Min, _Max} = Data#data.expected,
     if
 	Expected /= Player ->
@@ -168,9 +233,9 @@ betting({?PP_FOLD, Player}, Data) ->
 	    cancel_timer(Data),
 	    gen_server:cast(Data#data.game, {'SET STATE', Player, ?PS_FOLD}),
 	    next_turn(Data, Player)
-    end;
+    end.
 
-betting({timeout, _Timer, Player}, Data) ->
+betting_handle_timeout(Player, Data) ->
     cancel_timer(Data),
     Game = Data#data.game,
     GID = gen_server:call(Game, 'ID'),
@@ -182,54 +247,17 @@ betting({timeout, _Timer, Player}, Data) ->
 				 {seat, Seat}]),
     %%
     %%io:format("~w timed out, folding~n", [Player]),
-    betting({?PP_FOLD, Player,1}, Data);
+    betting({?PP_FOLD, Player,1}, Data).
 
-betting({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    blinds:join(Data, Player, SeatNum, BuyIn, betting, ?PS_FOLD);
+betting_handle_join(Player, SeatNum, BuyIn, Data) ->
+    blinds:join(Data, Player, SeatNum, BuyIn, betting, ?PS_FOLD).
 
-betting({?PP_LEAVE, Player}, Data) ->
+betting_handle_leave(Player, Data) ->
     gen_server:cast(Data#data.game, {?PP_LEAVE, Player}),
-    {next_state, betting, Data};
+    {next_state, betting, Data}.
 
-betting(Event, Data) ->
+betting_handle_rest(Event, Data) ->
     handle_event(Event, betting, Data).
-
-handle_event(stop, _State, Data) ->
-    {stop, normal, Data};
-
-handle_event(Event, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Event}, 
-			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected}]),
-    {next_state, State, Data}.
-        
-handle_sync_event(Event, From, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Event}, 
-			       {from, From},
-			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected}]),
-    {next_state, State, Data}.
-        
-handle_info(Info, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Info}, 
-			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected}]),
-    {next_state, State, Data}.
-
-terminate(_Reason, _State, _Data) -> 
-    ok.
-
-code_change(_OldVsn, State, Data, _Extra) ->
-    {ok, State, Data}.
 
 %%
 %% Utility

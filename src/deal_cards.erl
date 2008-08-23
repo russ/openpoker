@@ -34,30 +34,19 @@ stop(Ref) ->
     cardgame:send_all_state_event(Ref, stop).
 
 deal_cards({'START', Context}, Data) ->
-    Game = Data#data.game,
-    Deck = gen_server:call(Game, 'DECK'),
-    case Data#data.type of
-	private ->
-	    B = element(2, Context),
-	    Seats = gen_server:call(Game, {'SEATS', B, ?PS_STANDING}),
-	    deal_private(Game, Deck, Seats, Data#data.n);
-	shared ->
-	    deal_shared(Game, Deck, Data#data.n)
-    end,
-    {stop, {normal, Context}, Data};
+    deal_cards_start(Context, Data);
 
 deal_cards({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    blinds:join(Data, Player, SeatNum, BuyIn, deal_cards, ?PS_FOLD);
+    deal_cards_join(Player, SeatNum, BuyIn, Data);
 
 deal_cards({?PP_LEAVE, Player}, Data) ->
-    gen_server:cast(Data#data.game, {?PP_LEAVE, Player}),
-    {next_state, deal_cards, Data};
+    deal_cards_leave(Player, Data);
 
 deal_cards({timeout, _Timer, _Player}, Data) ->
-    {next_state, deal_cards, Data};
+    deal_cards_timeout(Data);
 
 deal_cards(Event, Data) ->
-    handle_event(Event, deal_cards, Data).
+    deal_cards_other(Event, Data).
 
 handle_event(stop, _State, Data) ->
     {stop, normal, Data};
@@ -93,9 +82,39 @@ terminate(_Reason, _State, _Data) ->
 code_change(_OldVsn, State, Data, _Extra) ->
     {ok, State, Data}.
 
-%%
-%% Utility
-%%
+%%%
+%%% Handlers
+%%%
+
+deal_cards_start(Context, Data) ->
+    Game = Data#data.game,
+    Deck = gen_server:call(Game, 'DECK'),
+    case Data#data.type of
+	private ->
+	    B = element(2, Context),
+	    Seats = gen_server:call(Game, {'SEATS', B, ?PS_STANDING}),
+	    deal_private(Game, Deck, Seats, Data#data.n);
+	shared ->
+	    deal_shared(Game, Deck, Data#data.n)
+    end,
+    {stop, {normal, Context}, Data}.
+
+deal_cards_join(Player, SeatNum, BuyIn, Data) ->
+    blinds:join(Data, Player, SeatNum, BuyIn, deal_cards, ?PS_FOLD).
+
+deal_cards_leave(Player, Data) ->
+    gen_server:cast(Data#data.game, {?PP_LEAVE, Player}),
+    {next_state, deal_cards, Data}.
+
+deal_cards_timeout(Data) ->
+    {next_state, deal_cards, Data}.
+
+deal_cards_other(Event, Data) ->
+    handle_event(Event, deal_cards, Data).
+
+%%%
+%%% Utility
+%%%
 
 deal_shared(_Game, _Deck, 0) ->
     ok;

@@ -299,97 +299,22 @@ dispatch(Event, From, Ctx) ->
     end.
 
 handle_event('RESTART', dispatch, Ctx) ->
-    start_next_module(Ctx, Ctx#data.modules);
-
-%% intercept rigging of the deck to reset our context.
-%% this is needed so that the button in irc texas games
-%% starts from seat #1.
+    handle_event_restart(Ctx);
 
 handle_event({'CAST', Event = {'RIG', _}}, dispatch, Ctx) ->
-    Ctx1 = Ctx#data {
-	     context = Ctx#data.original_context
-	    },
-    gen_server:cast(Ctx1#data.game, Event),
-    {next_state, dispatch, Ctx1};
+    handle_event_cast_rigged(Event, Ctx);
 
 handle_event({'CAST', Event}, dispatch, Ctx) ->
-    gen_server:cast(Ctx#data.game, Event),
-    {next_state, dispatch, Ctx};
+    handle_event_cast(Event, Ctx);
 
 handle_event(Event, dispatch, Ctx) ->
-    {Module, _} = hd(Ctx#data.stack),
-    State = Ctx#data.state,
-    Data = Ctx#data.statedata,
-    case Module:handle_event(Event, State, Data) of
-	{next_state, NextState, NewData} ->
-	    NewCtx = Ctx#data {
-		       state = NextState,
-		       statedata = NewData
-		      },
-	    {next_state, dispatch, NewCtx};
-
-	{next_state, NextState, NewData, Timeout} ->
-	    NewCtx = Ctx#data {
-		       state = NextState,
-		       statedata = NewData
-		      },
-	    {next_state, dispatch, NewCtx, Timeout};
-
-	{stop, Reason, NewData} ->
-	    stop(Ctx, Reason, NewData);
-
-	Other ->
-	    Other
-    end.
+    handle_event_other(Event, Ctx).
 
 handle_sync_event({'CALL', Event}, _From, dispatch, Ctx) ->
-    Reply = gen_server:call(Ctx#data.game, Event),
-    {reply, Reply, dispatch, Ctx};
+    handle_sync_call(Event, Ctx);
 
 handle_sync_event(Event, From, dispatch, Ctx) ->
-    {Module, _} = hd(Ctx#data.stack),
-    State = Ctx#data.state,
-    case Module:handle_sync_event(Event, From, State, Ctx#data.statedata) of
-	{reply, Reply, NextState, NewData} ->
-	    NewCtx = Ctx#data {
-		       state = NextState,
-		       statedata = NewData
-		      },
-	    {reply, Reply, dispatch, NewCtx};
-	
-	{reply, Reply, NextState, NewData, Timeout} ->
-	    NewCtx = Ctx#data {
-		       state = NextState,
-		       statedata = NewData
-		      },
-	    {reply, Reply, dispatch, NewCtx, Timeout};
-	
-	{next_state, NextState, NewData} ->
-	    NewCtx = Ctx#data { 
-		       state = NextState, 
-		       statedata = NewData
-		      },
-	    {next_state, dispatch, NewCtx};
-	
-	{next_state, NextState, NewData, Timeout} ->
-	    NewCtx = Ctx#data{ 
-		       state = NextState, 
-		       statedata = NewData
-		      },
-	    {next_state, dispatch, NewCtx, Timeout};
-	
-	{stop, Reason, Reply, NewData} ->
-	    NewCtx = Ctx#data {
-		       statedata = NewData
-		      },
-	    {stop, Reason, Reply, NewCtx};
-	
-	{stop, Reason, NewData} ->
-	    stop(Ctx, Reason, NewData);
-
-	Other ->
-	    Other
-    end.
+    handle_sync_other(Event, From, Ctx).
 
 handle_info(stop, dispatch, Ctx) ->
     stop(Ctx, {normal, exit}, none);
@@ -450,72 +375,150 @@ code_change(OldVersion, dispatch, Ctx, Extra) ->
 
 %% stop card game
 
-stop(Ctx, shutdown, Data) ->    
-    {Module, _} = hd(Ctx#data.stack),
-    State = Ctx#data.state,
-    Module:terminate(shutdown, State, Data),
-    stop(Ctx, normal, Data);
+stop(Ctx, shutdown, Data) ->  
+    stop_shutdown(Ctx, Data);
 
-stop(Ctx, {normal, exit}, Data) ->    
-    %% send to parent
-    Ctx#data.parent ! {'CARDGAME EXIT', self(), exit},
-    stop(Ctx, normal, Data);
+stop(Ctx, {normal, exit}, Data) ->  
+    stop_normal_exit(Ctx, Data);
 
 %% terminate current module
 %% and restart at the top
 
 stop(Ctx, {normal, restart}, Data) ->    
-    {Module, _} = hd(Ctx#data.stack),
-    State = Ctx#data.state,
-    Module:terminate({normal, restart}, State, Data),
-    start_next_module(Ctx, Ctx#data.modules);
+    stop_normal_restart(Ctx, Data);
 
 %% terminate current module
 %% and restart at the top
 %% carrying over the result
 
 stop(Ctx, {normal, restart, Result}, Data) ->    
-    {Module, _} = hd(Ctx#data.stack),
-    State = Ctx#data.state,
-    Module:terminate({normal, restart}, State, Data),
-    Ctx1 = Ctx#data {
-	     context = Result
-	    },
-    start_next_module(Ctx1, Ctx#data.modules);
+    stop_normal_restart_result(Ctx, Result, Data);
 
 %% terminate current module 
 %% and start the next one
 
-stop(Ctx, {normal, Result}, Data) ->    
-    {Module, _} = hd(Ctx#data.stack),
-    State = Ctx#data.state,
-    Module:terminate({normal, Result}, State, Data),
-    [_|Stack] = Ctx#data.stack,
-    Ctx1 = Ctx#data {
-	     context = Result
-	    },
-    start_next_module(Ctx1, Stack);
+stop(Ctx, {normal, Result}, Data) -> 
+    stop_normal_result(Ctx, Result, Data);
 
 %% terminate current module 
 %% and start the very last one
 
 stop(Ctx, {endgame, Result}, Data) ->    
-    {Module, _} = hd(Ctx#data.stack),
-    State = Ctx#data.state,
-    Module:terminate({normal, Result}, State, Data),
-    Stack = [lists:last(Ctx#data.stack)],
-    Ctx1 = Ctx#data {
-	     context = Result
-	    },
-    start_next_module(Ctx1, Stack);
+    stop_endgame(Ctx, Result, Data);
 
 %% stop cardgame
 
 stop(Ctx, Reason, Data) ->
-    NewCtx = Ctx#data {
-	       statedata = Data
-	      },
-    {stop, Reason, NewCtx}.
+    stop_other(Ctx, Reason, Data).
+
+stop(CardGameRef) ->
+    gen_fsm:send_all_state_event(CardGameRef, stop).
+
+restart(CardGameRef) ->
+    gen_fsm:sync_send_all_state_event(CardGameRef, 'RESTART').
+    
+call(CardGameRef, Event) ->
+    gen_fsm:sync_send_all_state_event(CardGameRef, {'CALL', Event}).
+
+cast(CardGameRef, Event) ->
+    gen_fsm:send_all_state_event(CardGameRef, {'CAST', Event}).
+
+%%%
+%%% Handlers
+%%%
+
+handle_event_restart(Ctx) ->
+    start_next_module(Ctx, Ctx#data.modules).
+
+%% intercept rigging of the deck to reset our context.
+%% this is needed so that the button in irc texas games
+%% starts from seat #1.
+
+handle_event_cast_rigged(Event, Ctx) ->
+    Ctx1 = Ctx#data {
+	     context = Ctx#data.original_context
+	    },
+    gen_server:cast(Ctx1#data.game, Event),
+    {next_state, dispatch, Ctx1}.
+
+handle_event_cast(Event, Ctx) ->
+    gen_server:cast(Ctx#data.game, Event),
+    {next_state, dispatch, Ctx}.
+
+handle_event_other(Event, Ctx) ->
+    {Module, _} = hd(Ctx#data.stack),
+    State = Ctx#data.state,
+    Data = Ctx#data.statedata,
+    case Module:handle_event(Event, State, Data) of
+	{next_state, NextState, NewData} ->
+	    NewCtx = Ctx#data {
+		       state = NextState,
+		       statedata = NewData
+		      },
+	    {next_state, dispatch, NewCtx};
+
+	{next_state, NextState, NewData, Timeout} ->
+	    NewCtx = Ctx#data {
+		       state = NextState,
+		       statedata = NewData
+		      },
+	    {next_state, dispatch, NewCtx, Timeout};
+
+	{stop, Reason, NewData} ->
+	    stop(Ctx, Reason, NewData);
+
+	Other ->
+	    Other
+    end.
+
+handle_sync_call(Event, Ctx) ->
+    Reply = gen_server:call(Ctx#data.game, Event),
+    {reply, Reply, dispatch, Ctx}.
+
+handle_sync_other(Event, From, Ctx) ->
+    {Module, _} = hd(Ctx#data.stack),
+    State = Ctx#data.state,
+    case Module:handle_sync_event(Event, From, State, Ctx#data.statedata) of
+	{reply, Reply, NextState, NewData} ->
+	    NewCtx = Ctx#data {
+		       state = NextState,
+		       statedata = NewData
+		      },
+	    {reply, Reply, dispatch, NewCtx};
+	
+	{reply, Reply, NextState, NewData, Timeout} ->
+	    NewCtx = Ctx#data {
+		       state = NextState,
+		       statedata = NewData
+		      },
+	    {reply, Reply, dispatch, NewCtx, Timeout};
+	
+	{next_state, NextState, NewData} ->
+	    NewCtx = Ctx#data { 
+		       state = NextState, 
+		       statedata = NewData
+		      },
+	    {next_state, dispatch, NewCtx};
+	
+	{next_state, NextState, NewData, Timeout} ->
+	    NewCtx = Ctx#data{ 
+		       state = NextState, 
+		       statedata = NewData
+		      },
+	    {next_state, dispatch, NewCtx, Timeout};
+	
+	{stop, Reason, Reply, NewData} ->
+	    NewCtx = Ctx#data {
+		       statedata = NewData
+		      },
+	    {stop, Reason, Reply, NewCtx};
+	
+	{stop, Reason, NewData} ->
+	    stop(Ctx, Reason, NewData);
+
+	Other ->
+	    Other
+    end.
 
 start_next_module(Ctx, []) ->
     %% module stack is empty,
@@ -556,17 +559,57 @@ start_next_module(Ctx, Modules) ->
 	    Other
     end.
 
-stop(CardGameRef) ->
-    gen_fsm:send_all_state_event(CardGameRef, stop).
+stop_shutdown(Ctx, Data) ->
+    {Module, _} = hd(Ctx#data.stack),
+    State = Ctx#data.state,
+    Module:terminate(shutdown, State, Data),
+    stop(Ctx, normal, Data).
 
-restart(CardGameRef) ->
-    gen_fsm:sync_send_all_state_event(CardGameRef, 'RESTART').
-    
-call(CardGameRef, Event) ->
-    gen_fsm:sync_send_all_state_event(CardGameRef, {'CALL', Event}).
+stop_normal_exit(Ctx, Data) ->
+    %% send to parent
+    Ctx#data.parent ! {'CARDGAME EXIT', self(), exit},
+    stop(Ctx, normal, Data).
 
-cast(CardGameRef, Event) ->
-    gen_fsm:send_all_state_event(CardGameRef, {'CAST', Event}).
+stop_normal_restart(Ctx, Data) ->
+    {Module, _} = hd(Ctx#data.stack),
+    State = Ctx#data.state,
+    Module:terminate({normal, restart}, State, Data),
+    start_next_module(Ctx, Ctx#data.modules).
+
+stop_normal_restart_result(Ctx, Result, Data) ->
+    {Module, _} = hd(Ctx#data.stack),
+    State = Ctx#data.state,
+    Module:terminate({normal, restart}, State, Data),
+    Ctx1 = Ctx#data {
+	     context = Result
+	    },
+    start_next_module(Ctx1, Ctx#data.modules).
+
+stop_normal_result(Ctx, Result, Data) ->
+    {Module, _} = hd(Ctx#data.stack),
+    State = Ctx#data.state,
+    Module:terminate({normal, Result}, State, Data),
+    [_|Stack] = Ctx#data.stack,
+    Ctx1 = Ctx#data {
+	     context = Result
+	    },
+    start_next_module(Ctx1, Stack).
+
+stop_endgame(Ctx, Result, Data) ->
+    {Module, _} = hd(Ctx#data.stack),
+    State = Ctx#data.state,
+    Module:terminate({normal, Result}, State, Data),
+    Stack = [lists:last(Ctx#data.stack)],
+    Ctx1 = Ctx#data {
+	     context = Result
+	    },
+    start_next_module(Ctx1, Stack).
+
+stop_other(Ctx, Reason, Data) ->
+    NewCtx = Ctx#data {
+	       statedata = Data
+	      },
+    {stop, Reason, NewCtx}.
 
 test() ->
     ok.

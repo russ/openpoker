@@ -173,6 +173,10 @@ logout(OID) ->
 	    oops
     end.
 
+%%% 
+%%% Handlers
+%%%
+
 %%%
 %%% Test suite
 %%%

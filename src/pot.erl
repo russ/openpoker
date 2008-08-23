@@ -57,50 +57,31 @@ terminate(normal, _Pot) ->
     ok.
 
 handle_cast('RESET', _Pot) ->
-    {noreply, new_pot()};
+    handle_cast_reset();
 
 handle_cast('NEW STAGE', Pot) ->
-    Inactive = Pot#pot.inactive 
-	++ Pot#pot.active
-	++ [Pot#pot.current],
-    NewPot = Pot#pot { 
-	       active = [], 
-	       inactive = Inactive, 
-	       current = new_side_pot()
-	      },
-    {noreply, NewPot};
+    handle_cast_new_stage(Pot);
 
 handle_cast({'SPLIT', Player, Amount}, Pot) ->
-    {noreply, split(Pot, Player, Amount)};
+    handle_cast_split(Player, Amount, Pot);
 
 handle_cast(stop, Pot) ->
-    {stop, normal, Pot};
+    handle_cast_stop(Pot);
 
 handle_cast({'ADD BET', Player, Amount, IsAllIn}, Pot) ->
-    {NewPot, 0} = add_bet(Pot, Player, Amount, IsAllIn),
-    {noreply, NewPot};
+    handle_cast_add_bet(Player, Amount, IsAllIn, Pot);
 
 handle_cast(Event, Pot) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {pot, self()}, 
-			      {message, Event}]),
-    {noreply, Pot}.
+    handle_cast_other(Event, Pot).
 
 handle_call('SIDE POTS', _From, Pot) ->
-    Pots = [{total(P), P#side_pot.members} || P <- side_pots(Pot)],
-    {reply, Pots, Pot};
+    handle_call_side_pots(Pot);
 
 handle_call('TOTAL', _From, Pot) ->
-    {reply, total(Pot), Pot};
+    handle_call_total(Pot);
 
 handle_call(Event, From, Pot) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {pot, self()}, 
-			      {message, Event}, 
-			      {from, From}]),
-    {noreply, Pot}.
+    handle_call_other(Event, From, Pot).
 
 handle_info({'EXIT', _Pid, _Reason}, Pot) ->
     %% child exit?
@@ -116,9 +97,59 @@ handle_info(Info, Pot) ->
 code_change(_OldVsn, Pot, _Extra) ->
     {ok, Pot}.
 
-%%
-%% Utility
-%%
+%%%
+%%% Handlers
+%%%
+
+handle_cast_reset() ->
+    {noreply, new_pot()}.
+
+handle_cast_new_stage(Pot) ->
+    Inactive = Pot#pot.inactive 
+	++ Pot#pot.active
+	++ [Pot#pot.current],
+    NewPot = Pot#pot { 
+	       active = [], 
+	       inactive = Inactive, 
+	       current = new_side_pot()
+	      },
+    {noreply, NewPot}.
+
+handle_cast_split(Player, Amount, Pot) ->
+    {noreply, split(Pot, Player, Amount)}.
+
+handle_cast_stop(Pot) ->
+    {stop, normal, Pot}.
+
+handle_cast_add_bet(Player, Amount, IsAllIn, Pot) ->
+    {NewPot, 0} = add_bet(Pot, Player, Amount, IsAllIn),
+    {noreply, NewPot}.
+
+handle_cast_other(Event, Pot) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {pot, self()}, 
+			      {message, Event}]),
+    {noreply, Pot}.
+
+handle_call_side_pots(Pot) ->
+    Pots = [{total(P), P#side_pot.members} || P <- side_pots(Pot)],
+    {reply, Pots, Pot}.
+
+handle_call_total(Pot) ->
+    {reply, total(Pot), Pot}.
+
+handle_call_other(Event, From, Pot) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {pot, self()}, 
+			      {message, Event}, 
+			      {from, From}]),
+    {noreply, Pot}.
+
+%%%
+%%% Utility
+%%%
 
 %% Ensure that player belongs to the pot
 

@@ -142,6 +142,187 @@ terminate(_Reason, Game) ->
 %%% Reset is used each time the game is restarted
 
 handle_cast('RESET', Game) ->
+    handle_cast_reset(Game);
+
+%%% Player timeout 
+
+handle_cast({'TIMEOUT', Timeout}, Game) ->
+    handle_cast_timeout(Timeout, Game);
+
+%%% Number of players required to start the game
+    
+handle_cast({'REQUIRED', N}, Game) ->
+    handle_cast_required(N, Game);
+
+%%% Broadcast event to players and observers
+
+handle_cast({'BROADCAST', Event}, Game) ->
+    handle_cast_broadcast(Event, Game);
+
+%%% Only used for testing to rig the deck 
+
+handle_cast({'RIG', Deck}, Game) ->
+    handle_cast_rig(Deck, Game);
+
+%%% Watch the game without joining
+
+handle_cast({?PP_WATCH, Player}, Game) ->
+    handle_cast_watch(Player, Game);
+
+handle_cast({?PP_UNWATCH, Player}, Game) ->
+    handle_cast_unwatch(Player, Game);
+
+%%% Need to be watching the game or playing
+%%% to be able to send chat messages.
+    
+handle_cast({?PP_CHAT, Player, Message}, Game) ->
+    handle_cast_chat(Player, Message, Game);
+
+handle_cast({?PP_JOIN, Player, SeatNum, BuyIn}, Game) ->
+    handle_cast({?PP_JOIN, Player, SeatNum, BuyIn, ?PS_PLAY}, Game);
+
+%%% You need to have enough money to buy in 
+%%% and the seat has to be empty.
+
+handle_cast({?PP_JOIN, Player, SeatNum, BuyIn, State}, Game) ->
+    handle_cast_join(Player, SeatNum, BuyIn, State, Game);
+
+handle_cast({?PP_LEAVE, Player}, Game) ->
+    handle_cast({?PP_LEAVE, Player, ?PS_CAN_LEAVE}, Game);
+
+handle_cast({?PP_LEAVE, Player, Mask}, Game) ->
+    handle_cast_leave_mask(Player, Mask, Game);
+
+handle_cast({'DRAW', Player, Card}, Game) ->
+    handle_cast_draw(Player, Card, Game);
+
+handle_cast({'DRAW SHARED', Card}, Game) ->
+    handle_cast_draw_shared(Card, Game);
+
+handle_cast({'SET STATE', Player, State}, Game) ->
+    handle_cast_set_state(Player, State, Game);
+
+%% Reset ?PS_BET to ?PS_PLAY
+
+handle_cast({'RESET STATE', Source, Target}, Game) ->
+    handle_cast_reset_state(Source, Target, Game);
+
+%% Reset bets to 0
+
+handle_cast('NEW STAGE', Game) ->
+    handle_cast_new_stage(Game);
+
+handle_cast({'ADD BET', Player, Amount}, Game) when Amount >= 0 ->
+    handle_cast_add_bet(Player, Amount, Game);
+
+handle_cast({'REQUEST BET', SeatNum, Call, RaiseMin, RaiseMax}, Game) ->
+    handle_cast_request_bet(SeatNum, Call, RaiseMin, RaiseMax, Game);
+
+handle_cast({'RESEND UPDATES', Player}, Game) ->
+    handle_cast_resend_updates(Player, Game);
+
+handle_cast(stop, Game) ->
+    handle_cast_stop(Game);
+
+handle_cast(Event, Game) ->
+    handle_cast_other(Event, Game).
+
+handle_call('ID', _From, Game) ->
+    handle_call_id(Game);
+
+handle_call('SHARED', _From, Game) ->
+    handle_call_shared(Game);
+
+handle_call({'PRIVATE CARDS',Player}, _From, Game) ->
+    handle_call_private_cards(Player, Game);
+
+handle_call('FSM', _From, Game) ->
+    handle_call_fsm(Game);
+
+handle_call('DECK', _From, Game) ->
+    handle_call_deck(Game);
+
+handle_call('TIMEOUT', _From, Game) ->
+    handle_call_timeout(Game);
+
+handle_call('REQUIRED', _From, Game) ->
+    handle_call_required(Game);
+
+handle_call('JOINED', _From, Game) ->
+    handle_call_joined(Game);
+
+handle_call('WAITING', _From, Game) ->
+    handle_call_waiting(Game);
+
+handle_call('BLINDS', _From, Game) ->
+    handle_call_blinds(Game);
+
+handle_call({'RAISE SIZE', Player, Stage}, _From, Game) ->
+    handle_call_raise_size(Player, Stage, Game);
+
+handle_call({'STATE', Player}, _From, Game) ->
+    handle_call_state(Player, Game);
+
+handle_call({'WHAT SEAT', Player}, _From, Game) ->
+    handle_call_what_seat(Player, Game);
+
+handle_call({'SEAT TAKEN', SeatNum}, _From, Game) ->
+    handle_call_seat_taken(SeatNum, Game);
+
+handle_call({'BET TOTAL', Player}, _From, Game) ->
+    handle_call_bet_total(Player, Game);
+
+handle_call({'PLAYER AT', SeatNum}, _From, Game) ->
+    handle_call_player_at(SeatNum, Game);
+
+handle_call('IS EMPTY', _From, Game) ->
+    handle_call_is_empty(Game);
+
+handle_call('SEAT COUNT', _From, Game) ->
+    handle_call_seat_count(Game);
+
+handle_call('RANK HANDS', _From, Game) ->
+    handle_call_rank_hands(Game);
+
+handle_call('POTS', _From, Game) ->
+    handle_call_pots(Game);
+
+handle_call('POT TOTAL', _From, Game) ->
+    handle_call_pot_total(Game);
+
+handle_call({'SEATS', StartFrom, Mask}, _From, Game) ->
+    handle_call_seats_from(StartFrom, Mask, Game);
+
+handle_call({'SEATS', Mask}, _From, Game) ->
+    handle_call_seats(Mask, Game);
+
+handle_call('SEAT QUERY', _From, Game) ->
+    handle_call_seat_query(Game);
+
+handle_call(Event, From, Game) ->
+    handle_call_other(Event, From, Game).
+
+handle_info({'EXIT', _Pid, _Reason}, Game) ->
+    %% child exit?
+    {noreply, Game};
+
+handle_info(Info, Game) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {id, Game#game.oid},
+			      {self, self()}, 
+			      {message, Info}]),
+    {noreply, Game}.
+
+                 
+code_change(_OldVsn, Game, _Extra) ->
+    {ok, Game}.
+
+%%%
+%%% Handlers
+%%%
+
+handle_cast_reset(Game) ->
     broadcast_inplay(Game),
     gen_server:cast(Game#game.deck, 'RESET'),
     gen_server:cast(Game#game.pot, 'RESET'),
@@ -156,19 +337,15 @@ handle_cast('RESET', Game) ->
      Game2 = reset_bets(Game1),
      ResetMask = ?PS_ANY band (bnot ?PS_WAIT_BB),
      Game3 = reset_state(Game2, ResetMask, ?PS_PLAY),
-     {noreply, Game3};
+     {noreply, Game3}.
     
-%%% Player timeout 
-
-handle_cast({'TIMEOUT', Timeout}, Game) ->
+handle_cast_timeout(Timeout, Game) ->
     Game1 = Game#game { 
 	      timeout = Timeout
 	     },
-    {noreply, Game1};
+    {noreply, Game1}.
 
-%%% Number of players required to start the game
-    
-handle_cast({'REQUIRED', N}, Game) ->
+handle_cast_required(N, Game) ->
     N1 = if
 	     N < 2 ->
 		 2;
@@ -178,38 +355,29 @@ handle_cast({'REQUIRED', N}, Game) ->
     Game1 = Game#game {
 	      required_player_count = N1
 	     },
-    {noreply, Game1};
+    {noreply, Game1}.
 
-%%% Broadcast event to players and observers
-
-handle_cast({'BROADCAST', Event}, Game) ->
+handle_cast_broadcast(Event, Game) ->
     Game1 = broadcast(Game, Event),
-    {noreply, Game1};
+    {noreply, Game1}.
 
-%%% Only used for testing to rig the deck 
-
-handle_cast({'RIG', Deck}, Game) ->
+handle_cast_rig(Deck, Game) ->
     gen_server:cast(Game#game.deck, {'RIG', Deck}),
-    {noreply, Game};
+    {noreply, Game}.
     
-%%% Watch the game without joining
-
-handle_cast({?PP_WATCH, Player}, Game) ->
+handle_cast_watch(Player, Game) ->
     Game1 = Game#game { 
 	      observers = [Player|Game#game.observers]
 	     },
-    {noreply, Game1};
+    {noreply, Game1}.
 
-handle_cast({?PP_UNWATCH, Player}, Game) ->
+handle_cast_unwatch(Player, Game) ->
     Game1 = Game#game { 
 	      observers = lists:delete(Player, Game#game.observers)
 	     },
-    {noreply, Game1};
+    {noreply, Game1}.
     
-%%% Need to be watching the game or playing
-%%% to be able to send chat messages.
-    
-handle_cast({?PP_CHAT, Player, Message}, Game) ->
+handle_cast_chat(Player, Message, Game) ->
     XRef = Game#game.xref,
     OurPlayer = gb_trees:is_defined(Player, XRef) 
 	or lists:member(Player, Game#game.observers),
@@ -219,15 +387,9 @@ handle_cast({?PP_CHAT, Player, Message}, Game) ->
 		true ->
 		    Game
 	    end,
-    {noreply, Game1};
+    {noreply, Game1}.
 
-handle_cast({?PP_JOIN, Player, SeatNum, BuyIn}, Game) ->
-    handle_cast({?PP_JOIN, Player, SeatNum, BuyIn, ?PS_PLAY}, Game);
-
-%%% You need to have enough money to buy in 
-%%% and the seat has to be empty.
-
-handle_cast({?PP_JOIN, Player, SeatNum, BuyIn, State}, Game) ->
+handle_cast_join(Player, SeatNum, BuyIn, State, Game) ->
     Seats = Game#game.seats,
     XRef = Game#game.xref,
     Seat = element(SeatNum, Seats),
@@ -272,12 +434,9 @@ handle_cast({?PP_JOIN, Player, SeatNum, BuyIn, State}, Game) ->
 			      [B1, I1, BuyIn]),
 		    {noreply, Game}
 	    end
-    end;
+    end.
 
-handle_cast({?PP_LEAVE, Player}, Game) ->
-    handle_cast({?PP_LEAVE, Player, ?PS_CAN_LEAVE}, Game);
-
-handle_cast({?PP_LEAVE, Player, Mask}, Game) ->
+handle_cast_leave_mask(Player, Mask, Game) ->
     XRef = Game#game.xref,
     Seats = Game#game.seats,
     OurPlayer = gb_trees:is_defined(Player, XRef),
@@ -314,25 +473,25 @@ handle_cast({?PP_LEAVE, Player, Mask}, Game) ->
 	%% not playing here
 	true ->
 	    {noreply, Game}
-    end;
+    end.
 
-handle_cast({'DRAW', Player, Card}, Game) ->
+handle_cast_draw(Player, Card, Game) ->
     SeatNum = gb_trees:get(Player, Game#game.xref),
     Seat = element(SeatNum, Game#game.seats),
     gen_server:cast(Seat#seat.hand, {'ADD CARD', Card}),
     GID = Game#game.oid,
     gen_server:cast(Player, {?PP_NOTIFY_DRAW, GID, Card, Game#game.seqnum}),
     Game1 = broadcast(Game, {?PP_NOTIFY_PRIVATE, Player}),
-    {noreply, Game1};
+    {noreply, Game1}.
 
-handle_cast({'DRAW SHARED', Card}, Game) ->
+handle_cast_draw_shared(Card, Game) ->
     Game1 = Game#game {
 	      board = [Card|Game#game.board]
 	     },
     Game2 = broadcast(Game1, {?PP_NOTIFY_SHARED, Card}),
-    {noreply, Game2};
+    {noreply, Game2}.
 
-handle_cast({'SET STATE', Player, State}, Game) ->
+handle_cast_set_state(Player, State, Game) ->
     Game1 = case gb_trees:lookup(Player, Game#game.xref) of
                 {value, SeatNum} ->
                     Seat = element(SeatNum, Game#game.seats),
@@ -346,22 +505,18 @@ handle_cast({'SET STATE', Player, State}, Game) ->
                 none ->
                     Game
             end,
-    handle_cast({'BROADCAST', {?PP_PLAYER_STATE, Player, State}}, Game1);
+    handle_cast({'BROADCAST', {?PP_PLAYER_STATE, Player, State}}, Game1).
 
-%% Reset ?PS_BET to ?PS_PLAY
-
-handle_cast({'RESET STATE', Source, Target}, Game) ->
+handle_cast_reset_state(Source, Target, Game) ->
     Game1 = reset_state(Game, Source, Target),
-    {noreply, Game1};
+    {noreply, Game1}.
 
-%% Reset bets to 0
-
-handle_cast('NEW STAGE', Game) ->
+handle_cast_new_stage(Game) ->
     gen_server:cast(Game#game.pot, 'NEW STAGE'),
     Game1 = reset_bets(Game),
-    {noreply, Game1};
+    {noreply, Game1}.
 
-handle_cast({'ADD BET', Player, Amount}, Game) when Amount >= 0 ->
+handle_cast_add_bet(Player, Amount, Game) ->
     SeatNum = gb_trees:get(Player, Game#game.xref),
     GID = Game#game.oid,
     Seat = element(SeatNum, Game#game.seats),
@@ -396,9 +551,9 @@ handle_cast({'ADD BET', Player, Amount}, Game) when Amount >= 0 ->
 					  })
 		     },
 	    {noreply, Game2}
-    end;
+    end.
 
-handle_cast({'REQUEST BET', SeatNum, Call, RaiseMin, RaiseMax}, Game) ->
+handle_cast_request_bet(SeatNum, Call, RaiseMin, RaiseMax, Game) ->
     if 
         %% huh?
         SeatNum > size(Game#game.seats) ->
@@ -422,93 +577,91 @@ handle_cast({'REQUEST BET', SeatNum, Call, RaiseMin, RaiseMax}, Game) ->
                     gen_server:cast(Seat#seat.player, Msg),
                     {noreply, Game}
             end
-    end;
+    end.
     
-handle_cast({'RESEND UPDATES', Player}, Game) ->
+handle_cast_resend_updates(Player, Game) ->
     resend_updates(Game, Player),
-    {noreply, Game};
+    {noreply, Game}.
 
-handle_cast(stop, Game) ->
-    {stop, normal, Game};
+handle_cast_stop(Game) ->
+    {stop, normal, Game}.
 
-handle_cast(Event, Game) ->
+handle_cast_other(Event, Game) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},
 			      {self, self()}, 
 			      {message, Event}]),
     {noreply, Game}.
 
-handle_call('ID', _From, Game) ->
-    {reply, Game#game.oid, Game};
+handle_call_id(Game) ->
+    {reply, Game#game.oid, Game}.
 
-%called back to get the shared cards for the game.
-handle_call('SHARED', _From, Game) ->
-    {reply, Game#game.board, Game};
+handle_call_shared(Game) ->
+    {reply, Game#game.board, Game}.
 
-%called back to get the private cards for a player.
-handle_call({'PRIVATE CARDS',Player}, _From, Game) ->
+handle_call_private_cards(Player, Game) ->
     SeatNum = gb_trees:get(Player, Game#game.xref),
     Seat = element(SeatNum, Game#game.seats),
     {_,GameCards} = gen_server:call(Seat#seat.hand,'CARDS'),
     N = erlang:length(GameCards),
     PrivateCards = [lists:nth(N,GameCards),lists:nth(N-1,GameCards)],
-    {reply, PrivateCards, Game};
+    {reply, PrivateCards, Game}.
 
-handle_call('FSM', _From, Game) ->
-    {reply, Game#game.fsm, Game};
+handle_call_fsm(Game) ->
+    {reply, Game#game.fsm, Game}.
 
-handle_call('DECK', _From, Game) ->
-    {reply, Game#game.deck, Game};
+handle_call_deck(Game) ->
+    {reply, Game#game.deck, Game}.
 
-handle_call('TIMEOUT', _From, Game) ->
-    {reply, Game#game.timeout, Game};
+handle_call_timeout(Game) ->
+    {reply, Game#game.timeout, Game}.
 
-handle_call('REQUIRED', _From, Game) ->
-    {reply, Game#game.required_player_count, Game};
+handle_call_required(Game) ->
+    {reply, Game#game.required_player_count, Game}.
 
-handle_call('JOINED', _From, Game) ->
-    {reply, length(get_seats(Game, ?PS_ANY)), Game};
+handle_call_joined(Game) ->
+    {reply, length(get_seats(Game, ?PS_ANY)), Game}.
 
-handle_call('WAITING', _From, Game) ->
-    {reply, 0, Game};
+handle_call_waiting(Game) ->
+    {reply, 0, Game}.
 
-handle_call('BLINDS', _From, Game) ->
-    {reply, gen_server:call(Game#game.limit,'BLINDS'), Game};
+handle_call_blinds(Game) ->
+    {reply, gen_server:call(Game#game.limit,'BLINDS'), Game}.
 
-handle_call({'RAISE SIZE', Player, Stage}, _From, Game) ->
+handle_call_raise_size(Player, Stage, Game) ->
     GID = Game#game.oid,
     PotSize = gen_server:call(Game#game.pot, 'TOTAL'),
     Reply = gen_server:call(Game#game.limit,
                             {'RAISE SIZE', GID, PotSize, Player, Stage}),
-    {reply, Reply, Game};
+    {reply, Reply, Game}.
 
-handle_call({'STATE', Player}, _From, Game) ->
+handle_call_state(Player, Game) ->
     case gb_trees:lookup(Player, Game#game.xref) of
 	none ->
 	    {reply, none, Game};
 	{value, SeatNum} ->
 	    Seat = element(SeatNum, Game#game.seats),
 	    {reply, Seat#seat.state, Game}
-    end;
+    end.
 
-handle_call({'WHAT SEAT', Player}, _From, Game) ->
+handle_call_what_seat(Player, Game) ->
     case gb_trees:lookup(Player, Game#game.xref) of
 	none ->
 	    {reply, none, Game};
 	{value, SeatNum} ->
 	    {reply, SeatNum, Game}
-    end;
+    end.
 
-handle_call({'SEAT TAKEN', SeatNum}, _From, Game) ->
+handle_call_seat_taken(SeatNum, Game) ->
     Seat = element(SeatNum, Game#game.seats),
-    {reply, Seat#seat.state /= ?PS_EMPTY, Game};
+    {reply, Seat#seat.state /= ?PS_EMPTY, Game}.
 
-handle_call({'BET TOTAL', Player}, _From, Game) ->
+handle_call_bet_total(Player, Game) ->
     SeatNum = gb_trees:get(Player, Game#game.xref),
     Seat = element(SeatNum, Game#game.seats),
-    {reply, Seat#seat.bet, Game};
+    {reply, Seat#seat.bet, Game}.
 
-handle_call({'PLAYER AT', SeatNum}, _From, Game) ->
+handle_call_player_at(SeatNum, Game) ->
     Player = if 
 		 SeatNum > size(Game#game.seats) ->
 		     none;
@@ -516,38 +669,38 @@ handle_call({'PLAYER AT', SeatNum}, _From, Game) ->
 		     Seat = element(SeatNum, Game#game.seats),
 		     Seat#seat.player
 	     end,
-    {reply, Player, Game};
+    {reply, Player, Game}.
 
-handle_call('IS EMPTY', _From, Game) ->
+handle_call_is_empty(Game) ->
     Seats = get_seats(Game, ?PS_ANY),
     Empty = (Game#game.observers == []) and (Seats == []),
-    {reply, Empty, Game};
+    {reply, Empty, Game}.
 
-handle_call('SEAT COUNT', _From, Game) ->
-    {reply, size(Game#game.seats), Game};
+handle_call_seat_count(Game) ->
+    {reply, size(Game#game.seats), Game}.
 
-handle_call('RANK HANDS', _From, Game) ->
+handle_call_rank_hands(Game) ->
     Seats = get_seats(Game, ?PS_SHOWDOWN),
-    {reply, rank_hands(Game, Seats), Game};
+    {reply, rank_hands(Game, Seats), Game}.
 
-handle_call('POTS', _From, Game) ->
+handle_call_pots(Game) ->
     Pots = gen_server:call(Game#game.pot, 'SIDE POTS'),
-    {reply, Pots, Game};
+    {reply, Pots, Game}.
 
-handle_call('POT TOTAL', _From, Game) ->
+handle_call_pot_total(Game) ->
     Total = gen_server:call(Game#game.pot, 'TOTAL'),
-    {reply, Total, Game};
+    {reply, Total, Game}.
 
-handle_call({'SEATS', StartFrom, Mask}, _From, Game) ->
-    {reply, get_seats(Game, StartFrom, Mask), Game};
+handle_call_seats_from(StartFrom, Mask, Game) ->
+    {reply, get_seats(Game, StartFrom, Mask), Game}.
 
-handle_call({'SEATS', Mask}, _From, Game) ->
-    {reply, get_seats(Game, Mask), Game};
+handle_call_seats(Mask, Game) ->
+    {reply, get_seats(Game, Mask), Game}.
 
-handle_call('SEAT QUERY', _From, Game) ->
-    {reply, seat_query(Game), Game};
+handle_call_seat_query(Game) ->
+    {reply, seat_query(Game), Game}.
 
-handle_call(Event, From, Game) ->
+handle_call_other(Event, From, Game) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},
 			      {id, Game#game.oid},
@@ -556,26 +709,9 @@ handle_call(Event, From, Game) ->
 			      {from, From}]),
     {noreply, Game}.                          
                        
-
-handle_info({'EXIT', _Pid, _Reason}, Game) ->
-    %% child exit?
-    {noreply, Game};
-
-handle_info(Info, Game) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {id, Game#game.oid},
-			      {self, self()}, 
-			      {message, Info}]),
-    {noreply, Game}.
-
-                 
-code_change(_OldVsn, Game, _Extra) ->
-    {ok, Game}.
-
-%%
-%% Utility
-%% 
+%%%
+%%% Utility
+%%% 
 
 rank_hands(Game, Seats) ->
     F = fun(SeatNum) ->

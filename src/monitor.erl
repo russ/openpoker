@@ -56,6 +56,22 @@ handle_call(Event, From, Data) ->
     {noreply, Data}.
 
 handle_info({timeout, _, _}, Data) ->
+    handle_info_timeout(Data);
+
+handle_info({tcp, _Socket, <<?PP_PONG>>}, Data) ->
+    handle_info_pong(Data);
+
+handle_info(Info, Data) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {self, self()}, 
+			      {message, Info}]),
+    {noreply, Data}.
+
+code_change(_OldVsn, Data, _Extra) ->
+    {ok, Data}.
+
+handle_info_timeout(Data) ->
     {Time, {ok, Sock}} = timer:tc(tcp_server, 
 				  start_client, 
 				  [Data#data.host, Data#data.port, 1024]),
@@ -71,9 +87,9 @@ handle_info({timeout, _, _}, Data) ->
 				 end,
 	      ping_time = now()
 	     },
-    {noreply, Data1};
+    {noreply, Data1}.
 
-handle_info({tcp, _Socket, <<?PP_PONG>>}, Data) ->
+handle_info_pong(Data) ->
     PongTime = now(),
     PingTime = Data#data.ping_time,
     Elapsed = timer:now_diff(PongTime, PingTime),
@@ -94,17 +110,8 @@ handle_info({tcp, _Socket, <<?PP_PONG>>}, Data) ->
 	       Data1#data.avg_connect_time,
 	       Data1#data.avg_ping_time]),
     erlang:start_timer(Data1#data.poll_freq, self(), nil),
-    {noreply, Data1};
+    {noreply, Data1}.
 	    
-handle_info(Info, Data) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {self, self()}, 
-			      {message, Info}]),
-    {noreply, Data}.
-
-code_change(_OldVsn, Data, _Extra) ->
-    {ok, Data}.
 
 monitor(Group, PollFreq) ->
     monitor(pg2:get_members(Group), PollFreq, []).

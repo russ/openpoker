@@ -50,23 +50,16 @@ handle_cast(Event, Limit) ->
     {noreply, Limit}.
 
 handle_call('INFO', _From, Limit) ->
-    {reply, {?LT_FIXED_LIMIT, 
-	     Limit#fixed_limit.low,
-	     Limit#fixed_limit.high}, Limit};
+    handle_call_info(Limit);
 
 handle_call({'RAISE SIZE', _GID, _PotSize, _Player, Stage}, _From, Limit) ->
-    {reply, raise_size(Limit, Stage), Limit};
+    handle_call_raise_size(Stage, Limit);
 
 handle_call('BLINDS', _From, Limit) ->
-    {reply, {(Limit#fixed_limit.low / 2), Limit#fixed_limit.low}, Limit};
+    handle_call_blinds(Limit);
 
 handle_call(Event, From, Limit) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {self, self()}, 
-			      {message, Event}, 
-			      {from, From}]),
-    {noreply, Limit}.
+    handle_call_other(Event, From, Limit).
 
 handle_info({'EXIT', _Pid, _Reason}, Limit) ->
     %% child exit?
@@ -88,6 +81,30 @@ raise_size(Limit, Stage) when ?GS_PREFLOP =:= Stage;
 
 raise_size(Limit, _Stage) ->
     {Limit#fixed_limit.high, Limit#fixed_limit.high}.
+
+%%%
+%%% Handlers
+%%%
+
+handle_call_info(Limit) ->
+    {reply, {?LT_FIXED_LIMIT, 
+	     Limit#fixed_limit.low,
+	     Limit#fixed_limit.high}, Limit}.
+
+handle_call_raise_size(Stage, Limit) ->
+    {reply, raise_size(Limit, Stage), Limit}.
+
+handle_call_blinds(Limit) ->
+    {reply, {(Limit#fixed_limit.low / 2), Limit#fixed_limit.low}, Limit}.
+
+handle_call_other(Event, From, Limit) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {self, self()}, 
+			      {message, Event}, 
+			      {from, From}]),
+    {noreply, Limit}.
+
 
 test() ->
     ok.

@@ -52,6 +52,110 @@ init([Game, Type]) ->
 stop(Ref) ->
     cardgame:send_all_state_event(Ref, stop).
 
+small_blind({'START', Context}, Data) ->
+    small_blind_handle_start(Context, Data);
+
+small_blind({?PP_CALL, Player, Amount}, Data) ->
+    small_blind_handle_call(Player, Amount, Data);
+
+small_blind({?PP_FOLD, Player}, Data) ->
+    small_blind_handle_fold(Player, Data);
+
+small_blind({timeout, _Timer, Player}, Data) ->
+    small_blind_handle_timeout(Player, Data);
+
+small_blind({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
+    small_blind_handle_join(Player, SeatNum, BuyIn, Data);
+
+small_blind({?PP_LEAVE, Player}, Data) ->
+    small_blind_handle_leave(Player, Data);
+
+small_blind({?PP_SIT_OUT, Player}, Data) ->
+    small_blind_handle_sitout(Player, Data);
+
+small_blind({?PP_COME_BACK, Player}, Data) ->
+    small_blind_handle_comeback(Player, Data);
+
+small_blind(Event, Data) ->
+    small_blind_other(Event, Data).
+
+big_blind({?PP_CALL, Player, Amount}, Data) ->
+    big_blind_handle_call(Player, Amount, Data);
+
+big_blind({?PP_FOLD, Player}, Data) ->
+    big_blind_handle_fold(Player, Data);
+
+big_blind({timeout, _Timer, Player}, Data) ->
+    big_blind_handle_timeout(Player, Data);
+
+big_blind({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
+    big_blind_handle_join(Player, SeatNum, BuyIn, Data);
+
+big_blind({?PP_LEAVE, Player}, Data) ->
+    big_blind_handle_leave(Player, Data);
+
+big_blind({?PP_SIT_OUT, Player}, Data) ->
+    big_blind_handle_sitout(Player, Data);
+
+big_blind({?PP_COME_BACK, Player}, Data) ->
+    big_blind_handle_comeback(Player, Data);
+
+big_blind(Event, Data) ->
+    big_blind_handle_other(Event, Data).
+
+handle_event(stop, _State, Data) ->
+    {stop, normal, Data};
+
+handle_event(Event, State, Data) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {where, handle_event},
+			       {message, Event}, 
+			       {self, self()},
+			       {game, Data#data.game},
+			       {expected, Data#data.expected},
+			       {sb, Data#data.small_blind_seat},
+			       {bb, Data#data.big_blind_seat},
+			       {b, Data#data.button_seat}]),
+    {next_state, State, Data}.
+        
+handle_sync_event(Event, From, State, Data) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {where, handle_sync_event},
+			       {message, Event}, 
+			       {from, From},
+			       {self, self()},
+			       {game, Data#data.game},
+			       {expected, Data#data.expected},
+			       {sb, Data#data.small_blind_seat},
+			       {bb, Data#data.big_blind_seat},
+			       {b, Data#data.button_seat}]),
+    {next_state, State, Data}.
+        
+handle_info(Info, State, Data) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {where, handle_info},
+			       {message, Info}, 
+			       {self, self()},
+			       {game, Data#data.game},
+			       {expected, Data#data.expected},
+			       {sb, Data#data.small_blind_seat},
+			       {bb, Data#data.big_blind_seat},
+			       {b, Data#data.button_seat}]),
+    {next_state, State, Data}.
+
+terminate(_Reason, _State, _Data) -> 
+    ok.
+
+code_change(_OldVsn, State, Data, _Extra) ->
+    {ok, State, Data}.
+
+%%%
+%%% Handlers
+%%%
+
 %% Theory
 
 %% Heads-up play. The small blind is the button and acts first 
@@ -74,7 +178,7 @@ stop(Ref) ->
 %% On the following hand, the button does not move and the two blinds 
 %% are posted normally.
 
-small_blind({'START', Context}, Data) ->
+small_blind_handle_start(Context, Data) ->
     if 
 	Data#data.type /= irc ->
 	    Data1 = Data#data {
@@ -135,9 +239,9 @@ small_blind({'START', Context}, Data) ->
 	    Amount = Data2#data.small_blind_amount,
 	    Data3 = ask_for_blind(Data2, hd(SBPlayers), Amount),
 	    {next_state, small_blind, Data3}
-    end;
+    end.
 	
-small_blind({?PP_CALL, Player, Amount}, Data) ->
+small_blind_handle_call(Player, Amount, Data) ->
     Game = Data#data.game,
     {ExpPlayer, Seat, ExpAmount} = Data#data.expected,
     if
@@ -162,18 +266,18 @@ small_blind({?PP_CALL, Player, Amount}, Data) ->
 					  Data1#data.big_blind_amount),
 		    {next_state, big_blind, Data2}
 	    end
-    end;
+    end.
 
-small_blind({?PP_FOLD, Player}, Data) ->
+small_blind_handle_fold(Player, Data) ->
     {ExpPlayer, _Seat, _ExpAmount} = Data#data.expected,
     if
 	ExpPlayer /= Player ->
 	    {next_state, small_blind, Data};
 	true ->
 	    timeout(Data, Player, small_blind)
-    end;
+    end.
 
-small_blind({timeout, _Timer, Player}, Data) ->
+small_blind_handle_timeout(Player, Data) ->
     cancel_timer(Data),
     Game = Data#data.game,
     GID = gen_server:call(Game, 'ID'),
@@ -186,24 +290,24 @@ small_blind({timeout, _Timer, Player}, Data) ->
        {game, GID},
        {seat, Seat},
        {now, now()}]),
-    timeout(Data, Player, small_blind);
+    timeout(Data, Player, small_blind).
 
-small_blind({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    join(Data, Player, SeatNum, BuyIn, small_blind);
+small_blind_handle_join(Player, SeatNum, BuyIn, Data) ->
+    join(Data, Player, SeatNum, BuyIn, small_blind).
 
-small_blind({?PP_LEAVE, Player}, Data) ->
-    leave(Data, Player, small_blind);
+small_blind_handle_leave(Player, Data) ->
+    leave(Data, Player, small_blind).
 
-small_blind({?PP_SIT_OUT, Player}, Data) ->
-    sit_out(Data, Player, small_blind);
+small_blind_handle_sitout(Player, Data) ->
+    sit_out(Data, Player, small_blind).
 
-small_blind({?PP_COME_BACK, Player}, Data) ->
-    come_back(Data, Player, small_blind);
+small_blind_handle_comeback(Player, Data) ->
+    come_back(Data, Player, small_blind).
 
-small_blind(Event, Data) ->
+small_blind_other(Event, Data) ->
     handle_event(Event, small_blind, Data).
 
-big_blind({?PP_CALL, Player, Amount}, Data) ->
+big_blind_handle_call(Player, Amount, Data) ->
     Game = Data#data.game,
     {ExpPlayer, Seat, ExpAmount} = Data#data.expected,
     if
@@ -262,18 +366,18 @@ big_blind({?PP_CALL, Player, Amount}, Data) ->
 			    },
 		    {stop, {normal, Ctx1}, Data1}
 	    end
-    end;
+    end.
 
-big_blind({?PP_FOLD, Player}, Data) ->
+big_blind_handle_fold(Player, Data) ->
     {ExpPlayer, _Seat, _ExpAmount} = Data#data.expected,
     if
 	ExpPlayer /= Player ->
 	    {next_state, big_blind, Data};
 	true ->
 	    timeout(Data, Player, big_blind)
-    end;
+    end.
 
-big_blind({timeout, _Timer, Player}, Data) ->
+big_blind_handle_timeout(Player, Data) ->
     cancel_timer(Data),
     Game = Data#data.game,
     GID = gen_server:call(Game, 'ID'),
@@ -286,71 +390,22 @@ big_blind({timeout, _Timer, Player}, Data) ->
        {game, GID},
        {seat, Seat},
        {now, now()}]),
-    timeout(Data, Player, big_blind);
+    timeout(Data, Player, big_blind).
 
-big_blind({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    join(Data, Player, SeatNum, BuyIn, big_blind);
+big_blind_handle_join(Player, SeatNum, BuyIn, Data) ->
+    join(Data, Player, SeatNum, BuyIn, big_blind).
 
-big_blind({?PP_LEAVE, Player}, Data) ->
-    leave(Data, Player, big_blind);
+big_blind_handle_leave(Player, Data) ->
+    leave(Data, Player, big_blind).
 
-big_blind({?PP_SIT_OUT, Player}, Data) ->
-    sit_out(Data, Player, big_blind);
+big_blind_handle_sitout(Player, Data) ->
+    sit_out(Data, Player, big_blind).
 
-big_blind({?PP_COME_BACK, Player}, Data) ->
-    come_back(Data, Player, big_blind);
+big_blind_handle_comeback(Player, Data) ->
+    come_back(Data, Player, big_blind).
 
-big_blind(Event, Data) ->
+big_blind_handle_other(Event, Data) ->
     handle_event(Event, big_blind, Data).
-
-handle_event(stop, _State, Data) ->
-    {stop, normal, Data};
-
-handle_event(Event, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {where, handle_event},
-			       {message, Event}, 
-			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected},
-			       {sb, Data#data.small_blind_seat},
-			       {bb, Data#data.big_blind_seat},
-			       {b, Data#data.button_seat}]),
-    {next_state, State, Data}.
-        
-handle_sync_event(Event, From, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {where, handle_sync_event},
-			       {message, Event}, 
-			       {from, From},
-			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected},
-			       {sb, Data#data.small_blind_seat},
-			       {bb, Data#data.big_blind_seat},
-			       {b, Data#data.button_seat}]),
-    {next_state, State, Data}.
-        
-handle_info(Info, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {where, handle_info},
-			       {message, Info}, 
-			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected},
-			       {sb, Data#data.small_blind_seat},
-			       {bb, Data#data.big_blind_seat},
-			       {b, Data#data.button_seat}]),
-    {next_state, State, Data}.
-
-terminate(_Reason, _State, _Data) -> 
-    ok.
-
-code_change(_OldVsn, State, Data, _Extra) ->
-    {ok, State, Data}.
 
 %%
 %% Utility

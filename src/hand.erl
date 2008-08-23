@@ -46,47 +46,25 @@ terminate(normal, _Hand) ->
     ok.
 
 handle_cast({'ADD CARD', Card}, Hand) ->
-    NewHand = add(Hand, Card), 
-    {noreply, NewHand};
+    handle_cast_add_card(Card, Hand);
 
 handle_cast({'RESET', Id}, Hand) ->
-    NewHand = Hand#hand {
-		id = Id,
-		cards = [],
-		rank = none,
-		score = 0,
-		high = none
-	       },
-    {noreply, NewHand};
+    handle_cast_reset(Id, Hand);
 
 handle_cast(stop, Hand) ->
-    {stop, normal, Hand};
+    handle_cast_stop(Hand);
 
 handle_cast(Event, Hand) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {hand, self()}, 
-			      {message, Event}]),
-    {noreply, Hand}.
+    handle_cast_other(Event, Hand).
 
 handle_call('CARDS', _From, Hand) ->
-    {reply, {Hand#hand.id, Hand#hand.cards}, Hand};
+    handle_call_cards(Hand);
 
 handle_call('RANK', _From, Hand) ->
-    NewHand = rank(Hand),
-    Id = NewHand#hand.id,
-    Value = rank_value(NewHand#hand.rank),
-    High = NewHand#hand.high,
-    Score = NewHand#hand.score,
-    {reply, {Id, Value, High, Score}, NewHand};
+    handle_call_rank(Hand);
 
 handle_call(Event, From, Hand) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {hand, self()}, 
-			      {message, Event}, 
-			      {from, From}]),
-    {noreply, Hand}.
+    handle_call_other(Event, From, Hand).
 
 handle_info({'EXIT', _Pid, _Reason}, Hand) ->
     %% child exit?
@@ -101,6 +79,53 @@ handle_info(Info, Hand) ->
 
 code_change(_OldVsn, Hand, _Extra) ->
     {ok, Hand}.
+
+%%
+%% Handlers
+%%
+
+handle_cast_add_card(Card, Hand) ->
+    NewHand = add(Hand, Card), 
+    {noreply, NewHand}.
+
+handle_cast_reset(Id, Hand) ->
+    NewHand = Hand#hand {
+		id = Id,
+		cards = [],
+		rank = none,
+		score = 0,
+		high = none
+	       },
+    {noreply, NewHand}.
+
+handle_cast_stop(Hand) ->
+    {stop, normal, Hand}.
+
+handle_cast_other(Event, Hand) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {hand, self()}, 
+			      {message, Event}]),
+    {noreply, Hand}.
+
+handle_call_cards(Hand) ->
+    {reply, {Hand#hand.id, Hand#hand.cards}, Hand}.
+
+handle_call_rank(Hand) ->
+    NewHand = rank(Hand),
+    Id = NewHand#hand.id,
+    Value = rank_value(NewHand#hand.rank),
+    High = NewHand#hand.high,
+    Score = NewHand#hand.score,
+    {reply, {Id, Value, High, Score}, NewHand}.
+
+handle_call_other(Event, From, Hand) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {hand, self()}, 
+			      {message, Event}, 
+			      {from, From}]),
+    {noreply, Hand}.
 
 %%
 %% Utility

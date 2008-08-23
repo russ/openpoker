@@ -57,70 +57,38 @@ terminate(_Reason, Bot) ->
     ok.
 
 handle_cast({'SET ACTIONS', Actions}, Bot) ->
-    {Filters, Actions1} = extract_filters(Actions),
-    Bot1 = Bot#bot {
-	     actions = Actions1,
-             filters = Filters
-	    },
-    {noreply, Bot1};
-    
+    handle_set_actions(Actions, Bot);
+
 handle_cast({'GAMES TO PLAY', N}, Bot) ->
-    {noreply, Bot#bot{ games_to_play = N}};
+    handle_games_to_play(N, Bot);
 
 handle_cast(X = {'NOTIFY LEAVE',_,_}, Bot) ->
-    gen_server:cast(Bot#bot.player, X),
-    {noreply, Bot};
+    handle_notify_leave_x(X, Bot);
 
 handle_cast(stop, Bot) ->
-    {stop, normal, Bot};
+    handle_stop(Bot);
 
 handle_cast(Event, Bot) ->
-    ok = ?tcpsend(Bot#bot.socket, Event),
-    {noreply, Bot}.
+    handle_other(Event, Bot).
 
 handle_call({'CONNECT', Host, Port}, _From, Bot) ->
-    {ok, Sock} = tcp_server:start_client(Host, Port, 1024),
-    Bot1 = Bot#bot {
-	     socket = Sock
-	    },
-    {reply, ok, Bot1};
-    
+    handle_connect(Host, Port, Bot);
+
 handle_call('ACTIONS', _From, Bot) ->
-    {reply, Bot#bot.actions, Bot};
+    handle_actions(Bot);
 
 handle_call('SOCKET', _From, Bot) ->
-    {reply, Bot#bot.socket, Bot};
+    handle_socket(Bot);
 
 handle_call(Event, From, Bot) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {self, self()}, 
-			      {from, From},
-			      {message, Event}]),
-    {noreply, Bot}.
+    handle_other(Event, From, Bot).
 
 handle_info({tcp_closed, Socket}, Bot) ->
-    if 
-	not Bot#bot.done ->
-	    error_logger:info_report([{message, "Premature connection close"},
-                                      {module, ?MODULE},
-                                      {line, ?LINE},
-                                      {socket, Socket},
-                                      {bot, Bot}]);
-	true ->
-	    ok
-    end,
-    {stop, normal, Bot};
+    handle_tcp_closed(Socket, Bot);
 
 handle_info({tcp, _Socket, Bin}, Bot) ->
-    case proto:read(Bin) of
-	none ->
-	    {noreply, Bot};
-	Event ->
-            Bot1 = process_filters(Event, Bot),
-	    handle(Event, Bot1)
-    end;
-	    
+    handle_tcp_data(Bin, Bot);
+
 handle_info({'EXIT', _Pid, _Reason}, Bot) ->
     %% child exit?
     {noreply, Bot};
@@ -135,21 +103,82 @@ handle_info(Info, Bot) ->
 code_change(_OldVsn, Bot, _Extra) ->
     {ok, Bot}.
 
-handle({?PP_PID, PID}, Bot) ->
+%%%
+%%% Handlers
+%%% 
+
+handle_set_actions(Actions, Bot) ->
+    {Filters, Actions1} = extract_filters(Actions),
+    Bot1 = Bot#bot {
+	     actions = Actions1,
+             filters = Filters
+	    },
+    {noreply, Bot1}.
+    
+handle_games_to_play(N, Bot) ->
+    {noreply, Bot#bot{ games_to_play = N}}.
+
+handle_notify_leave_x(X, Bot) ->
+    gen_server:cast(Bot#bot.player, X),
+    {noreply, Bot}.
+
+handle_stop(Bot) ->
+    {stop, normal, Bot}.
+
+handle_other(Event, Bot) ->
+    ok = ?tcpsend(Bot#bot.socket, Event),
+    {noreply, Bot}.
+
+handle_connect(Host, Port, Bot) ->
+    {ok, Sock} = tcp_server:start_client(Host, Port, 1024),
+    Bot1 = Bot#bot {
+	     socket = Sock
+	    },
+    {reply, ok, Bot1}.
+    
+handle_actions(Bot) ->
+    {reply, Bot#bot.actions, Bot}.
+
+handle_socket(Bot) ->
+    {reply, Bot#bot.socket, Bot}.
+
+handle_other(Event, From, Bot) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {self, self()}, 
+			      {from, From},
+			      {message, Event}]),
+    {noreply, Bot}.
+
+handle_tcp_closed(Socket, Bot) ->
+    if 
+	not Bot#bot.done ->
+	    error_logger:info_report([{message, "Premature connection close"},
+                                      {module, ?MODULE},
+                                      {line, ?LINE},
+                                      {socket, Socket},
+                                      {bot, Bot}]);
+	true ->
+	    ok
+    end,
+    {stop, normal, Bot}.
+
+handle_tcp_data(Bin, Bot) ->
+    case proto:read(Bin) of
+	none ->
+	    {noreply, Bot};
+	Event ->
+            Bot1 = process_filters(Event, Bot),
+	    handle(Event, Bot1)
+    end.
+
+handle_pid(PID, Bot) ->
     Bot1 = Bot#bot {
 	     player = PID
 	    },
-    {noreply, Bot1};
+    {noreply, Bot1}.
 
-handle({?PP_GAME_INFO, _GID, ?GT_IRC_TEXAS, 
-	_Expected, _Joined, _Waiting,
-	{_Limit, _Low, _High}}, Bot) ->
-    {noreply, Bot};
-
-handle({?PP_PLAYER_INFO, _PID, _InPlay, _Nick, _Location}, Bot) ->
-    {noreply, Bot};
-
-handle({?PP_NOTIFY_JOIN, GID, PID, _SeatNum,_BuyIn, _Seq}, Bot) ->
+handle_notify_join(GID, PID, Bot) ->
     Bot1 = if
 	       PID == Bot#bot.player ->
 		   Bot#bot {
@@ -158,9 +187,9 @@ handle({?PP_NOTIFY_JOIN, GID, PID, _SeatNum,_BuyIn, _Seq}, Bot) ->
 	       true ->
 		   Bot
 	   end,
-    {noreply, Bot1};
+    {noreply, Bot1}.
 
-handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, _GameInplay,_SeatNum, _Seq}, Bot) ->
+handle_notify_game_inplay(GID, PID, Bot) ->
     Bot1 = if
 	       PID == Bot#bot.player ->
 		   Bot#bot {
@@ -169,12 +198,9 @@ handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, _GameInplay,_SeatNum, _Seq}, Bot) ->
 	       true ->
 		   Bot
 	   end,
-    {noreply, Bot1};
+    {noreply, Bot1}.
 
-handle({?PP_NOTIFY_CHAT, _GID, _PID, _Seq, _Message}, Bot) ->
-    {noreply, Bot};
-
-handle({?PP_BET_REQ, GID, Amount}, Bot) ->
+handle_bet_req(GID, Amount, Bot) ->
     GID = Bot#bot.game,
     %%io:format("~w: BLIND_REQ: ~w/~w, ~.2. f~n", 
     %%	      [GID, Bot#bot.player, Bot#bot.seat_num, Amount]),
@@ -217,9 +243,9 @@ handle({?PP_BET_REQ, GID, Amount}, Bot) ->
 				       {now, now()}]),
 	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
 	    {noreply, Bot1}
-    end;
+    end.
 
-handle({?PP_BET_REQ, GID, Call, RaiseMin, RaiseMax}, Bot) ->
+handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot) ->
     GID = Bot#bot.game,
     [Action|Rest] = Bot#bot.actions,
     Bot1 = Bot#bot {
@@ -307,19 +333,68 @@ handle({?PP_BET_REQ, GID, Call, RaiseMin, RaiseMax}, Bot) ->
 				       {now, now()}]),
 	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
 	    {noreply, Bot1}
-    end;
+    end.
 
-handle({?PP_PLAYER_STATE, _GID, _PID, _State, _Seq}, Bot) ->
-    {noreply, Bot};
-
-handle({?PP_NOTIFY_LEAVE, _GID, PID, _Seq}, Bot) ->
+handle_notify_leave(PID, Bot) ->
     if
 	PID == Bot#bot.player ->
 	    ok = ?tcpsend(Bot#bot.socket, ?PP_LOGOUT),
 	    {stop, leave, Bot};
 	true ->
 	    {noreply, Bot}
-    end;
+    end.
+
+handle_notify_end_last_game(GID, Bot) ->
+    %%io:format("Bot ~w leaving ~w at ~w~n",
+    %%		      [Bot#bot.player, GID, now()]),
+    ok = ?tcpsend(Bot#bot.socket, {?PP_LEAVE, GID}),
+    ok = ?tcpsend(Bot#bot.socket, ?PP_LOGOUT),
+    Bot1 = Bot#bot {
+	     done = true
+	    },
+    {stop, normal, Bot1}.
+
+handle_notify_cancel_game(GID, Bot) ->
+    ok = ?tcpsend(Bot#bot.socket, {?PP_JOIN, GID, 
+				   Bot#bot.seat_num, 
+				   Bot#bot.balance}),
+    {noreply, Bot}.
+
+%%% 
+%%% Utility
+%%%
+	    
+handle({?PP_PID, PID}, Bot) ->
+    handle_pid(PID, Bot);
+
+handle({?PP_GAME_INFO, _GID, ?GT_IRC_TEXAS, 
+	_Expected, _Joined, _Waiting,
+	{_Limit, _Low, _High}}, Bot) ->
+    {noreply, Bot};
+
+handle({?PP_PLAYER_INFO, _PID, _InPlay, _Nick, _Location}, Bot) ->
+    {noreply, Bot};
+
+handle({?PP_NOTIFY_JOIN, GID, PID, _SeatNum,_BuyIn, _Seq}, Bot) ->
+    handle_notify_join(GID, PID, Bot);
+
+handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, _GameInplay,_SeatNum, _Seq}, Bot) ->
+    handle_notify_game_inplay(GID, PID, Bot);
+
+handle({?PP_NOTIFY_CHAT, _GID, _PID, _Seq, _Message}, Bot) ->
+    {noreply, Bot};
+
+handle({?PP_BET_REQ, GID, Amount}, Bot) ->
+    handle_bet_req(GID, Amount, Bot);
+
+handle({?PP_BET_REQ, GID, Call, RaiseMin, RaiseMax}, Bot) ->
+    handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot);
+
+handle({?PP_PLAYER_STATE, _GID, _PID, _State, _Seq}, Bot) ->
+    {noreply, Bot};
+
+handle({?PP_NOTIFY_LEAVE, _GID, PID, _Seq}, Bot) ->
+    handle_notify_leave(PID, Bot);
 
 handle({?PP_GAME_STAGE, _GID, _Stage, _Seq}, Bot) ->
     {noreply, Bot};
@@ -329,23 +404,13 @@ handle({?PP_NOTIFY_START_GAME, _GID, _Seq}, Bot) ->
 
 handle({?PP_NOTIFY_END_GAME, GID, _Seq}, Bot) 
   when Bot#bot.games_to_play == 1 ->
-    %%io:format("Bot ~w leaving ~w at ~w~n",
-    %%		      [Bot#bot.player, GID, now()]),
-    ok = ?tcpsend(Bot#bot.socket, {?PP_LEAVE, GID}),
-    ok = ?tcpsend(Bot#bot.socket, ?PP_LOGOUT),
-    Bot1 = Bot#bot {
-	     done = true
-	    },
-    {stop, normal, Bot1};
+    handle_notify_end_last_game(GID, Bot);
 
 handle({?PP_NOTIFY_END_GAME, _GID, _Seq}, Bot) ->
     {noreply, Bot#bot{ games_to_play = Bot#bot.games_to_play - 1 }};
 
 handle({?PP_NOTIFY_CANCEL_GAME, GID, _Seq}, Bot) ->
-    ok = ?tcpsend(Bot#bot.socket, {?PP_JOIN, GID, 
-				   Bot#bot.seat_num, 
-				   Bot#bot.balance}),
-    {noreply, Bot};
+    handle_notify_cancel_game(GID, Bot);
 
 handle({Cmd, _GID, _PID, _Amount, _Seq}, Bot)
   when Cmd == ?PP_NOTIFY_WIN;

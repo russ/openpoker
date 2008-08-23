@@ -39,27 +39,13 @@ terminate(normal, _Data) ->
     ok.
 
 handle_cast(stop, Data) ->
-    {stop, normal, Data};
+    handle_cast_stop(Data);
 
 handle_cast('RESET', Data) ->
-    Data1 = case Data#data.rigged of
-		[] ->
-		    %%io:format("Deck is not rigged~n"),
-		    new();
-		Cards ->
-		    %%io:format("Deck is rigged with ~w~n", [Cards]),
-		    Data#data {
-		      cards = Cards
-		     }
-	    end,
-    {noreply, Data1};
+    handle_cast_reset(Data);
 
 handle_cast({'RIG', Cards}, Data) ->
-    Data1 = Data#data {
-	      rigged = Cards,
-	      cards = Cards
-	     },
-    {noreply, Data1};
+    handle_cast_rig(Cards, Data);
 
 handle_cast(Event, Data) ->
     error_logger:info_report([{module, ?MODULE}, 
@@ -69,24 +55,10 @@ handle_cast(Event, Data) ->
     {noreply, Data}.
 
 handle_call('DRAW', _From, Data) ->
-    if
-	length(Data#data.cards) > 0 ->
-	    [Card|Rest] = Data#data.cards,
-	    Data1 = Data#data {
-		      cards = Rest
-		     },
-	    {reply, Card, Data1};
-	true ->
-	    {reply, none, Data}
-    end;
+    handle_call_draw(Data);
 
 handle_call(Event, From, Data) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {deck, self()}, 
-			      {message, Event}, 
-			      {from, From}]),
-    {noreply, Data}.
+    handle_call_other(Event, From, Data).
 
 handle_info({'EXIT', _Pid, _Reason}, Data) ->
     %% child exit?
@@ -101,6 +73,53 @@ handle_info(Info, Data) ->
 
 code_change(_OldVsn, Deck, _Extra) ->
     {ok, Deck}.
+
+%%%
+%%% Handlers
+%%%
+
+handle_cast_stop(Data) ->
+    {stop, normal, Data}.
+
+handle_cast_reset(Data) ->
+    Data1 = case Data#data.rigged of
+		[] ->
+		    %%io:format("Deck is not rigged~n"),
+		    new();
+		Cards ->
+		    %%io:format("Deck is rigged with ~w~n", [Cards]),
+		    Data#data {
+		      cards = Cards
+		     }
+	    end,
+    {noreply, Data1}.
+
+handle_cast_rig(Cards, Data) ->
+    Data1 = Data#data {
+	      rigged = Cards,
+	      cards = Cards
+	     },
+    {noreply, Data1}.
+
+handle_call_draw(Data) ->
+    if
+	length(Data#data.cards) > 0 ->
+	    [Card|Rest] = Data#data.cards,
+	    Data1 = Data#data {
+		      cards = Rest
+		     },
+	    {reply, Card, Data1};
+	true ->
+	    {reply, none, Data}
+    end.
+
+handle_call_other(Event, From, Data) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {deck, self()}, 
+			      {message, Event}, 
+			      {from, From}]),
+    {noreply, Data}.
 
 make_deck() ->
     Face = [ two, 

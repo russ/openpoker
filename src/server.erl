@@ -151,13 +151,10 @@ code_change(_OldVsn, Server, _Extra) ->
 parse_packet(Socket, Client) ->
     receive
 	{tcp, Socket, Bin} ->
-	    %%io:format("--> ~w~n", [Bin]),
 	    case proto:read(Bin) of
 		{?PP_LOGIN, Nick, Pass} ->
-		    %%io:format("Logging in ~s~n", [Nick]),
 		    case login:login(Nick, Pass, self()) of
 			{error, Error} ->
-			    %%io:format("Login error: ~w~n", [Error]),
 			    ok = ?tcpsend(Socket, {?PP_BAD, 
 						   ?PP_LOGIN,
 						   Error}), 
@@ -183,7 +180,7 @@ parse_packet(Socket, Client) ->
 		    ok = ?tcpsend(Socket, {?PP_GOOD, 
 					   ?PP_LOGOUT, 
 					   0}),
-		    %% Replace player process with a visitor
+		    %% replace player process with a visitor
 		    {ok, Visitor} = visitor:start(),
 		    Client1 = Client#client {
 				player = Visitor
@@ -243,6 +240,14 @@ parse_packet(Socket, Client) ->
 	    ok = ?tcpsend(Socket, Packet),
 	    parse_packet(Socket, Client)
     end.
+
+%%%
+%%% Handlers
+%%%
+
+%%%
+%%% Utility
+%%%
 
 find_games(Socket, 
 	   GameType, LimitType,

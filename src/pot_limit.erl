@@ -41,33 +41,22 @@ terminate(_Reason, _Limit) ->
     ok.
 
 handle_cast(stop, Limit) ->
-    {stop, normal, Limit};
+    handle_cast_stop(Limit);
 
 handle_cast(Event, Limit) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {self, self()}, 
-			      {message, Event}]),
-    {noreply, Limit}.
+    handle_cast_other(Event, Limit).
 
 handle_call('INFO', _From, Limit) ->
-    {reply, {?LT_POT_LIMIT, 
-	     Limit#pot_limit.low,
-	     Limit#pot_limit.high}, Limit};
+    handle_call_info(Limit);
 
 handle_call({'RAISE SIZE', _GID, PotSize, _Player, Stage}, _From, Limit) ->
-    {reply, raise_size(Limit, PotSize, Stage), Limit};
+    handle_call_raise_size(PotSize, Stage, Limit);
 
 handle_call('BLINDS', _From, Limit) ->
-    {reply, {Limit#pot_limit.low, Limit#pot_limit.high}, Limit};
+    handle_call_blinds(Limit);
 
 handle_call(Event, From, Limit) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {self, self()}, 
-			      {message, Event}, 
-			      {from, From}]),
-    {noreply, Limit}.
+    handle_call_other(Event, From, Limit).
 
 handle_info({'EXIT', _Pid, _Reason}, Limit) ->
     %% child exit?
@@ -82,6 +71,35 @@ handle_info(Info, Limit) ->
 
 code_change(_OldVsn, Limit, _Extra) ->
     {ok, Limit}.
+
+handle_cast_stop(Limit) ->
+    {stop, normal, Limit}.
+
+handle_cast_other(Event, Limit) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {self, self()}, 
+			      {message, Event}]),
+    {noreply, Limit}.
+
+handle_call_info(Limit) ->
+    {reply, {?LT_POT_LIMIT, 
+	     Limit#pot_limit.low,
+	     Limit#pot_limit.high}, Limit}.
+
+handle_call_raise_size(PotSize, Stage, Limit) ->
+    {reply, raise_size(Limit, PotSize, Stage), Limit}.
+
+handle_call_blinds(Limit) ->
+    {reply, {Limit#pot_limit.low, Limit#pot_limit.high}, Limit}.
+
+handle_call_other(Event, From, Limit) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {self, self()}, 
+			      {message, Event}, 
+			      {from, From}]),
+    {noreply, Limit}.
 
 raise_size(Limit, PotSize, Stage) when ?GS_PREFLOP =:= Stage; 
                                        ?GS_FLOP =:= Stage ->

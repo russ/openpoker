@@ -34,73 +34,25 @@ stop(Ref) ->
     cardgame:send_all_state_event(Ref, stop).
 
 delayed_start({'START', Context}, Data) ->
-    Delay = Data#data.delay,
-    cardgame:send_event_after(Delay, 'CHECK'),
-    %% reset call amount
-    Context1 = setelement(3, Context, 0),
-    Data1 = Data#data {
-	      context = Context1
-	     },
-    {next_state, delayed_start, Data1};
+    delayed_start_start(Context, Data);
 
 delayed_start('CHECK', Data) ->
-    Game = Data#data.game,
-    Ready = gen_server:call(Game, {'SEATS', ?PS_READY}),
-    %%get the game id of the game to be started
-    GID = gen_server:call(Game,'ID'),
-    {atomic,Result} = db:find(game_xref,GID),
-    %%checking for empty list
-    	if Result == []->
-            %%if list is empty minimum players req count is set to 2
-            ReqCount = 2,
-            ok;
-        true ->
-            %%minimum players req count is obtained from game_xref table
-    		{atomic,[GameXref]} = db:find(game_xref,GID),
-             MinPlayersReq = GameXref#game_xref.min_players,
-    		ReqCount = MinPlayersReq
-        end,
-    %%ReqCount = gen_server:call(Game, 'REQUIRED'),
-    Start = (length(Ready) >= ReqCount),
-    Empty = gen_server:call(Game, 'IS EMPTY'),
-    if
-	Start ->
-	    gen_server:cast(Game, 'RESET'),
-	    Msg = lang:msg(?GAME_STARTING),
-	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CHAT, 0, Msg}}),
-	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_START_GAME}}), 
-	    {stop, {normal, Data#data.context}, Data};
-	Empty ->
-	    {stop, {normal, restart}, Data};
-	true ->
-	    Msg = lang:msg(?GAME_CANCELLED),
-	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CHAT, 0, Msg}}),
-	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CANCEL_GAME}}), 
-	    {stop, {normal, restart}, Data}
-    end;
-	    
+    delayed_start_check(Data);
+
 delayed_start({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    Game = Data#data.game,
-    gen_server:cast(Game, {?PP_JOIN, Player, SeatNum, BuyIn, ?PS_PLAY}),
-    {next_state, delayed_start, Data};
+    delayed_start_join(Player, SeatNum, BuyIn, Data);
 
 delayed_start({?PP_LEAVE, Player}, Data) ->
-    Game = Data#data.game,
-    gen_server:cast(Game, {?PP_LEAVE, Player, ?PS_ANY}),
-    {next_state, delayed_start, Data};
+    delayed_start_leave(Player, Data);
 
 delayed_start({?PP_SIT_OUT, Player}, Data) ->
-    Game = Data#data.game,
-    gen_server:cast(Game, {'SET STATE', Player, ?PS_SIT_OUT}),
-    {next_state, delayed_start, Data};
+    delayed_star_sitout(Player, Data);
 
 delayed_start({?PP_COME_BACK, Player}, Data) ->
-    Game = Data#data.game,
-    gen_server:cast(Game, {'SET STATE', Player, ?PS_PLAY}),
-    {next_state, delayed_start, Data};
+    delayed_start_comeback(Player, Data);
 
 delayed_start(Event, Data) ->
-    handle_event(Event, delayed_start, Data).
+    delayed_start_other(Event, Data).
 
 handle_event(stop, _State, Data) ->
     {stop, normal, Data};
@@ -136,10 +88,82 @@ terminate(_Reason, _State, _Data) ->
 code_change(_OldVsn, State, Data, _Extra) ->
     {ok, State, Data}.
 
+%%%
+%%% Handlers
+%%%
 
-%%
-%% Test suite
-%%
+delayed_start_start(Context, Data) ->
+    Delay = Data#data.delay,
+    cardgame:send_event_after(Delay, 'CHECK'),
+    %% reset call amount
+    Context1 = setelement(3, Context, 0),
+    Data1 = Data#data {
+	      context = Context1
+	     },
+    {next_state, delayed_start, Data1}.
+
+delayed_start_check(Data) ->
+    Game = Data#data.game,
+    Ready = gen_server:call(Game, {'SEATS', ?PS_READY}),
+    %%get the game id of the game to be started
+    GID = gen_server:call(Game,'ID'),
+    {atomic,Result} = db:find(game_xref,GID),
+    %%checking for empty list
+    	if Result == []->
+            %%if list is empty minimum players req count is set to 2
+            ReqCount = 2,
+            ok;
+        true ->
+            %%minimum players req count is obtained from game_xref table
+    		{atomic,[GameXref]} = db:find(game_xref,GID),
+             MinPlayersReq = GameXref#game_xref.min_players,
+    		ReqCount = MinPlayersReq
+        end,
+    %%ReqCount = gen_server:call(Game, 'REQUIRED'),
+    Start = (length(Ready) >= ReqCount),
+    Empty = gen_server:call(Game, 'IS EMPTY'),
+    if
+	Start ->
+	    gen_server:cast(Game, 'RESET'),
+	    Msg = lang:msg(?GAME_STARTING),
+	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CHAT, 0, Msg}}),
+	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_START_GAME}}), 
+	    {stop, {normal, Data#data.context}, Data};
+	Empty ->
+	    {stop, {normal, restart}, Data};
+	true ->
+	    Msg = lang:msg(?GAME_CANCELLED),
+	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CHAT, 0, Msg}}),
+	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CANCEL_GAME}}), 
+	    {stop, {normal, restart}, Data}
+    end.
+	    
+delayed_start_join(Player, SeatNum, BuyIn, Data) ->
+    Game = Data#data.game,
+    gen_server:cast(Game, {?PP_JOIN, Player, SeatNum, BuyIn, ?PS_PLAY}),
+    {next_state, delayed_start, Data}.
+
+delayed_start_leave(Player, Data) ->
+    Game = Data#data.game,
+    gen_server:cast(Game, {?PP_LEAVE, Player, ?PS_ANY}),
+    {next_state, delayed_start, Data}.
+
+delayed_star_sitout(Player, Data) ->
+    Game = Data#data.game,
+    gen_server:cast(Game, {'SET STATE', Player, ?PS_SIT_OUT}),
+    {next_state, delayed_start, Data}.
+
+delayed_start_comeback(Player, Data) ->
+    Game = Data#data.game,
+    gen_server:cast(Game, {'SET STATE', Player, ?PS_PLAY}),
+    {next_state, delayed_start, Data}.
+
+delayed_start_other(Event, Data) ->
+    handle_event(Event, delayed_start, Data).
+
+%%%
+%%% Test suite
+%%%
 
 test() ->
     ok.
