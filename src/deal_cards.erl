@@ -16,14 +16,14 @@
 -include("texas.hrl").
 -include("test.hrl").
 
--record(data, {
+-record(deal, {
 	  game,
 	  n,
 	  type
 	 }).
 
 init([Game, N, Type]) ->
-    Data = #data {
+    Data = #deal {
       game = Game,
       n = N,
       type = Type
@@ -56,7 +56,7 @@ handle_event(Event, State, Data) ->
 			       {line, ?LINE},
 			       {message, Event}, 
 			       {self, self()},
-			       {game, Data#data.game}]),
+			       {game, Data#deal.game}]),
     {next_state, State, Data}.
         
 handle_sync_event(Event, From, State, Data) ->
@@ -65,7 +65,7 @@ handle_sync_event(Event, From, State, Data) ->
 			       {message, Event}, 
 			       {from, From},
 			       {self, self()},
-			       {game, Data#data.game}]),
+			       {game, Data#deal.game}]),
     {next_state, State, Data}.
         
 handle_info(Info, State, Data) ->
@@ -73,7 +73,7 @@ handle_info(Info, State, Data) ->
 			       {line, ?LINE},
 			       {message, Info}, 
 			       {self, self()},
-			       {game, Data#data.game}]),
+			       {game, Data#deal.game}]),
     {next_state, State, Data}.
 
 terminate(_Reason, _State, _Data) -> 
@@ -87,15 +87,15 @@ code_change(_OldVsn, State, Data, _Extra) ->
 %%%
 
 deal_cards_start(Context, Data) ->
-    Game = Data#data.game,
+    Game = Data#deal.game,
     Deck = gen_server:call(Game, 'DECK'),
-    case Data#data.type of
+    case Data#deal.type of
 	private ->
 	    B = element(2, Context),
 	    Seats = gen_server:call(Game, {'SEATS', B, ?PS_STANDING}),
-	    deal_private(Game, Deck, Seats, Data#data.n);
+	    deal_private(Game, Deck, Seats, Data#deal.n);
 	shared ->
-	    deal_shared(Game, Deck, Data#data.n)
+	    deal_shared(Game, Deck, Data#deal.n)
     end,
     {stop, {normal, Context}, Data}.
 
@@ -103,7 +103,7 @@ deal_cards_join(Player, SeatNum, BuyIn, Data) ->
     blinds:join(Data, Player, SeatNum, BuyIn, deal_cards, ?PS_FOLD).
 
 deal_cards_leave(Player, Data) ->
-    gen_server:cast(Data#data.game, {?PP_LEAVE, Player}),
+    gen_server:cast(Data#deal.game, {?PP_LEAVE, Player}),
     {next_state, deal_cards, Data}.
 
 deal_cards_timeout(Data) ->

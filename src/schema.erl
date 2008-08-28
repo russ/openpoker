@@ -16,67 +16,71 @@ install(Nodes) when is_list(Nodes) ->
     mnesia:delete_schema(Nodes),
     catch(mnesia:create_schema(Nodes)),
     mnesia:start(),
-    %% counter
-    case mnesia:create_table(counter, 
-			     [
-			      {disc_copies, Nodes}, 
-			      {type, set}, 
-			      {attributes, record_info(fields, counter)}
-			     ]) of
-	{atomic, ok} ->
-	    ok;
-	Any ->
-	    error_logger:error_report([{message, "Cannot install table"},
-				       {table, counter},
-				       {error, Any},
-				       {nodes, Nodes}])
-    end,
+    install_counter(Nodes),
+    install_player_info(Nodes),
+    install_player(Nodes),
+    install_inplay(Nodes),
+    install_game_xref(Nodes),
+    install_cluster_config(Nodes),
+    install_game_config(Nodes),
+    install_tourney_config(Nodes),
+    populate(),
+    reset_counters(),
+    ok.
+
+install_player_info(Nodes) ->
+    %% static player info
+    {atomic, ok} =
+        mnesia:create_table(player_info, 
+                            [
+                             {disc_copies, Nodes}, 
+                             {index, [nick]}, 
+                             {type, set}, 
+                             {attributes, record_info(fields, player_info)}
+                            ]).
+
+install_player(Nodes) ->
     %% player 
-    case mnesia:create_table(player, 
-			     [
-			      {disc_copies, Nodes}, 
-			      {index, [nick]}, 
-			      {type, set}, 
-			      {attributes, record_info(fields, player)}
-			     ]) of
-	{atomic, ok} ->
-	    ok;
-	Any1 ->
-	    error_logger:error_report([{message, "Cannot install table"},
-				       {table, player},
-				       {error, Any1},
-				       {nodes, Nodes}])
-    end,
+    {atomic, ok} =
+        mnesia:create_table(player, 
+                            [
+                             {ram_copies, Nodes}, 
+                             {type, set}, 
+                             {attributes, record_info(fields, player)}
+                            ]).
+
+install_inplay(Nodes) ->
+    %% player inplay balance per table,
+    %% swept back into player_info.balance 
+    %% when player leaves a table
+    {atomic, ok} =
+        mnesia:create_table(inplay, 
+                            [
+                             {disc_copies, Nodes}, 
+                             {type, bag}, 
+                             {index, [pid]},
+                             {attributes, record_info(fields, inplay)}
+                            ]).
+
+install_game_xref(Nodes) ->
     %% online game
-    case mnesia:create_table(game_xref, 
-			     [
-			      {disc_copies, Nodes}, 
-			      {type, set}, 
-			      {attributes, record_info(fields, game_xref)}
-			     ]) of
-	{atomic, ok} ->
-	    ok;
-	Any3 ->
-	    error_logger:error_report([{message, "Cannot install table"},
-				       {table, game_xref},
-				       {error, Any3},
-				       {nodes, Nodes}])
-    end,
+    {atomic, ok} =
+        mnesia:create_table(game_xref, 
+                            [
+                             {ram_copies, Nodes}, 
+                             {type, set}, 
+                             {attributes, record_info(fields, game_xref)}
+                            ]).
+
+install_cluster_config(Nodes) ->
     %% cluster configuration
-    case mnesia:create_table(cluster_config, 
-			     [
-			      {disc_copies, Nodes}, 
-			      {type, set}, 
-			      {attributes, record_info(fields, cluster_config)}
-			     ]) of
-	{atomic, ok} ->
-	    ok;
-	Any5 ->
-	    error_logger:error_report([{message, "Cannot install table"},
-				       {table, cluster_config},
-				       {error, Any5},
-				       {nodes, Nodes}])
-    end,
+    {atomic, ok} =
+        mnesia:create_table(cluster_config, 
+                            [
+                             {disc_copies, Nodes}, 
+                             {type, set}, 
+                             {attributes, record_info(fields, cluster_config)}
+                            ]),
     Conf = #cluster_config {
       id = 0,
       mnesia_masters = Nodes
@@ -84,39 +88,36 @@ install(Nodes) when is_list(Nodes) ->
     F = fun() ->
 		mnesia:write(Conf)
 	end,
-    {atomic, ok} = mnesia:transaction(F),
-    case mnesia:create_table(game_config, 
-			     [
-			      {disc_copies, Nodes}, 
-			      {type, set}, 
-			      {attributes, record_info(fields, game_config)}
-			     ]) of
-	{atomic, ok} ->
-	    ok;
-	Any6 ->
-	    error_logger:error_report([{message, "Cannot install table"},
-				       {table, game_config},
-				       {error, Any6},
-				       {nodes, Nodes}])
-    end,
-    case mnesia:create_table(tourney_config, 
-			     [
-			      {disc_copies, Nodes}, 
-			      {type, set}, 
-			      {attributes, record_info(fields, tourney_config)}
-			     ]) of
-	{atomic, ok} ->
-	    ok;
-	Any7 ->
-	    error_logger:error_report([{message, "Cannot install table"},
-				       {table, tourney_config},
-				       {error, Any7},
-				       {nodes, Nodes}])
-    end,
-    populate(),
-    reset_counters(),
-    ok.
+    {atomic, ok} = mnesia:transaction(F).
 
+install_game_config(Nodes) ->
+    {atomic, ok} = 
+        mnesia:create_table(game_config, 
+                            [
+                             {disc_copies, Nodes}, 
+                             {type, set}, 
+                             {attributes, record_info(fields, game_config)}
+                            ]).
+
+install_tourney_config(Nodes) ->
+    {atomic, ok} =
+        mnesia:create_table(tourney_config, 
+                            [
+                             {disc_copies, Nodes}, 
+                             {type, set}, 
+                             {attributes, record_info(fields, tourney_config)}
+                            ]).
+
+install_counter(Nodes) ->
+    %% counter
+    {atomic, ok} = 
+        mnesia:create_table(counter, 
+                            [
+                             {disc_copies, Nodes}, 
+                             {type, set}, 
+                             {attributes, record_info(fields, counter)}
+                            ]).
+    
 populate() ->
     game:setup(?GT_IRC_TEXAS, 20, 
 			 {?LT_FIXED_LIMIT, 10, 20}, 

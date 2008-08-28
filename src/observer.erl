@@ -12,8 +12,8 @@
 -include("common.hrl").
 -include("proto.hrl").
 
--record(data, {
-	  oid,
+-record(obs, {
+	  id,
 	  trace,
 	  parent,
 	  gid,
@@ -26,7 +26,7 @@
 	 }).
 
 new(Parent) ->
-    #data {
+    #obs {
      trace = false,
      parent = Parent,
      player = none,
@@ -48,7 +48,7 @@ stop(Ref) ->
     gen_server:cast(Ref, stop).
 
 terminate(_Reason, Data) ->
-    case Data#data.socket of
+    case Data#obs.socket of
 	none ->
 	    ignore;
 	Socket ->
@@ -56,41 +56,41 @@ terminate(_Reason, Data) ->
     end,
     ok.
 
-handle_cast({'ID', OID}, Data) ->
-    Data1 = Data#data {
-	      oid = OID
+handle_cast({'ID', ID}, Data) ->
+    Data1 = Data#obs {
+	      id = ID
 	     },
     {noreply, Data1};
 
 handle_cast({'TRACE', On}, Data) ->
-    Data1 = Data#data {
+    Data1 = Data#obs {
 	      trace = On
 	     },
     {noreply, Data1};
 
 handle_cast({'GAMES TO PLAY', N}, Data) ->
-    {noreply, Data#data{ games_to_watch = N}};
+    {noreply, Data#obs{ games_to_watch = N}};
 
-handle_cast(X = {'NOTIFY LEAVE',_, _}, Data) ->
-    gen_server:cast(Data#data.player, X),
+handle_cast(X = {'NOTIFY LEAVE', _}, Data) ->
+    gen_server:cast(Data#obs.player, X),
     {noreply, Data};
 
 handle_cast(stop, Data) ->
     {stop, normal, Data};
 
 handle_cast(Event, Data) ->
-    ok = ?tcpsend(Data#data.socket, Event),
+    ok = ?tcpsend(Data#obs.socket, Event),
     {noreply, Data}.
 
 handle_call({'CONNECT', Host, Port}, _From, Data) ->
     {ok, Sock} = tcp_server:start_client(Host, Port, 1024),
-    Data1 = Data#data {
+    Data1 = Data#obs {
 	      socket = Sock
 	     },
     {reply, ok, Data1};
 
 handle_call('ID', _From, Data) ->
-    {reply, Data#data.oid, Data};
+    {reply, Data#obs.id, Data};
 
 handle_call(Event, From, Data) ->
     error_logger:info_report([{module, ?MODULE}, 
@@ -104,7 +104,7 @@ handle_info({tcp_closed, _Socket}, Data) ->
     {stop, normal, Data};
 
 handle_info({tcp, _Socket, <<?PP_PID, PID:32>>}, Data) ->
-    Data1 = Data#data {
+    Data1 = Data#obs {
 	      player = PID
 	     },
     {noreply, Data1};
@@ -135,7 +135,7 @@ handle({?PP_GAME_INFO, GID, ?GT_IRC_TEXAS,
 	Expected, Joined, Waiting,
 	{_Limit, Low, High}}, Data) ->
     if 
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("Game #~w, #players: ~w, joined: ~w, waiting: ~w; ",
 		      [GID, Expected, Joined, Waiting]),
 	    io:format("limit: low: ~w, high: ~w~n", [Low, High]);
@@ -146,14 +146,14 @@ handle({?PP_GAME_INFO, GID, ?GT_IRC_TEXAS,
 
 handle({?PP_PLAYER_INFO, PID, InPlay, Nick, Location}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("Player: #~w, in-play: ~w, nick: ~w, location: ~w~n",
 		      [PID, InPlay, Nick, Location]),
-	    Amount = gb_trees:get(PID, Data#data.winners),
-	    T1 = gb_trees:delete(PID, Data#data.winners),
-	    Nick1 = list_to_atom(Nick),
+	    Amount = gb_trees:get(PID, Data#obs.winners),
+	    T1 = gb_trees:delete(PID, Data#obs.winners),
+	    Nick1 = list_to_atom(binary_to_list(Nick)),
 	    io:format("Observer: Nick: ~w, Amount: ~w~n", [Nick1, Amount]),
-	    Data1 = Data#data {
+	    Data1 = Data#obs {
 		      winners = gb_trees:insert(Nick1, Amount, T1)
 		     },
 	    {noreply, Data1};
@@ -163,20 +163,20 @@ handle({?PP_PLAYER_INFO, PID, InPlay, Nick, Location}, Data) ->
 
 handle({?PP_NOTIFY_JOIN, GID, PID, SeatNum,_BuyIn, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: JOIN: ~w at seat#~w~n",
 		      [GID, PID, SeatNum]);
 	true ->
 	    ok
     end,
-    Data1 = Data#data {
-	      seats = gb_trees:insert(PID, SeatNum, Data#data.seats)
+    Data1 = Data#obs {
+	      seats = gb_trees:insert(PID, SeatNum, Data#obs.seats)
 	     },
     {noreply, Data1};
 
 handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, GameInplay,SeatNum, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("GID#:  ~w PID#~w: At Seat No:~w GAME INPLAY: ~w  ~n",
 		      [GID, PID,SeatNum, GameInplay]);
 	true ->
@@ -186,7 +186,7 @@ handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, GameInplay,SeatNum, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_CHAT, GID, PID, _Seq, Message}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: CHAT: ~w: ~s~n",
 		      [GID, PID, Message]);
 	true ->
@@ -196,7 +196,7 @@ handle({?PP_NOTIFY_CHAT, GID, PID, _Seq, Message}, Data) ->
 
 handle({?PP_PLAYER_STATE, GID, PID, State, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: STATE: ~w = ~w~n",
 		      [GID, PID, State]);
 	true ->
@@ -206,7 +206,7 @@ handle({?PP_PLAYER_STATE, GID, PID, State, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_LEAVE, GID, PID, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: LEAVE: ~w~n",
 		      [GID, PID]);
 	true ->
@@ -216,7 +216,7 @@ handle({?PP_NOTIFY_LEAVE, GID, PID, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_PRIVATE, GID, PID, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: CARD: ~w~n",
 		      [GID, PID]);
 	true ->
@@ -226,7 +226,7 @@ handle({?PP_NOTIFY_PRIVATE, GID, PID, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_PRIVATE_CARDS, GID, PID, Cards, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: ~w WON WITH CARDS: ~w~n",
 		      [GID, PID, Cards]);
 	true ->
@@ -237,7 +237,7 @@ handle({?PP_NOTIFY_PRIVATE_CARDS, GID, PID, Cards, _Seq}, Data) ->
 
 handle({?PP_GAME_STAGE, GID, Stage, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: STAGE: ~w~n",
 		      [GID, Stage]);
 	true ->
@@ -247,7 +247,7 @@ handle({?PP_GAME_STAGE, GID, Stage, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_BET, GID, PID, Amount, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: BET: ~w, ~-14.2. f~n",
 		      [GID, PID, Amount]);
 	true ->
@@ -257,7 +257,7 @@ handle({?PP_NOTIFY_BET, GID, PID, Amount, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_CALL, GID, PID, Amount, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: CALL: ~w, ~-14.2. f~n",
 		      [GID, PID, Amount]);
 	true ->
@@ -267,7 +267,7 @@ handle({?PP_NOTIFY_CALL, GID, PID, Amount, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_RAISE, GID, PID, Amount, AmtPlusCall, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: RAISE: ~w, ~-14.2. f, ~-14.2. f~n",
 		      [GID, PID, Amount, AmtPlusCall]);
 	true ->
@@ -277,7 +277,7 @@ handle({?PP_NOTIFY_RAISE, GID, PID, Amount, AmtPlusCall, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_SB, GID, PID, Amount, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: SB: ~w, ~-14.2. f~n",
 		      [GID, PID, Amount]);
 	true ->
@@ -287,7 +287,7 @@ handle({?PP_NOTIFY_SB, GID, PID, Amount, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_BB, GID, PID, Amount, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: BB: ~w, ~-14.2. f~n",
 		      [GID, PID, Amount]);
 	true ->
@@ -297,7 +297,7 @@ handle({?PP_NOTIFY_BB, GID, PID, Amount, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_SHARED, GID, {Face, Suit}, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: BOARD: {~w, ~w}~n",
 		      [GID, Face, Suit]);
 	true ->
@@ -307,33 +307,33 @@ handle({?PP_NOTIFY_SHARED, GID, {Face, Suit}, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_WIN, GID, PID, Amount, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: WIN: ~w, ~-14.2. f~n",
 		      [GID, PID, Amount]);
 	true ->
 	    ok
     end,
-    SeatNum = gb_trees:get(PID, Data#data.seats),
-    Data1 = Data#data {
+    SeatNum = gb_trees:get(PID, Data#obs.seats),
+    Data1 = Data#obs {
 	      winners = gb_trees:insert(SeatNum, 
 					Amount, 
-					Data#data.winners)
+					Data#obs.winners)
 	     },
     {noreply, Data1};
 
 handle({?PP_NOTIFY_START_GAME, GID, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: START~n", [GID]);
 	true ->
 	    ok
     end,
-    Data#data.parent ! {'START', GID},
-    {noreply, Data#data{ winners = gb_trees:empty()}};
+    Data#obs.parent ! {'START', GID},
+    {noreply, Data#obs{ winners = gb_trees:empty()}};
 
 handle({?PP_NOTIFY_BUTTON, GID, SeatNum, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: DEALER: seat#~w~n", [GID, SeatNum]);
 	true ->
 	    ok
@@ -342,7 +342,7 @@ handle({?PP_NOTIFY_BUTTON, GID, SeatNum, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_SB, GID, SeatNum, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: SB: seat#~w~n", [GID, SeatNum]);
 	true ->
 	    ok
@@ -351,7 +351,7 @@ handle({?PP_NOTIFY_SB, GID, SeatNum, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_BB, GID, SeatNum, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: BB: seat#~w~n", [GID, SeatNum]);
 	true ->
 	    ok
@@ -360,36 +360,36 @@ handle({?PP_NOTIFY_BB, GID, SeatNum, _Seq}, Data) ->
 
 handle({?PP_NOTIFY_CANCEL_GAME, GID, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: CANCEL~n", [GID]);
 	true ->
 	    ok
     end,
-    N = Data#data.cancel_count,
+    N = Data#obs.cancel_count,
     if
-        N == Data#data.games_to_watch ->
-            Data#data.parent ! {'CANCEL', GID},
-            ok = ?tcpsend(Data#data.socket, {?PP_UNWATCH, GID}),
+        N == Data#obs.games_to_watch ->
+            Data#obs.parent ! {'CANCEL', GID},
+            ok = ?tcpsend(Data#obs.socket, {?PP_UNWATCH, GID}),
             {stop, normal, Data};
         true ->
-            {noreply, Data#data{ cancel_count = N + 1}}
+            {noreply, Data#obs{ cancel_count = N + 1}}
     end;
 
 handle({?PP_NOTIFY_END_GAME, GID, _Seq}, Data) ->
     if
-	Data#data.trace ->
+	Data#obs.trace ->
 	    io:format("~w: END~n", [GID]);
 	true ->
 	    ok
     end,
-    Data#data.parent ! {'END', GID, Data#data.winners},
+    Data#obs.parent ! {'END', GID, Data#obs.winners},
     if 
-        Data#data.games_to_watch == 1 ->
-            ok = ?tcpsend(Data#data.socket, {?PP_UNWATCH, GID}),
+        Data#obs.games_to_watch == 1 ->
+            ok = ?tcpsend(Data#obs.socket, {?PP_UNWATCH, GID}),
             {stop, normal, Data};
         true ->
-            N = Data#data.games_to_watch,
-            {noreply, Data#data{ games_to_watch = N - 1}}
+            N = Data#obs.games_to_watch,
+            {noreply, Data#obs{ games_to_watch = N - 1}}
     end;
 
 handle({?PP_GOOD, _, _}, Data) ->

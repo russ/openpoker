@@ -17,7 +17,7 @@
 -record(seat, {
 	  %% player process
 	  player, 
-	  %% total bet amount
+	  %% total bet
 	  bet,
 	  %% cards
 	  hand,
@@ -33,7 +33,7 @@
 	 }).
 	
 -record(game, {
-	  oid, 
+	  gid, 
 	  %% game type
 	  type,
 	  %% cardgame state machine process
@@ -44,7 +44,7 @@
 	  seats,
 	  %% fixed, pot, no limit, etc. process
 	  limit,
-      %% fixed, pot, no limit, etc. 
+          %% fixed, pot, no limit, etc. 
 	  limit_type, 
 	  %% card deck process
 	  deck, 
@@ -82,7 +82,7 @@ new(OID, FSM, GameType, SeatCount, LimitType) ->
 			  pot_limit:start_link(Low, High)
 		  end,
     _ = #game {
-      oid = OID,
+      gid = OID,
       fsm = FSM,
       type = GameType,
       deck = Deck,
@@ -105,8 +105,8 @@ init([FSM, GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers])
     Data = new(OID, FSM, GameType, SeatCount, LimitType),
     %% store game info
     Game = #game_xref {
-      oid = OID,
-      pid = FSM,
+      gid = OID,
+      proc_id = FSM,
       type = GameType, 
       limit = LimitType,
       table_name = TableName,
@@ -136,7 +136,7 @@ terminate(_Reason, Game) ->
     deck:stop(Game#game.deck),
     pot:stop(Game#game.pot),
     %% remove ourselves from the db
-    db:delete(game_xref, Game#game.oid),
+    db:delete(game_xref, Game#game.gid),
     ok.
 
 %%% Reset is used each time the game is restarted
@@ -309,7 +309,7 @@ handle_info({'EXIT', _Pid, _Reason}, Game) ->
 handle_info(Info, Game) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},
-			      {id, Game#game.oid},
+			      {id, Game#game.gid},
 			      {self, self()}, 
 			      {message, Info}]),
     {noreply, Game}.
@@ -394,7 +394,7 @@ handle_cast_join(Player, SeatNum, BuyIn, State, Game) ->
     XRef = Game#game.xref,
     Seat = element(SeatNum, Seats),
     OurPlayer = gb_trees:is_defined(Player, XRef),
-    GID = Game#game.oid,
+    GID = Game#game.gid,
     if
 	%% seat is taken
 	Seat#seat.state /= ?PS_EMPTY ->
@@ -406,32 +406,20 @@ handle_cast_join(Player, SeatNum, BuyIn, State, Game) ->
 	    %% try to move the buy-in amount 
 	    %% from balance to inplay
 	    ID = gen_server:call(Player, 'ID'),
-	    case db:move_amt(player, ID, {balance, inplay, BuyIn}) of
+            case do_buy_in(GID, ID, BuyIn) of
 		{atomic, ok} ->
-		    %% update player            
-                    {atomic, Games} = db:get(player, ID, games),
-                    Games1 = [Game#game.fsm|Games],
-		    db:set(player, ID, {games, Games1}),
-		    %% notify player
-		    gen_server:cast(Player, {'INPLAY+', BuyIn}),
-                    %%add the game specific inplay for player
-                    gen_server:cast(Player, {'ADD GAME INPLAY', BuyIn, GID}),
+                    %% add the game specific inplay for player
+                    gen_server:cast(Player, {'INPLAY=', BuyIn, GID}),
 		    %% take seat and broadcast the fact
 		    Game1 = join_player(Game, Player, SeatNum, State),
 		    Game2 = broadcast(Game1, {?PP_NOTIFY_JOIN, 
                                               Player, SeatNum, BuyIn}),
-                    %%broadcast other player's current playins to the game
+                    %% broadcast other player's current playins to the game
                     broadcast_inplay(Game2),
 		    {noreply, Game2};
-		Any ->
-		    %% not enough money
-		    %% or another error
-		    io:format("Move amt error: ~w for player ~w~n", 
-			      [Any, ID]),
-		    B1 = db:get(player, ID, balance),
-		    I1 = db:get(player, ID, inplay),
-		    io:format("Balance: ~w, Inplay: ~w, BuyIn: ~w~n",
-			      [B1, I1, BuyIn]),
+		_Any ->
+                    %% no money or other error
+                    %% gen_server:cast(Player, {stop, Any}),
 		    {noreply, Game}
 	    end
     end.
@@ -458,7 +446,7 @@ handle_cast_leave_mask(Player, Mask, Game) ->
                                                   })
                              },
                     %% notify ourselves
-                    gen_server:cast(Player, {'NOTIFY LEAVE',Game#game.oid, Game#game.fsm}),
+                    gen_server:cast(Player, {'NOTIFY LEAVE', Game#game.gid}),
                     %% notify player
                     Game2 = broadcast(Game1, {?PP_NOTIFY_LEAVE, Player}),
                     {noreply, Game2};
@@ -479,7 +467,7 @@ handle_cast_draw(Player, Card, Game) ->
     SeatNum = gb_trees:get(Player, Game#game.xref),
     Seat = element(SeatNum, Game#game.seats),
     gen_server:cast(Seat#seat.hand, {'ADD CARD', Card}),
-    GID = Game#game.oid,
+    GID = Game#game.gid,
     gen_server:cast(Player, {?PP_NOTIFY_DRAW, GID, Card, Game#game.seqnum}),
     Game1 = broadcast(Game, {?PP_NOTIFY_PRIVATE, Player}),
     {noreply, Game1}.
@@ -518,10 +506,9 @@ handle_cast_new_stage(Game) ->
 
 handle_cast_add_bet(Player, Amount, Game) ->
     SeatNum = gb_trees:get(Player, Game#game.xref),
-    GID = Game#game.oid,
+    GID = Game#game.gid,
     Seat = element(SeatNum, Game#game.seats),
-    %InPlay = gen_server:call(Player, 'INPLAY'),
-    GameInplay = gen_server:call(Player,{'GAME INPLAY',GID}),
+    GameInplay = gen_server:call(Player,{'INPLAY',GID}),
     if
 	Amount > GameInplay->
 	    {noreply, Game};
@@ -539,8 +526,7 @@ handle_cast_add_bet(Player, Amount, Game) ->
 		    Game1 = Game
 	    end,
 	    gen_server:cast(Game1#game.pot, {'ADD BET', Player, Amount, AllIn}),
-	    gen_server:cast(Player, {'INPLAY-', Amount}),
-        gen_server:cast(Player, {'GAME INPLAY-', Amount,GID}),
+            gen_server:cast(Player, {'INPLAY-', Amount,GID}),
 	    NewBet = Seat#seat.bet + Amount,
 	    Game2 = Game1#game {
 		      seats = setelement(SeatNum,
@@ -594,7 +580,7 @@ handle_cast_other(Event, Game) ->
     {noreply, Game}.
 
 handle_call_id(Game) ->
-    {reply, Game#game.oid, Game}.
+    {reply, Game#game.gid, Game}.
 
 handle_call_shared(Game) ->
     {reply, Game#game.board, Game}.
@@ -629,7 +615,7 @@ handle_call_blinds(Game) ->
     {reply, gen_server:call(Game#game.limit,'BLINDS'), Game}.
 
 handle_call_raise_size(Player, Stage, Game) ->
-    GID = Game#game.oid,
+    GID = Game#game.gid,
     PotSize = gen_server:call(Game#game.pot, 'TOTAL'),
     Reply = gen_server:call(Game#game.limit,
                             {'RAISE SIZE', GID, PotSize, Player, Stage}),
@@ -703,7 +689,7 @@ handle_call_seat_query(Game) ->
 handle_call_other(Event, From, Game) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},
-			      {id, Game#game.oid},
+			      {gid, Game#game.gid},
 			      {self, self()}, 
 			      {message, Event}, 
 			      {from, From}]),
@@ -816,28 +802,28 @@ reset_bets(Game, Count) ->
 	    
 %% Reset player state
 
-reset_state(Game) ->
-    reset_state(Game, size(Game#game.seats)).
+%% reset_state(Game) ->
+%%     reset_state(Game, size(Game#game.seats)).
 
-reset_state(Game, 0) ->
-    Game;
+%% reset_state(Game, 0) ->
+%%     Game;
 
-reset_state(Game, Count) ->
-    Seat = element(Count, Game#game.seats),
-    NewGame = if 
-		  Seat#seat.state == ?PS_FOLD ->
-		      Game#game {
-			seats = setelement(Count,
-					   Game#game.seats,
-					   Seat#seat {
-					     state = ?PS_PLAY,
-                                             cmd_que = []
-					    })
-		       };
-		  true ->
-		      Game
-	      end,
-    reset_state(NewGame, Count - 1).
+%% reset_state(Game, Count) ->
+%%     Seat = element(Count, Game#game.seats),
+%%     NewGame = if 
+%% 		  Seat#seat.state == ?PS_FOLD ->
+%% 		      Game#game {
+%% 			seats = setelement(Count,
+%% 					   Game#game.seats,
+%% 					   Seat#seat {
+%% 					     state = ?PS_PLAY,
+%%                                              cmd_que = []
+%% 					    })
+%% 		       };
+%% 		  true ->
+%% 		      Game
+%% 	      end,
+%%     reset_state(NewGame, Count - 1).
 	    
 %% Reset hands
 
@@ -890,12 +876,12 @@ add_seqnum(Game, Event)
     add_seqnum(Game, tuple_to_list(Event));
 
 add_seqnum(Game, [?PP_NOTIFY_CHAT, Player, Msg]) ->
-    [?PP_NOTIFY_CHAT, Game#game.oid, Player, Game#game.seqnum, Msg];
+    [?PP_NOTIFY_CHAT, Game#game.gid, Player, Game#game.seqnum, Msg];
 
 add_seqnum(Game, List) 
   when is_list(List) ->
     [Type|Rest] = List,
-    [Type, Game#game.oid|Rest] ++ [Game#game.seqnum].
+    [Type, Game#game.gid|Rest] ++ [Game#game.seqnum].
 
 make_players(Game, Seats) ->
     make_players(Game, Seats, []).
@@ -1016,8 +1002,8 @@ find(GameType, LimitType,
     {atomic, lists:filter(F1, L)}.
 		 
 find_1(GameType, LimitType) ->
-    Q = qlc:q([{G#game_xref.oid,
-		G#game_xref.pid,
+    Q = qlc:q([{G#game_xref.gid,
+		G#game_xref.proc_id,
 		G#game_xref.type,
 		G#game_xref.limit}
 	       || G <- mnesia:table(game_xref),
@@ -1088,23 +1074,37 @@ broadcast_inplay(_Game, _Seats, 0) ->
 broadcast_inplay(Game, Seats, SeatNum) ->
     Seat = element(SeatNum, Seats),
     Player = Seat#seat.player,
-    GID = Game#game.oid,
+    GID = Game#game.gid,
     case Player of
         none->
             ok;
         _ ->
-            GameInplay = gen_server:call(Player, {'GAME INPLAY', GID}),
+            GameInplay = gen_server:call(Player, {'INPLAY', GID}),
             broadcast(Game, {?PP_NOTIFY_GAME_INPLAY,
                              Player, GameInplay, SeatNum})
     end,
     broadcast_inplay(Game, Seats, SeatNum - 1).
 
-%% 
-%%
-%% Test suite
-%%
-
-test() ->
-    ok.
+do_buy_in(GID, PID, Amt) 
+  when is_number(GID),
+       is_number(PID),
+       is_number(Amt) ->
+    F = fun() ->
+                case mnesia:read({player_info, PID}) of
+                    [] ->
+                        {error, key_not_found};
+                    [Info] ->
+                        Balance = Info#player_info.balance,
+                        Info1 = Info#player_info{ balance = Balance - Amt },
+                        ok = mnesia:write(Info1),
+                        Inplay = #inplay{ gid = GID, pid = PID, amount = Amt },
+                        ok = mnesia:write(Inplay);
+                    Any ->
+                        Any
+                end
+        end,
+    mnesia:transaction(F).
 
   
+test() ->
+    ok.

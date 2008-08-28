@@ -17,14 +17,14 @@
 -include("proto.hrl").
 -include("schema.hrl").
 
--record(data, {
+-record(delayed, {
 	  game,
 	  context,
 	  delay
 	 }).
 
 init([Game, Delay]) ->
-    Data = #data {
+    Data = #delayed {
       game = Game,
       delay = Delay
      },
@@ -62,7 +62,7 @@ handle_event(Event, State, Data) ->
  			       {line, ?LINE},
  			       {message, Event}, 
  			       {self, self()},
- 			       {game, Data#data.game}]),
+ 			       {game, Data#delayed.game}]),
     {next_state, State, Data}.
         
 handle_sync_event(Event, From, State, Data) ->
@@ -71,7 +71,7 @@ handle_sync_event(Event, From, State, Data) ->
  			       {from, From},
  			       {message, Event}, 
  			       {self, self()},
- 			       {game, Data#data.game}]),
+ 			       {game, Data#delayed.game}]),
     {next_state, State, Data}.
 
 handle_info(Info, State, Data) ->
@@ -79,7 +79,7 @@ handle_info(Info, State, Data) ->
  			       {line, ?LINE},
  			       {message, Info}, 
  			       {self, self()},
- 			       {game, Data#data.game}]),
+ 			       {game, Data#delayed.game}]),
     {next_state, State, Data}.
 
 terminate(_Reason, _State, _Data) -> 
@@ -93,33 +93,34 @@ code_change(_OldVsn, State, Data, _Extra) ->
 %%%
 
 delayed_start_start(Context, Data) ->
-    Delay = Data#data.delay,
+    Delay = Data#delayed.delay,
     cardgame:send_event_after(Delay, 'CHECK'),
     %% reset call amount
     Context1 = setelement(3, Context, 0),
-    Data1 = Data#data {
+    Data1 = Data#delayed {
 	      context = Context1
 	     },
     {next_state, delayed_start, Data1}.
 
 delayed_start_check(Data) ->
-    Game = Data#data.game,
+    Game = Data#delayed.game,
     Ready = gen_server:call(Game, {'SEATS', ?PS_READY}),
-    %%get the game id of the game to be started
-    GID = gen_server:call(Game,'ID'),
-    {atomic,Result} = db:find(game_xref,GID),
-    %%checking for empty list
-    	if Result == []->
-            %%if list is empty minimum players req count is set to 2
-            ReqCount = 2,
-            ok;
-        true ->
-            %%minimum players req count is obtained from game_xref table
-    		{atomic,[GameXref]} = db:find(game_xref,GID),
-             MinPlayersReq = GameXref#game_xref.min_players,
-    		ReqCount = MinPlayersReq
-        end,
-    %%ReqCount = gen_server:call(Game, 'REQUIRED'),
+%%     %% get the game id of the game to be started
+%%     GID = gen_server:call(Game, 'ID'),
+%%     {atomic, Result} = db:find(game_xref, GID),
+%%     %% checking for empty list
+%%     if 
+%%         Result == []->
+%%             %% if list is empty minimum players req count is set to 2
+%%             ReqCount = 2,
+%%             ok;
+%%         true ->
+%%             %% minimum players req count is obtained from game_xref table
+%%             {atomic,[GameXref]} = db:find(game_xref,GID),
+%%             MinPlayersReq = GameXref#game_xref.min_players,
+%%             ReqCount = MinPlayersReq
+%%     end,
+    ReqCount = gen_server:call(Game, 'REQUIRED'),
     Start = (length(Ready) >= ReqCount),
     Empty = gen_server:call(Game, 'IS EMPTY'),
     if
@@ -128,7 +129,7 @@ delayed_start_check(Data) ->
 	    Msg = lang:msg(?GAME_STARTING),
 	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CHAT, 0, Msg}}),
 	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_START_GAME}}), 
-	    {stop, {normal, Data#data.context}, Data};
+	    {stop, {normal, Data#delayed.context}, Data};
 	Empty ->
 	    {stop, {normal, restart}, Data};
 	true ->
@@ -139,22 +140,22 @@ delayed_start_check(Data) ->
     end.
 	    
 delayed_start_join(Player, SeatNum, BuyIn, Data) ->
-    Game = Data#data.game,
+    Game = Data#delayed.game,
     gen_server:cast(Game, {?PP_JOIN, Player, SeatNum, BuyIn, ?PS_PLAY}),
     {next_state, delayed_start, Data}.
 
 delayed_start_leave(Player, Data) ->
-    Game = Data#data.game,
+    Game = Data#delayed.game,
     gen_server:cast(Game, {?PP_LEAVE, Player, ?PS_ANY}),
     {next_state, delayed_start, Data}.
 
 delayed_star_sitout(Player, Data) ->
-    Game = Data#data.game,
+    Game = Data#delayed.game,
     gen_server:cast(Game, {'SET STATE', Player, ?PS_SIT_OUT}),
     {next_state, delayed_start, Data}.
 
 delayed_start_comeback(Player, Data) ->
-    Game = Data#data.game,
+    Game = Data#delayed.game,
     gen_server:cast(Game, {'SET STATE', Player, ?PS_PLAY}),
     {next_state, delayed_start, Data}.
 

@@ -11,13 +11,13 @@
 -include("test.hrl").
 -include("common.hrl").
 
--record(data, {
+-record(deck, {
 	  rigged,
 	  cards
 	 }).
 
 new() ->
-    #data {
+    #deck {
      rigged = [],
      cards = shuffle(make_deck())
     }.
@@ -82,20 +82,20 @@ handle_cast_stop(Data) ->
     {stop, normal, Data}.
 
 handle_cast_reset(Data) ->
-    Data1 = case Data#data.rigged of
+    Data1 = case Data#deck.rigged of
 		[] ->
 		    %%io:format("Deck is not rigged~n"),
 		    new();
 		Cards ->
 		    %%io:format("Deck is rigged with ~w~n", [Cards]),
-		    Data#data {
+		    Data#deck {
 		      cards = Cards
 		     }
 	    end,
     {noreply, Data1}.
 
 handle_cast_rig(Cards, Data) ->
-    Data1 = Data#data {
+    Data1 = Data#deck {
 	      rigged = Cards,
 	      cards = Cards
 	     },
@@ -103,9 +103,9 @@ handle_cast_rig(Cards, Data) ->
 
 handle_call_draw(Data) ->
     if
-	length(Data#data.cards) > 0 ->
-	    [Card|Rest] = Data#data.cards,
-	    Data1 = Data#data {
+	length(Data#deck.cards) > 0 ->
+	    [Card|Rest] = Data#deck.cards,
+	    Data1 = Data#deck {
 		      cards = Rest
 		     },
 	    {reply, Card, Data1};

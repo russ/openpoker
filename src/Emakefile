@@ -1,2 +1,2 @@
-{'cardgame', []}.
-{'*',[]}.
+{'cardgame', [debug_info]}.
+{'*',[debug_info]}.

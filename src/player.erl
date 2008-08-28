@@ -5,30 +5,27 @@
 
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
--export([start/1, stop/1, cast/2, call/2, test/0]).
+-export([start/1, stop/1, stop/2, cast/2, call/2, test/0]).
 -export([create/4]).
+
+-include_lib("eunit/include/eunit.hrl").
 
 -include("test.hrl").
 -include("common.hrl").
 -include("proto.hrl").
 -include("schema.hrl").
 
--record(data, {
-	  oid,
+-record(player_data, {
+	  pid,
 	  socket = none,
-	  inplay = 0,
-      %% game to inplay cross-reference for this player
+          %% game to inplay cross-reference for this player
 	  inplay_xref = gb_trees:empty()   
 	 }).
 
-new(OID) ->
-    #data {
-     oid = OID
+new(ID) ->
+    #player_data {
+     pid = ID
     }.
-
-start(Nick) 
-  when is_list(Nick) ->
-    start(list_to_binary(Nick));
 
 start(Nick) 
   when is_binary(Nick) ->
@@ -38,18 +35,12 @@ init([Nick])
   when is_binary(Nick) ->
     process_flag(trap_exit, true),
     %% make sure we exist
-    case db:find(player, nick, Nick) of
-	{atomic, [Player]} ->
-	    %% update process id
-	    OID = Player#player.oid,
-	    case db:set(player, OID, {pid, self()}) of
-		{atomic, ok} ->
-		    %% all good
-		    {ok, new(OID)};
-		Any ->
-		    {stop, Any}
-	    end;
-	Any ->
+    case db:find(player_info, nick, Nick) of
+	{atomic, [Info]} ->
+	    ID = Info#player_info.pid,
+            {atomic, ok} = create_runtime(ID, self()),
+            {ok, new(ID)};
+        Any ->
 	    {stop, Any}
     end.
 
@@ -57,9 +48,12 @@ stop(Player)
   when is_pid(Player) ->
     gen_server:cast(Player, stop).
 
+stop(Player, Reason) 
+  when is_pid(Player) ->
+    gen_server:cast(Player, {stop, Reason}).
+
 terminate(_Reason, Data) ->
-    db:set(player, Data#data.oid, {pid, none}),
-    ok.
+    db:delete(player, Data#player_data.pid).
 
 handle_cast('LOGOUT', Data) ->
     handle_cast_logout(Data);
@@ -70,28 +64,20 @@ handle_cast('DISCONNECT', Data) ->
 handle_cast({'SOCKET', Socket}, Data) ->
     handle_cast_socket(Socket, Data);
 
-handle_cast({'INPLAY-', Amount}, Data)
-  when is_number(Amount), Amount >= 0 ->
-    handle_cast_inplay_minus(Amount, Data);
-
-handle_cast({'INPLAY+', Amount}, Data) 
-  when is_number(Amount), Amount > 0 ->
-    handle_cast_inplay_plus(Amount, Data);
-
-handle_cast({'ADD GAME INPLAY', Amount, Game}, Data) 
+handle_cast({'INPLAY=', Amount, Game}, Data) 
   when Amount >= 0 ->
-    handle_cast_add_game_inplay(Amount, Game, Data);
+    handle_cast_set_game_inplay(Amount, Game, Data);
 
-handle_cast({'GAME INPLAY+', Amount, Game}, Data) 
+handle_cast({'INPLAY+', Amount, Game}, Data) 
   when  Amount >= 0 ->
     handle_cast_game_inplay_plus(Amount, Game, Data);
 
-handle_cast({'GAME INPLAY-', Amount, Game}, Data) 
+handle_cast({'INPLAY-', Amount, Game}, Data) 
   when Amount >= 0 ->
     handle_cast_game_play_plus(Amount, Game, Data);
     
-handle_cast({'NOTIFY LEAVE', GID, Game}, Data) ->
-    handle_cast_notify_leave(GID, Game, Data);
+handle_cast({'NOTIFY LEAVE', GID}, Data) ->
+    handle_cast_notify_leave(GID, Data);
 
 handle_cast({?PP_WATCH, Game}, Data) 
   when is_pid(Game) ->
@@ -136,17 +122,26 @@ handle_cast(?PP_BALANCE_REQ, Data) ->
 handle_cast(stop, Data) ->
     handle_cast_stop(Data);
 
+handle_cast({stop, Reason}, Data) ->
+    handle_cast_stop_reason(Reason, Data);
+
 handle_cast(Event, Data) ->
     handle_cast_other(Event, Data).
 
 handle_call('ID', _From, Data) ->
     handle_call_id(Data);
 
+handle_call({'INPLAY', Game}, _From, Data) ->
+    handle_call_game_inplay(Game, Data);
+
 handle_call('INPLAY', _From, Data) ->
     handle_call_inplay(Data);
 
-handle_call({'GAME INPLAY',Game}, _From, Data) ->
-    handle_call_game_inplay(Game, Data);
+handle_call('SOCKET', _From, Data) ->
+    handle_call_socket(Data);
+
+handle_call('GAMES', _From, Data) ->
+    handle_call_games(Data);
 
 handle_call(Event, From, Data) ->
     handle_call_other(Event, From, Data).
@@ -170,7 +165,7 @@ code_change(_OldVsn, Data, _Extra) ->
 %%% 
 
 handle_cast_logout(Data) ->
-    ID = Data#data.oid,
+    ID = Data#player_data.pid,
     {atomic, Games} = db:get(player, ID, games),
     if
         %% not playing anymore, can log out
@@ -178,7 +173,7 @@ handle_cast_logout(Data) ->
             spawn(fun() -> login:logout(ID) end);
         true ->
             %% delay until we leave our last game
-            db:set(player, Data#data.oid, {socket, none})
+            db:set(player, Data#player_data.pid, {zombie, 1})
     end,
     {noreply, Data}.
 
@@ -187,89 +182,57 @@ handle_cast_disconnect(Data) ->
     {noreply, Data}.
 
 handle_cast_socket(Socket, Data) when is_pid(Socket) ->
-    Data1 = Data#data {
+    Data1 = Data#player_data {
 	      socket = Socket
 	     },
     {noreply, Data1}.
     
-handle_cast_inplay_minus(Amount, Data) ->
-    %%db:dec(player, Data#data.oid, {inplay, Amount}),
-    Data1 = Data#data {
-	      inplay = Data#data.inplay - Amount
-	     },
-    {noreply, Data1}.
-    
-handle_cast_inplay_plus(Amount, Data) ->
-    %%db:dec(player, Data#data.oid, {inplay, Amount}),
-    Data1 = Data#data {
-	      inplay = Data#data.inplay + Amount
-	     },
-    {noreply, Data1}.
-
-handle_cast_add_game_inplay(Amount, Game, Data) ->
-    Xref = Data#data.inplay_xref,
-    Xref1= gb_trees:enter(Game,Amount,Xref),
-	Data1 = Data#data {
-      inplay_xref = Xref1},
+handle_cast_set_game_inplay(Amount, Game, Data) ->
+    Xref = Data#player_data.inplay_xref,
+    Xref1 = gb_trees:enter(Game, Amount, Xref),
+    Data1 = Data#player_data{ inplay_xref = Xref1 },
     {noreply, Data1}.
                  
 handle_cast_game_inplay_plus(Amount, Game, Data) ->
-    Xref = Data#data.inplay_xref,
-    PrevAmount = gb_trees:get(Game,Xref),
+    Xref = Data#player_data.inplay_xref,
+    PrevAmount = gb_trees:get(Game, Xref),
     NewAmount = PrevAmount + Amount,
-    Xref1 = gb_trees:enter(Game,NewAmount,Xref),
-    Data1 = Data#data {
-      inplay_xref = Xref1},
+    Xref1 = gb_trees:enter(Game,NewAmount, Xref),
+    Data1 = Data#player_data{ inplay_xref = Xref1 },
     {noreply, Data1}.
 
 handle_cast_game_play_plus(Amount, Game, Data) ->
-    Xref = Data#data.inplay_xref,
-    PrevAmount = gb_trees:get(Game,Xref),
+    Xref = Data#player_data.inplay_xref,
+    PrevAmount = gb_trees:get(Game, Xref),
     NewAmount = PrevAmount - Amount,
-    Xref1 = gb_trees:enter(Game,NewAmount,Xref),
-    Data1 = Data#data {
-      inplay_xref = Xref1},
+    Xref1 = gb_trees:enter(Game, NewAmount, Xref),
+    Data1 = Data#player_data{ inplay_xref = Xref1 },
     {noreply, Data1}.                                                                     
-handle_cast_notify_leave(GID, Game, Data) ->
-    ID = Data#data.oid,
-    %% update player
-    {atomic, Games} = db:get(player, ID, games),
-    Games1 = lists:filter(fun(X) -> X /= Game end, Games),
-    db:set(player, ID, {games, Games1}),
-    Xref = Data#data.inplay_xref,
-    TreeDefined = gb_trees:is_defined(GID,Xref),
-    case TreeDefined of
-        true->
-            InplayAmount = gb_trees:get(GID,Xref);
-        %%could not get the gb_tree for this game
-        false->
-            InplayAmount = 0.0
-    end,
-    InplayNow = Data#data.inplay,
-    Data1 = Data#data {inplay = InplayNow - InplayAmount},
-    {atomic, ok} = db:inc(player,ID,{balance,InplayAmount}),
-    
-    Data2 = if
-                %% not playing anymore
-                Games1 == [] ->
-                    %% move inplay amount back to balance
-                    {atomic, ok} = db:set(player, ID, 
-                                          {inplay, Data1#data.inplay}),
-                    {atomic, ok} = db:move_amt(player, ID, 
-                                               {inplay, balance, Data1#data.inplay}),
-                    {atomic, Sock} = db:get(player, ID, socket),
-                    if 
-                        %% player requested logout previously
-                        Sock == none ->
-                            spawn(fun() -> login:logout(ID) end);
-                        true ->
-                            ok
-                    end,
-                    Data1#data { inplay = 0.0 };
+handle_cast_notify_leave(GID, Data) ->
+    ID = Data#player_data.pid,
+    Xref = Data#player_data.inplay_xref,
+    Inplay = case gb_trees:is_defined(GID, Xref) of
+                 true->
+                     gb_trees:get(GID, Xref);
+                 false->
+                     0.0
+             end,
+    {atomic, ok} = db:inc(player_info, ID, {balance, Inplay}),
+    {atomic, ok} = db:delete_pat({inplay, GID, ID, '_'}),
+    LastGame = gb_trees:size(Xref) == 1,
+    if
+        LastGame ->
+            {atomic, Zombie} = db:get(player, ID, zombie),
+            if 
+                %% player requested logout previously
+                Zombie == 1 ->
+                    spawn(fun() -> login:logout(ID) end);
                 true ->
-                    Data1
-            end,
-    {noreply, Data2}.
+                    ok
+            end
+    end,
+    Xref1 = gb_trees:delete(GID, Xref),
+    {noreply, Data#player_data{ inplay_xref = Xref1 }}.
 
 handle_cast_watch(Game, Data) ->
     cardgame:cast(Game, {?PP_WATCH, self()}),
@@ -305,7 +268,7 @@ handle_cast_seat_query(Game, Data) ->
     F = fun({SeatNum, State, Player}) -> 
 		PID = if 
 			  Player == self() ->
-			      Data#data.oid;
+			      Data#player_data.pid;
 			  State /= ?SS_EMPTY ->
 			      gen_server:call(Player, 'ID');
 			  true ->
@@ -317,13 +280,13 @@ handle_cast_seat_query(Game, Data) ->
     {noreply, Data}.
 
 handle_cast_player_info_req(PID, Data) ->
-    case db:find(player, PID) of
-	{atomic, [Player]} ->
+    case db:find(player_info, PID) of
+	{atomic, [Info]} ->
 	    handle_cast({?PP_PLAYER_INFO, 
-			 Player#player.pid, 
-			 Player#player.inplay,
-			 Player#player.nick,
-			 Player#player.location}, Data);
+			 PID, 
+			 inplay(Data),
+			 Info#player_info.nick,
+			 Info#player_info.location}, Data);
 	_ ->
 	    oops
     end,
@@ -346,11 +309,11 @@ handle_cast_new_game_req(GameType, Expected, Limit, Data) ->
     {noreply, Data}.
 
 handle_cast_balance_req(Data) ->
-    case db:find(player, Data#data.oid) of
-	{atomic, [Player]} ->
+    case db:find(player_info, Data#player_data.pid) of
+	{atomic, [Info]} ->
 	    handle_cast({?PP_BALANCE_INFO, 
-			 Player#player.balance,
-			 Player#player.inplay}, Data);
+			 Info#player_info.balance,
+			 inplay(Data)}, Data);
 	_ ->
 	    oops
     end,
@@ -359,32 +322,41 @@ handle_cast_balance_req(Data) ->
 handle_cast_stop(Data) ->
     {stop, normal, Data}.
 
+handle_cast_stop_reason(Reason, Data) ->
+    {stop, Reason, Data}.
+
 handle_cast_other(Event, Data) ->
     if 
-	Data#data.socket /= none ->
-	    Data#data.socket ! {packet, Event};
+	Data#player_data.socket /= none ->
+	    Data#player_data.socket ! {packet, Event};
 	true ->
 	    ok
     end,
     {noreply, Data}.
 
 handle_call_id(Data) ->
-    {reply, Data#data.oid, Data}.
-
-handle_call_inplay(Data) ->
-    {reply, Data#data.inplay, Data}.
+    {reply, Data#player_data.pid, Data}.
 
 handle_call_game_inplay(Game, Data) ->
-    Xref = Data#data.inplay_xref,
+    Xref = Data#player_data.inplay_xref,
     TreeDefined = gb_trees:is_defined(Game,Xref),
     case TreeDefined of
         true->
             InplayAmount = gb_trees:get(Game,Xref);
-        %%could not get the gb_tree for this game
+        %% could not get the gb_tree for this game
         false->
             InplayAmount = 0.0
     end,
 	{reply, InplayAmount, Data}.
+
+handle_call_inplay(Data) ->
+    {reply, inplay(Data), Data}.
+
+handle_call_socket(Data) ->
+    {reply, Data#player_data.socket, Data}.
+
+handle_call_games(Data) ->
+    {reply, gb_trees:keys(Data#player_data.inplay_xref), Data}.
 
 handle_call_other(Event, From, Data) ->
     error_logger:info_report([{module, ?MODULE}, 
@@ -401,7 +373,7 @@ handle_call_other(Event, From, Data) ->
 cast(PID, Event) ->
     case db:find(player, PID) of
 	{atomic, [Player]} ->
-	    gen_server:cast(Player#player.pid, Event);
+	    gen_server:cast(Player#player.proc_id, Event);
 	_ ->
 	    none
     end.
@@ -409,7 +381,7 @@ cast(PID, Event) ->
 call(PID, Event) ->
     case db:find(player, PID) of
 	{atomic, [Player]} ->
-	    gen_server:call(Player#player.pid, Event);
+	    gen_server:call(Player#player.proc_id, Event);
 	_ ->
 	    none
     end.
@@ -429,21 +401,45 @@ create(Nick, Pass, Location, Balance)
        is_binary(Pass),
        is_binary(Location),
        is_number(Balance) ->
-    OID = counter:bump(player),
+    case db:find(player_info, nick, Nick) of
+        {atomic, [_]} ->
+            {atomic, {error, player_exists}};
+        _ ->
+            ID = counter:bump(player),
+            Info = #player_info {
+              pid = ID,
+              nick = Nick,
+              %% store a hash of the password
+              %% instead of the password itself
+              password = erlang:phash2(Pass, 1 bsl 32),
+              location = Location,
+              balance = Balance
+             },
+            {atomic, ok} = db:write(Info),
+            {atomic, ID}
+    end.
+
+create_runtime(ID, Pid) 
+  when is_number(ID),
+       is_pid(Pid) ->
     Player = #player {
-      oid = OID,
-      nick = Nick,
-      %% store a hash of the password
-      %% instead of the password itself
-      password = erlang:phash2(Pass, 1 bsl 32),
-      location = Location,
-      balance = Balance,
-      inplay = 0.00
+      pid = ID,
+      proc_id = Pid,
+      zombie = 0
      },
-    mnesia:transaction(fun() -> 
-			       mnesia:write(Player),
-			       OID
-		       end).
+    db:write(Player).
+
+inplay(Data) when is_record(Data, player_data) ->
+    inplay(Data#player_data.inplay_xref);
+
+inplay(Xref) when is_tuple(Xref) ->
+    inplay(gb_trees:to_list(Xref), 0.0).
+
+inplay([], Total) when is_float(Total) ->
+    Total;
+
+inplay([{_, Amt}|Rest], Total) ->
+    inplay(Rest, Total + Amt).
 
 %%%
 %%% Test suite

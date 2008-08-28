@@ -17,7 +17,7 @@
 -include("proto.hrl").
 -include("schema.hrl").
 
--record(data, {
+-record(betting, {
 	  game,
 	  context,
 	  have_blinds,
@@ -33,7 +33,7 @@ init([Game, MaxRaises, Stage]) ->
     init([Game, MaxRaises, Stage, false]);
 
 init([Game, MaxRaises, Stage, HaveBlinds]) ->
-    Data = #data {
+    Data = #betting {
       game = Game,
       have_blinds = HaveBlinds,
       max_raises = MaxRaises,
@@ -76,8 +76,8 @@ handle_event(Event, State, Data) ->
 			       {line, ?LINE},
 			       {message, Event}, 
 			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected}]),
+			       {game, Data#betting.game},
+			       {expected, Data#betting.expected}]),
     {next_state, State, Data}.
         
 handle_sync_event(Event, From, State, Data) ->
@@ -86,8 +86,8 @@ handle_sync_event(Event, From, State, Data) ->
 			       {message, Event}, 
 			       {from, From},
 			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected}]),
+			       {game, Data#betting.game},
+			       {expected, Data#betting.expected}]),
     {next_state, State, Data}.
         
 handle_info(Info, State, Data) ->
@@ -95,8 +95,8 @@ handle_info(Info, State, Data) ->
 			       {line, ?LINE},
 			       {message, Info}, 
 			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected}]),
+			       {game, Data#betting.game},
+			       {expected, Data#betting.expected}]),
     {next_state, State, Data}.
 
 terminate(_Reason, _State, _Data) -> 
@@ -110,7 +110,7 @@ code_change(_OldVsn, State, Data, _Extra) ->
 %%%
 
 betting_handle_start(Context, Data) ->
-    Game = Data#data.game,
+    Game = Data#betting.game,
     %% assume that we are given a record
     Button = element(2, Context),
     Call = element(3, Context),
@@ -123,9 +123,9 @@ betting_handle_start(Context, Data) ->
 	true ->
 	    _Total = gen_server:call(Game, 'POT TOTAL'),
 	    gen_server:cast(Game, {'BROADCAST', 
-				   {?PP_GAME_STAGE, Data#data.stage}}), 
+				   {?PP_GAME_STAGE, Data#betting.stage}}), 
 	    if 
-		Data#data.have_blinds ->
+		Data#betting.have_blinds ->
 		    %% start with the player after the big blind
 		    BB = element(6, Context),
 		    Temp = gen_server:call(Game, {'SEATS', BB, ?PS_PLAY}),
@@ -134,7 +134,7 @@ betting_handle_start(Context, Data) ->
 		    %% start with the first player after the button
 		    Player = hd(Active)
 	    end,
-	    Data1 = Data#data {
+	    Data1 = Data#betting {
 		      context = Context,
 		      call = Call,
 		      raise_count = 0
@@ -144,9 +144,9 @@ betting_handle_start(Context, Data) ->
     end.
 
 betting_handle_call(Player, Amount, Data) ->
-    Game = Data#data.game,
+    Game = Data#betting.game,
     GID = gen_server:call(Game,'ID'),
-    {Expected, Call, _Min, _Max} = Data#data.expected,
+    {Expected, Call, _Min, _Max} = Data#betting.expected,
     if 
 	Expected /= Player ->
 	    {next_state, betting, Data};
@@ -154,7 +154,7 @@ betting_handle_call(Player, Amount, Data) ->
 	    %% it's us
 	    cancel_timer(Data),
 	    %% InPlay = gen_server:call(Player, 'INPLAY'),
-            GameInplay = gen_server:call(Player, {'GAME INPLAY', GID}),
+            GameInplay = gen_server:call(Player, {'INPLAY', GID}),
 	    if 
 		Amount > GameInplay  ->
 		    betting({?PP_FOLD, Player}, Data);
@@ -178,10 +178,10 @@ betting_handle_call(Player, Amount, Data) ->
     end.
 
 betting_handle_raise(Player, Amount, Data) ->
-    Game = Data#data.game,
+    Game = Data#betting.game,
     GID = gen_server:call(Game, 'ID'),
-    RaiseCount = Data#data.raise_count,
-    {Expected, Call, Min, Max} = Data#data.expected,
+    RaiseCount = Data#betting.raise_count,
+    {Expected, Call, Min, Max} = Data#betting.expected,
     if
 	Expected /= Player ->
 	    {next_state, betting, Data};
@@ -189,7 +189,7 @@ betting_handle_raise(Player, Amount, Data) ->
 	    %% it's us
 	    cancel_timer(Data),
 	    %% InPlay = gen_server:call(Player, 'INPLAY'),
-            GameInplay = gen_server:call(Player, {'GAME INPLAY', GID}),
+            GameInplay = gen_server:call(Player, {'INPLAY', GID}),
 	    if 
 		(Amount > GameInplay) or 
 		(Amount > Max) or
@@ -216,8 +216,8 @@ betting_handle_raise(Player, Amount, Data) ->
 		    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_RAISE, 
 							 Player, Amount,
                                                          Amount + Call}}),
-		    Data1 = Data#data {
-			      call = Data#data.call + Amount,
+		    Data1 = Data#betting {
+			      call = Data#betting.call + Amount,
 			      raise_count = RaiseCount1
 			     },
 		    next_turn(Data1, Player)
@@ -225,19 +225,19 @@ betting_handle_raise(Player, Amount, Data) ->
     end.
 
 betting_handle_fold(Player, Data) ->
-    {Expected, _Call, _Min, _Max} = Data#data.expected,
+    {Expected, _Call, _Min, _Max} = Data#betting.expected,
     if
 	Expected /= Player ->
 	    {next_state, betting, Data};
 	true ->
 	    cancel_timer(Data),
-	    gen_server:cast(Data#data.game, {'SET STATE', Player, ?PS_FOLD}),
+	    gen_server:cast(Data#betting.game, {'SET STATE', Player, ?PS_FOLD}),
 	    next_turn(Data, Player)
     end.
 
 betting_handle_timeout(Player, Data) ->
     cancel_timer(Data),
-    Game = Data#data.game,
+    Game = Data#betting.game,
     GID = gen_server:call(Game, 'ID'),
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
     error_logger:warning_report([{message, "Player timeout!"},
@@ -253,7 +253,7 @@ betting_handle_join(Player, SeatNum, BuyIn, Data) ->
     blinds:join(Data, Player, SeatNum, BuyIn, betting, ?PS_FOLD).
 
 betting_handle_leave(Player, Data) ->
-    gen_server:cast(Data#data.game, {?PP_LEAVE, Player}),
+    gen_server:cast(Data#betting.game, {?PP_LEAVE, Player}),
     {next_state, betting, Data}.
 
 betting_handle_rest(Event, Data) ->
@@ -264,7 +264,7 @@ betting_handle_rest(Event, Data) ->
 %%
 
 next_turn(Data, Player) ->
-    Game = Data#data.game,
+    Game = Data#betting.game,
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
     Active = gen_server:call(Game, {'SEATS', Seat, ?PS_PLAY}),
     Standing = gen_server:call(Game, {'SEATS', Seat, ?PS_STANDING}),
@@ -273,11 +273,11 @@ next_turn(Data, Player) ->
     if 
 	StandingCount < 2 ->
 	    %% last man standing wins
-	    {stop, {endgame, Data#data.context}, Data};
+	    {stop, {endgame, Data#betting.context}, Data};
  	ActiveCount == 0 ->
  	    %% we are done with this stage
  	    gen_server:cast(Game, {'RESET STATE', ?PS_BET, ?PS_PLAY}),
- 	    Ctx = setelement(3, Data#data.context, 0), % call = 0
+ 	    Ctx = setelement(3, Data#betting.context, 0), % call = 0
 	    gen_server:cast(Game, 'NEW STAGE'),
 	    {stop, {normal, Ctx}, Data};
  	true ->
@@ -287,24 +287,24 @@ next_turn(Data, Player) ->
     end.
 
 ask_for_bet(Data, Seat) ->
-    Game = Data#data.game,
-    Stage = Data#data.stage,
+    Game = Data#betting.game,
+    Stage = Data#betting.stage,
     Player = gen_server:call(Game, {'PLAYER AT', Seat}),
     Bet = gen_server:call(Game, {'BET TOTAL', Player}),
-    Call = Data#data.call - Bet,
+    Call = Data#betting.call - Bet,
     {Min, Max} = gen_server:call(Game, {'RAISE SIZE', Player, Stage}),
     gen_server:cast(Game, {'REQUEST BET', Seat, Call, Min, Max}),
     Data1 = restart_timer(Data, Player),
-    Data1#data {
+    Data1#betting {
       expected = {Player, Call, Min, Max}
      }.
 
 cancel_timer(Data) ->
-    catch cardgame:cancel_timer(Data#data.timer).
+    catch cardgame:cancel_timer(Data#betting.timer).
 
 restart_timer(Data, Msg) ->
-    Timeout = gen_server:call(Data#data.game, 'TIMEOUT'),
-    Data#data {
+    Timeout = gen_server:call(Data#betting.game, 'TIMEOUT'),
+    Data#betting {
       timer = cardgame:start_timer(Timeout, Msg)
      }.
 

@@ -12,7 +12,8 @@
 -include("common.hrl").
 -include("proto.hrl").
 
-new(IRC_ID, Nick, SeatNum, Balance) ->
+new(Nick, IRC_ID, SeatNum, Balance) 
+  when is_binary(Nick) ->
     Bot = #bot {
       nick = Nick,
       player = none,
@@ -28,7 +29,8 @@ new(IRC_ID, Nick, SeatNum, Balance) ->
      },
     Bot.
 
-start(Nick, IRC_ID, SeatNum, Balance) ->
+start(Nick, IRC_ID, SeatNum, Balance) 
+  when is_binary(Nick) ->
     gen_server:start(bot, [Nick, IRC_ID, SeatNum, Balance], []).
 
 init([Nick, IRC_ID, SeatNum, Balance]) ->
@@ -44,11 +46,12 @@ terminate(_Reason, Bot) ->
 	    ignore;
 	Socket ->
 	    if 
-		not Bot#bot.done ->
+		(not Bot#bot.done) and (Bot#bot.actions /= []) ->
 		    error_logger:info_report([{message, "Premature connection close"},
                                               {module, ?MODULE},
                                               {line, ?LINE},
-                                              {bot, Bot}]);
+                                              {bot, Bot},
+                                              {actions, Bot#bot.actions}]);
 		true ->
 		    ok
 	    end,
@@ -62,7 +65,7 @@ handle_cast({'SET ACTIONS', Actions}, Bot) ->
 handle_cast({'GAMES TO PLAY', N}, Bot) ->
     handle_games_to_play(N, Bot);
 
-handle_cast(X = {'NOTIFY LEAVE',_,_}, Bot) ->
+handle_cast(X = {'NOTIFY LEAVE', _}, Bot) ->
     handle_notify_leave_x(X, Bot);
 
 handle_cast(stop, Bot) ->
@@ -349,9 +352,7 @@ handle_notify_end_last_game(GID, Bot) ->
     %%		      [Bot#bot.player, GID, now()]),
     ok = ?tcpsend(Bot#bot.socket, {?PP_LEAVE, GID}),
     ok = ?tcpsend(Bot#bot.socket, ?PP_LOGOUT),
-    Bot1 = Bot#bot {
-	     done = true
-	    },
+    Bot1 = Bot#bot{ done = true },
     {stop, normal, Bot1}.
 
 handle_notify_cancel_game(GID, Bot) ->

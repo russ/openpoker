@@ -10,6 +10,7 @@
 
 -export([make_card/1, face/1, suit/1, print_bin/1, print_rep/1]).
 
+-include_lib("eunit/include/eunit.hrl").
 -include("test.hrl").
 
 -record(hand, {
@@ -524,209 +525,209 @@ test_make_rep() ->
 	score(make_rep(make_cards(Cards)))).
 
 test_rank_1() ->
-    ?match({junk, 2#00111011000000, 0},
+    ?assertEqual({junk, 2#00111011000000, 0},
 	   ?score("4D JH 5D 8C QD TD 7H")),
-    ?match({junk, 2#11000110010000, 0},
+    ?assertEqual({junk, 2#11000110010000, 0},
 	   ?score("8C AD 5H 3S KD 9D 4D")),
-    ?match({junk, 2#00110010011000, 0},
+    ?assertEqual({junk, 2#00110010011000, 0},
 	   ?score("4C JH 5C 8D QC 2C 3D")).
     
 test_rank_2() ->
-    ?match({pair, 2#00000000000100, 2#01100100000000},
+    ?assertEqual({pair, 2#00000000000100, 2#01100100000000},
 	   ?score("KD 3S 5H 3D 6C QH 9S")),
-    ?match({pair, 2#10000000000000, 2#01000100010000},
+    ?assertEqual({pair, 2#10000000000000, 2#01000100010000},
 	   ?score("AC 2D 5D AS 4H 9D KD")),
-    ?match({pair, 2#00000000000100, 2#01011000000000},
+    ?assertEqual({pair, 2#00000000000100, 2#01011000000000},
 	   ?score("9S JH 5D TS 3C KC 3H")).
 
 test_rank_3() ->
-    ?match({two_pair, 2#01100000000000, 2#00010000000000},
+    ?assertEqual({two_pair, 2#01100000000000, 2#00010000000000},
 	   ?score("QC KD JD QD JC 5C KC")),
-    ?match({two_pair, 2#00000001100000, 2#00010000000000},
+    ?assertEqual({two_pair, 2#00000001100000, 2#00010000000000},
 	   ?score("7H 3H 6C TD 7C JH 6H")),
-    ?match({two_pair, 2#00010000010000, 2#00100000000000},
+    ?assertEqual({two_pair, 2#00010000010000, 2#00100000000000},
 	   ?score("4D 3S 5H JD JC QH 5S")),
-    ?match({two_pair, 2#10000000010000, 2#00000100000000},
+    ?assertEqual({two_pair, 2#10000000010000, 2#00000100000000},
 	   ?score("AC 2D 5D AS 5H 9D 4D")),
-    ?match({two_pair, 2#00010000010000, 2#01000000000000},
+    ?assertEqual({two_pair, 2#00010000010000, 2#01000000000000},
 	   ?score("9S JH 5D JS 5C KC 3D")).
 
 test_rank_4() ->
-    ?match({three_kind, 2#00100000000000, 2#01000100000000},
+    ?assertEqual({three_kind, 2#00100000000000, 2#01000100000000},
 	   ?score("KH 9S 5H QD QC QH 3S")),
-    ?match({three_kind, 2#01000000000000, 2#10000100000000},
+    ?assertEqual({three_kind, 2#01000000000000, 2#10000100000000},
 	   ?score("AC KC KD KS 7H 9D 4D")),
-    ?match({three_kind, 2#00100000000000, 2#01001000000000},
+    ?assertEqual({three_kind, 2#00100000000000, 2#01001000000000},
 	   ?score("KS TS QD QS QH 4C 5D")).
 
 test_rank_5() ->
-    ?match({straight, 2#01111100000000, 0},
+    ?assertEqual({straight, 2#01111100000000, 0},
 	   ?score("KC QS JH TC 9C 4D 3S")),
-    ?match({straight, 2#11111000000000, 0},
+    ?assertEqual({straight, 2#11111000000000, 0},
 	   ?score("AC KS QH JC TC 9D 4D")),
-    ?match({straight, 2#01111100000000, 0},
+    ?assertEqual({straight, 2#01111100000000, 0},
 	   ?score("KS QD JS TC 9S 2D 7S")),
-    ?match({straight, 2#00000000011111, 0},
+    ?assertEqual({straight, 2#00000000011111, 0},
 	   ?score("5C 4D 3H 2C AD 7H 9S")),
-    ?match({straight, 2#00000011111000, 0},
+    ?assertEqual({straight, 2#00000011111000, 0},
 	   ?score("5H 4S JC 8S 7D 6C 3C")).
 
 test_rank_6() ->
-    ?match({flush, 2#00110000011010, 0},
+    ?assertEqual({flush, 2#00110000011010, 0},
 	   ?score("4D JD 5D JC QD 2D 7H")),
-    ?match({flush, 2#11000100011000, 0},
+    ?assertEqual({flush, 2#11000100011000, 0},
 	   ?score("8C AD 5D AS KD 9D 4D")),
-    ?match({flush, 2#00110000011100, 0},
+    ?assertEqual({flush, 2#00110000011100, 0},
 	   ?score("4C JC 5C 8D QC 3C 7S")).
 
 test_rank_7() ->
-    ?match({full_house, (2#00010000000000 bsl 16) bor 2#00100000000000, 0},
+    ?assertEqual({full_house, (2#00010000000000 bsl 16) bor 2#00100000000000, 0},
  	   ?score("4D JS 5H JD JC QH QS")),
-    ?match({full_house, (2#10000000000000 bsl 16) bor 2#01000000000000, 0},
+    ?assertEqual({full_house, (2#10000000000000 bsl 16) bor 2#01000000000000, 0},
  	   ?score("AC AD KD AS KH 9D 4D")),
-    ?match({full_house, (2#00010000000000 bsl 16) bor 2#01000000000000, 0},
+    ?assertEqual({full_house, (2#00010000000000 bsl 16) bor 2#01000000000000, 0},
  	   ?score("3S JH JD JS KH KC 5D")),
-    ?match({full_house, (2#00100000000000 bsl 16) bor 2#00001000000000, 0},
+    ?assertEqual({full_house, (2#00100000000000 bsl 16) bor 2#00001000000000, 0},
 	   ?score("TD QH TH TC 6C QD QC")).
 
 test_rank_8() ->
-    ?match({four_kind, 2#00100000000000, 2#10000000000000},
+    ?assertEqual({four_kind, 2#00100000000000, 2#10000000000000},
 	   ?score("4D AS 5H QD QC QH QS")),
-    ?match({four_kind, 2#01000000000000, 2#10000000000000},
+    ?assertEqual({four_kind, 2#01000000000000, 2#10000000000000},
 	   ?score("AC KC KD KS KH 9D 4D")),
-    ?match({four_kind, 2#00100000000000, 2#01000000000000},
+    ?assertEqual({four_kind, 2#00100000000000, 2#01000000000000},
 	   ?score("KS TS QD QS QH QC 5D")).
 
 test_rank_9() ->
-    ?match({straight_flush, 2#01111100000000, 0},
+    ?assertEqual({straight_flush, 2#01111100000000, 0},
 	   ?score("KC QC JC TC 9C 4D AS")),
-    ?match({straight_flush, 2#11111000000000, 0},
+    ?assertEqual({straight_flush, 2#11111000000000, 0},
 	   ?score("AC KC QC JC TC 9D 4D")),
-    ?match({straight_flush, 2#01111100000000, 0},
+    ?assertEqual({straight_flush, 2#01111100000000, 0},
 	   ?score("KS QS JS TS 9S AD 7S")).
 
 test_winner_1() ->
     S1 = ?score("4D JH 5D 8C QD TD 7H"),
     S2 = ?score("8C AD 5H 3S KD 9D 4D"),
     S3 = ?score("4C JH 5C 8D QC 2C 3D"),
-    ?match(junk, element(1, S1)),
-    ?match(junk, element(1, S2)),
-    ?match(junk, element(1, S3)),
-    ?match(true, S2 > S1),
-    ?match(true, S2 > S3),
-    ?match(true, S1 > S3).
+    ?assertEqual(junk, element(1, S1)),
+    ?assertEqual(junk, element(1, S2)),
+    ?assertEqual(junk, element(1, S3)),
+    ?assertEqual(true, S2 > S1),
+    ?assertEqual(true, S2 > S3),
+    ?assertEqual(true, S1 > S3).
 
 test_winner_2() ->
     S1 = ?score("KD 3S 5H 3D 6C QH 9S"),
     S2 = ?score("AC 2D 5D AS 4H 9D KD"),
     S3 = ?score("9S JH 5D TS 3C KC 3H"),
-    ?match(pair, element(1, S1)),
-    ?match(pair, element(1, S2)),
-    ?match(pair, element(1, S3)),
-    ?match(true, S2 > S1),
-    ?match(true, S2 > S3),
-    ?match(true, S1 > S3).
+    ?assertEqual(pair, element(1, S1)),
+    ?assertEqual(pair, element(1, S2)),
+    ?assertEqual(pair, element(1, S3)),
+    ?assertEqual(true, S2 > S1),
+    ?assertEqual(true, S2 > S3),
+    ?assertEqual(true, S1 > S3).
 
 test_winner_3() ->
     S1 = ?score("4D 3S 5H JD JC QH 5S"),
     S2 = ?score("AC 2D 5D AS 5H 9D 4D"),
     S3 = ?score("9S JH 5D JS 5C KC 3D"),
-    ?match(two_pair, element(1, S1)),
-    ?match(two_pair, element(1, S2)),
-    ?match(two_pair, element(1, S3)),
-    ?match(true, S2 > S1),
-    ?match(true, S2 > S3),
-    ?match(true, S3 > S1).
+    ?assertEqual(two_pair, element(1, S1)),
+    ?assertEqual(two_pair, element(1, S2)),
+    ?assertEqual(two_pair, element(1, S3)),
+    ?assertEqual(true, S2 > S1),
+    ?assertEqual(true, S2 > S3),
+    ?assertEqual(true, S3 > S1).
     
 test_winner_4() ->
     S1 = ?score("KH 9S 5H QD QC QH 3S"),
     S2 = ?score("AC KC KD KS 7H 9D 4D"),
     S3 = ?score("KS TS QD QS QH 4C 5D"),
-    ?match(three_kind, element(1, S1)),
-    ?match(three_kind, element(1, S2)),
-    ?match(three_kind, element(1, S3)),
-    ?match(true, S2 > S1),
-    ?match(true, S2 > S3),
-    ?match(true, S3 > S1).
+    ?assertEqual(three_kind, element(1, S1)),
+    ?assertEqual(three_kind, element(1, S2)),
+    ?assertEqual(three_kind, element(1, S3)),
+    ?assertEqual(true, S2 > S1),
+    ?assertEqual(true, S2 > S3),
+    ?assertEqual(true, S3 > S1).
 
 test_winner_5() ->
     S1 = ?score("KC QS JH TC 9C 4D 3S"),
     S2 = ?score("AC KS QH JC TC 9D 4D"),
     S3 = ?score("KS QD JS TC 9S 2D 7S"),
-    ?match(straight, element(1, S1)),
-    ?match(straight, element(1, S2)),
-    ?match(straight, element(1, S3)),
-    ?match(true, S2 > S1),
-    ?match(true, S2 > S3),
-    ?match(true, S1 == S3).
+    ?assertEqual(straight, element(1, S1)),
+    ?assertEqual(straight, element(1, S2)),
+    ?assertEqual(straight, element(1, S3)),
+    ?assertEqual(true, S2 > S1),
+    ?assertEqual(true, S2 > S3),
+    ?assertEqual(true, S1 == S3).
 
 test_winner_6() ->
     S1 = ?score("4D JD 5D JC QD 2D 7H"),
     S2 = ?score("8C AD 5D AS KD 9D 4D"),
     S3 = ?score("4C JC 5C 8D QC 3C 7S"),
     S4 = ?score("4C JC 7C 8D QC 5C 7S"),
-    ?match(flush, element(1, S1)),
-    ?match(flush, element(1, S2)),
-    ?match(flush, element(1, S3)),
-    ?match(flush, element(1, S4)),
-    ?match(true, S2 > S1),
-    ?match(true, S2 > S3),
-    ?match(true, S3 > S1),
-    ?match(true, S4 > S1).
+    ?assertEqual(flush, element(1, S1)),
+    ?assertEqual(flush, element(1, S2)),
+    ?assertEqual(flush, element(1, S3)),
+    ?assertEqual(flush, element(1, S4)),
+    ?assertEqual(true, S2 > S1),
+    ?assertEqual(true, S2 > S3),
+    ?assertEqual(true, S3 > S1),
+    ?assertEqual(true, S4 > S1).
 
 test_winner_7() ->
     S1 = ?score("4D AS 5H QD QC QH QS"),
     S2 = ?score("AC KC KD KS KH 9D 4D"),
     S3 = ?score("KS TS QD QS QH QC 5D"),
-    ?match(four_kind, element(1, S1)),
-    ?match(four_kind, element(1, S2)),
-    ?match(four_kind, element(1, S3)),
-    ?match(true, S2 > S1),
-    ?match(true, S2 > S3),
-    ?match(true, S1 > S3).
+    ?assertEqual(four_kind, element(1, S1)),
+    ?assertEqual(four_kind, element(1, S2)),
+    ?assertEqual(four_kind, element(1, S3)),
+    ?assertEqual(true, S2 > S1),
+    ?assertEqual(true, S2 > S3),
+    ?assertEqual(true, S1 > S3).
 
 test_winner_8() ->
     S1 = ?score("KC QC JC TC 9C 4D AS"),
     S2 = ?score("AC KC QC JC TC 9D 4D"),
     S3 = ?score("KS QS JS TS 9S AD 7S"),
-    ?match(straight_flush, element(1, S1)),
-    ?match(straight_flush, element(1, S2)),
-    ?match(straight_flush, element(1, S3)),
-    ?match(true, S2 > S1),
-    ?match(true, S2 > S3),
-    ?match(true, S1 == S3).
+    ?assertEqual(straight_flush, element(1, S1)),
+    ?assertEqual(straight_flush, element(1, S2)),
+    ?assertEqual(straight_flush, element(1, S3)),
+    ?assertEqual(true, S2 > S1),
+    ?assertEqual(true, S2 > S3),
+    ?assertEqual(true, S1 == S3).
 
 test_winner_9() ->
     S1 = ?score("4D JS 5H JD JC QH QS"),
     S2 = ?score("AC AD KD AS KH 9D 4D"),
     S3 = ?score("3S JH JD JS KH KC 5D"),
-    ?match(full_house, element(1, S1)),
-    ?match(full_house, element(1, S2)),
-    ?match(full_house, element(1, S3)),
-    ?match(true, S2 > S1),
-    ?match(true, S2 > S3),
-    ?match(true, S3 > S1).
+    ?assertEqual(full_house, element(1, S1)),
+    ?assertEqual(full_house, element(1, S2)),
+    ?assertEqual(full_house, element(1, S3)),
+    ?assertEqual(true, S2 > S1),
+    ?assertEqual(true, S2 > S3),
+    ?assertEqual(true, S3 > S1).
 
 test_winner_10() ->
     S1 = ?score("5C TC 7H KH 5S TS KS"),
     S2 = ?score("5C TC 7H KH 5S KC TH"),
-    ?match(two_pair, element(1, S1)),
-    ?match(two_pair, element(1, S2)),
-    ?match(true, S1 == S2).
+    ?assertEqual(two_pair, element(1, S1)),
+    ?assertEqual(two_pair, element(1, S2)),
+    ?assertEqual(true, S1 == S2).
 
 test_winner_11() ->    
     S1 = ?score("KH TC 9H 7D 6H 5D 2S"),
     S2 = ?score("KH TC 9H 7H 6H 3D 2S"),
-    ?match(junk, element(1, S1)),
-    ?match(junk, element(1, S2)),
-    ?match(true, S1 == S2).
+    ?assertEqual(junk, element(1, S1)),
+    ?assertEqual(junk, element(1, S2)),
+    ?assertEqual(true, S1 == S2).
 
 test_winner_12() ->    
     S1 = ?score("2H 2C 5H 5S 5C 7C 4D"),
     S2 = ?score("2H 2C 5H 5S 5D 4D 2D"),
-    ?match(full_house, element(1, S1)),
-    ?match(full_house, element(1, S2)),
-    ?match(true, S1 == S2).
+    ?assertEqual(full_house, element(1, S1)),
+    ?assertEqual(full_house, element(1, S2)),
+    ?assertEqual(true, S1 == S2).
 
 print_bin(X) ->
     io:format("AKQJT98765432A~n"),

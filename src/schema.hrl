@@ -5,24 +5,33 @@
 	  value
 	 }).
 
--record(player, {
-	  oid, % object id
+-record(player_info, {
+	  pid,
 	  user_id, % external user id
 	  nick,
 	  password,
 	  location,
 	  balance = 0.0,
-	  inplay = 0.0, % only used while in a game
 	  login_errors = 0,
-	  pid = none, % process id
-	  socket = none, % socket process
-	  games = [], % games we are playing
 	  disabled = false % player is disabled
 	 }).
 
--record(game_xref, {
-	  oid,
+-record(player, {
 	  pid,
+	  proc_id = none, % process id
+          socket = none,
+          zombie = 0 % % on autoplay until game ends
+	 }).
+
+-record(inplay, {
+          gid,
+          pid,
+          amount
+         }).
+
+-record(game_xref, {
+	  gid,
+	  proc_id,
 	  type,
 	  limit,
           table_name,

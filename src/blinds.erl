@@ -11,13 +11,14 @@
 
 -export([small_blind/2, big_blind/2, join/6]).
 
+-include_lib("eunit/include/eunit.hrl").
 -include("common.hrl").
 -include("test.hrl").
 -include("texas.hrl").
 -include("proto.hrl").
 -include("schema.hrl").
 
--record(data, {
+-record(blinds, {
 	  game,
 	  context,
 	  small_blind_seat,
@@ -37,7 +38,7 @@ init([Game]) ->
 
 init([Game, Type]) ->
     {Small, Big} = gen_server:call(Game, 'BLINDS'),
-    Data = #data {
+    Data = #blinds {
       game = Game,
       small_blind_amount = Small,
       big_blind_amount = Big,
@@ -112,11 +113,11 @@ handle_event(Event, State, Data) ->
 			       {where, handle_event},
 			       {message, Event}, 
 			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected},
-			       {sb, Data#data.small_blind_seat},
-			       {bb, Data#data.big_blind_seat},
-			       {b, Data#data.button_seat}]),
+			       {game, Data#blinds.game},
+			       {expected, Data#blinds.expected},
+			       {sb, Data#blinds.small_blind_seat},
+			       {bb, Data#blinds.big_blind_seat},
+			       {b, Data#blinds.button_seat}]),
     {next_state, State, Data}.
         
 handle_sync_event(Event, From, State, Data) ->
@@ -126,11 +127,11 @@ handle_sync_event(Event, From, State, Data) ->
 			       {message, Event}, 
 			       {from, From},
 			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected},
-			       {sb, Data#data.small_blind_seat},
-			       {bb, Data#data.big_blind_seat},
-			       {b, Data#data.button_seat}]),
+			       {game, Data#blinds.game},
+			       {expected, Data#blinds.expected},
+			       {sb, Data#blinds.small_blind_seat},
+			       {bb, Data#blinds.big_blind_seat},
+			       {b, Data#blinds.button_seat}]),
     {next_state, State, Data}.
         
 handle_info(Info, State, Data) ->
@@ -139,11 +140,11 @@ handle_info(Info, State, Data) ->
 			       {where, handle_info},
 			       {message, Info}, 
 			       {self, self()},
-			       {game, Data#data.game},
-			       {expected, Data#data.expected},
-			       {sb, Data#data.small_blind_seat},
-			       {bb, Data#data.big_blind_seat},
-			       {b, Data#data.button_seat}]),
+			       {game, Data#blinds.game},
+			       {expected, Data#blinds.expected},
+			       {sb, Data#blinds.small_blind_seat},
+			       {bb, Data#blinds.big_blind_seat},
+			       {b, Data#blinds.button_seat}]),
     {next_state, State, Data}.
 
 terminate(_Reason, _State, _Data) -> 
@@ -180,22 +181,22 @@ code_change(_OldVsn, State, Data, _Extra) ->
 
 small_blind_handle_start(Context, Data) ->
     if 
-	Data#data.type /= irc ->
-	    Data1 = Data#data {
+	Data#blinds.type /= irc ->
+	    Data1 = Data#blinds {
 		      context = Context,
 		      small_blind_seat = Context#texas.small_blind_seat,
 		      big_blind_seat = Context#texas.big_blind_seat,
 		      button_seat = Context#texas.button_seat
 		     };
 	true ->
-	    Data1 = Data#data {
+	    Data1 = Data#blinds {
 		      context = Context,
 		      small_blind_seat = none,
 		      big_blind_seat = none,
 		      button_seat = none
 		     }
     end,
-    Game = Data1#data.game,
+    Game = Data1#blinds.game,
     %% advance button and broadcast position
     {Button1, Bust} = advance_button(Data1),
     gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_BUTTON, Button1}}), 
@@ -213,12 +214,12 @@ small_blind_handle_start(Context, Data) ->
 	Bust and not HeadsUp ->
 	    %% there's no small blind so the first player
 	    %% after the button is the big blind
-	    Data2 = Data1#data {
+	    Data2 = Data1#blinds {
 		      button_seat = Button1,
 		      no_small_blind = true,
-		      small_blind_seat = Data1#data.big_blind_seat
+		      small_blind_seat = Data1#blinds.big_blind_seat
 		     },
-	    Amount = Data2#data.big_blind_amount,
+	    Amount = Data2#blinds.big_blind_amount,
 	    %% ask for big blind
 	    Data3 = ask_for_blind(Data2, hd(BBPlayers), Amount), 
 	    {next_state, big_blind, Data3};
@@ -226,24 +227,24 @@ small_blind_handle_start(Context, Data) ->
 	    %% the first player after the button 
 	    %% is the big blind and the other player
 	    %% is the small blind and button
-	    Data2 = Data1#data {
+	    Data2 = Data1#blinds {
 		      button_seat = Button1
 		     },
-	    Amount = Data2#data.small_blind_amount,
+	    Amount = Data2#blinds.small_blind_amount,
 	    Data3 = ask_for_blind(Data2, lists:last(SBPlayers), Amount), 
 	    {next_state, small_blind, Data3};
 	true ->
-	    Data2 = Data1#data {
+	    Data2 = Data1#blinds {
 		      button_seat = Button1
 		     },
-	    Amount = Data2#data.small_blind_amount,
+	    Amount = Data2#blinds.small_blind_amount,
 	    Data3 = ask_for_blind(Data2, hd(SBPlayers), Amount),
 	    {next_state, small_blind, Data3}
     end.
 	
 small_blind_handle_call(Player, Amount, Data) ->
-    Game = Data#data.game,
-    {ExpPlayer, Seat, ExpAmount} = Data#data.expected,
+    Game = Data#blinds.game,
+    {ExpPlayer, Seat, ExpAmount} = Data#blinds.expected,
     if
 	ExpPlayer /= Player ->
 	    {next_state, small_blind, Data};
@@ -255,7 +256,7 @@ small_blind_handle_call(Player, Amount, Data) ->
 		    timeout(Data, Player, small_blind);
 		true ->
 		    %% small blind posted
-		    Data1 = Data#data {
+		    Data1 = Data#blinds {
 			      small_blind_seat = Seat,
 			      small_blind_bet = Amount
 			     },
@@ -263,13 +264,13 @@ small_blind_handle_call(Player, Amount, Data) ->
 						{'SEATS', Seat, ?PS_BB_ACTIVE}),
 		    Data2 = ask_for_blind(Data1, 
 					  hd(BBPlayers), 
-					  Data1#data.big_blind_amount),
+					  Data1#blinds.big_blind_amount),
 		    {next_state, big_blind, Data2}
 	    end
     end.
 
 small_blind_handle_fold(Player, Data) ->
-    {ExpPlayer, _Seat, _ExpAmount} = Data#data.expected,
+    {ExpPlayer, _Seat, _ExpAmount} = Data#blinds.expected,
     if
 	ExpPlayer /= Player ->
 	    {next_state, small_blind, Data};
@@ -279,7 +280,7 @@ small_blind_handle_fold(Player, Data) ->
 
 small_blind_handle_timeout(Player, Data) ->
     cancel_timer(Data),
-    Game = Data#data.game,
+    Game = Data#blinds.game,
     GID = gen_server:call(Game, 'ID'),
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
     error_logger:warning_report(
@@ -308,8 +309,8 @@ small_blind_other(Event, Data) ->
     handle_event(Event, small_blind, Data).
 
 big_blind_handle_call(Player, Amount, Data) ->
-    Game = Data#data.game,
-    {ExpPlayer, Seat, ExpAmount} = Data#data.expected,
+    Game = Data#blinds.game,
+    {ExpPlayer, Seat, ExpAmount} = Data#blinds.expected,
     if
 	ExpPlayer /= Player ->
 	    {next_state, big_blind, Data};
@@ -321,17 +322,17 @@ big_blind_handle_call(Player, Amount, Data) ->
 		    timeout(Data, Player, big_blind);
 		true ->
 		    %% big blind posted
-		    SB = Data#data.small_blind_seat,
+		    SB = Data#blinds.small_blind_seat,
 		    BB = Seat,
 		    SBPlayer = gen_server:call(Game, {'PLAYER AT', SB}),
 		    BBPlayer = Player,
 		    gen_server:cast(Game, {'SET STATE', SBPlayer, ?PS_PLAY}),
 		    gen_server:cast(Game, {'SET STATE', BBPlayer, ?PS_PLAY}),
 		    %% record blind bets
-		    Small = Data#data.small_blind_bet,
+		    Small = Data#blinds.small_blind_bet,
 		    Big = Amount,
 		    if
-			Data#data.no_small_blind ->
+			Data#blinds.no_small_blind ->
 			    ok;
 			true ->
 			    gen_server:cast(Game, {'ADD BET', SBPlayer, Small})
@@ -340,12 +341,12 @@ big_blind_handle_call(Player, Amount, Data) ->
 		    %% adjust button if a heads-up game
 		    Seats = gen_server:call(Game, {'SEATS', ?PS_ACTIVE}),
 		    if
-			(length(Seats) == 2) and (Data#data.type /= irc) ->
+			(length(Seats) == 2) and (Data#blinds.type /= irc) ->
 			    Button = SB;
 			true ->
-			    Button = Data#data.button_seat
+			    Button = Data#blinds.button_seat
 		    end,
-		    Data1 = Data#data {
+		    Data1 = Data#blinds {
 			      big_blind_seat = BB,
 			      button_seat = Button,
 			      expected = {none, none, 0}
@@ -357,7 +358,7 @@ big_blind_handle_call(Player, Amount, Data) ->
 		    			   {?PP_NOTIFY_BET, SBPlayer, Small}}),
 		    gen_server:cast(Game, {'BROADCAST', 
 		    			   {?PP_NOTIFY_BET, BBPlayer, Big}}),
-		    Ctx = Data#data.context,
+		    Ctx = Data#blinds.context,
 		    Ctx1 = Ctx#texas {
 			     call = Amount,
 			     small_blind_seat = SB,
@@ -369,7 +370,7 @@ big_blind_handle_call(Player, Amount, Data) ->
     end.
 
 big_blind_handle_fold(Player, Data) ->
-    {ExpPlayer, _Seat, _ExpAmount} = Data#data.expected,
+    {ExpPlayer, _Seat, _ExpAmount} = Data#blinds.expected,
     if
 	ExpPlayer /= Player ->
 	    {next_state, big_blind, Data};
@@ -379,7 +380,7 @@ big_blind_handle_fold(Player, Data) ->
 
 big_blind_handle_timeout(Player, Data) ->
     cancel_timer(Data),
-    Game = Data#data.game,
+    Game = Data#blinds.game,
     GID = gen_server:call(Game, 'ID'),
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
     error_logger:warning_report(
@@ -413,23 +414,21 @@ big_blind_handle_other(Event, Data) ->
 
 timeout(Data, Player, State) ->
     cancel_timer(Data),
-    Game = Data#data.game,
+    Game = Data#blinds.game,
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
     case State of
 	small_blind ->
 	    Players = gen_server:call(Game, {'SEATS', Seat, ?PS_ACTIVE}),
-	    Amount = Data#data.small_blind_amount,
+	    Amount = Data#blinds.small_blind_amount,
 	    Expected = 2;
 	_ ->
 	    Temp = gen_server:call(Game, {'SEATS', Seat, ?PS_BB_ACTIVE}),
 	    %% remove small blind
-	    Players = lists:delete(Data#data.small_blind_seat, Temp),
-	    Amount = Data#data.big_blind_amount,
+	    Players = lists:delete(Data#blinds.small_blind_seat, Temp),
+	    Amount = Data#blinds.big_blind_amount,
 	    Expected = 1
     end,
     Players1 = lists:delete(Seat, Players),
-    %%gen_server:cast(Game, {?PP_LEAVE, Player}), % kick player
-    io:format("Player- ~w is Sitting out in Game No- ~w ~n",[Player,Game]),
     gen_server:cast(Game, {'SET STATE', Player, ?PS_SIT_OUT}),
     if
 	length(Players1) < Expected ->
@@ -449,11 +448,11 @@ join(Data, Player, SeatNum, BuyIn, State, PlayerState) ->
     {next_state, State, Data}.
 
 leave(Data, Player, State) ->
-    Game = Data#data.game,
+    Game = Data#blinds.game,
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
     if
 	(State == big_blind) and 
-	(Seat == Data#data.small_blind_seat) ->
+	(Seat == Data#blinds.small_blind_seat) ->
             %% fold and leave next time 
             %% a bet is requested from us
 	    gen_server:cast(Game, {?PP_LEAVE, Player});
@@ -464,16 +463,16 @@ leave(Data, Player, State) ->
     {next_state, State, Data}.
 
 sit_out(Data, Player, State) ->
-    gen_server:cast(Data#data.game, {'SET STATE', Player, ?PS_SIT_OUT}),
+    gen_server:cast(Data#blinds.game, {'SET STATE', Player, ?PS_SIT_OUT}),
     {next_state, State, Data}.
 
 come_back(Data, Player, State) ->
-    gen_server:cast(Data#data.game, {'SET STATE', Player, ?PS_PLAY}),
+    gen_server:cast(Data#blinds.game, {'SET STATE', Player, ?PS_PLAY}),
     {next_state, State, Data}.
 
 advance_button(Data) ->
-    Game = Data#data.game,
-    B = Data#data.button_seat,
+    Game = Data#blinds.game,
+    B = Data#blinds.button_seat,
     if
 	B == none ->
 	    %% first hand of the game
@@ -487,7 +486,7 @@ advance_button(Data) ->
 	    Players = gen_server:call(Game, {'SEATS', B, ?PS_ANY}),
 	    Button = hd(Players),
 	    %% big blind is bust
-	    BB = Data#data.big_blind_seat,
+	    BB = Data#blinds.big_blind_seat,
 	    BBPlayer = gen_server:call(Game, {'PLAYER AT', BB}),
 	    State = gen_server:call(Game, {'STATE', BBPlayer}),
 	    Bust = ?PS_FOLD == State
@@ -495,20 +494,20 @@ advance_button(Data) ->
     {Button, Bust}.
 
 ask_for_blind(Data, Seat, Amount) ->
-    Game = Data#data.game,
+    Game = Data#blinds.game,
     Player = gen_server:call(Game, {'PLAYER AT', Seat}),
     gen_server:cast(Game, {'REQUEST BET', Seat, Amount, 0, 0}),
     Data1 = restart_timer(Data, Player),
-    Data1#data {
+    Data1#blinds {
       expected = {Player, Seat, Amount}
      }.
 
 cancel_timer(Data) ->
-    catch cardgame:cancel_timer(Data#data.timer).
+    catch cardgame:cancel_timer(Data#blinds.timer).
 
 restart_timer(Data, Msg) ->
-    Timeout = gen_server:call(Data#data.game, 'TIMEOUT'),
-    Data#data {
+    Timeout = gen_server:call(Data#blinds.game, 'TIMEOUT'),
+    Data#blinds {
       timer = cardgame:start_timer(trunc(Timeout/2), Msg)
      }.
 
@@ -545,11 +544,11 @@ make_game_5_bust() ->
     make_game_5_bust(1, 2, 3).
 
 make_game_5_bust(Button_N, SB_N, BB_N) ->
-    A = test:make_player('A'),
-    B = test:make_player('B'),
-    C = test:make_player('C'),
-    D = test:make_player('D'),
-    E = test:make_player('E'),
+    A = test:make_player(<<"A">>),
+    B = test:make_player(<<"B">>),
+    C = test:make_player(<<"C">>),
+    D = test:make_player(<<"D">>),
+    E = test:make_player(<<"E">>),
     Players = [{A, 2}, {B, 4}, {C, 6}, {D, 8}, {E, 9}],
     Ctx = #texas {
       small_blind_seat = element(2, lists:nth(SB_N, Players)),
@@ -594,9 +593,10 @@ test3() ->
       big_blind_seat = element(2, B),
       call = 10
      },
-    ?match(success, ?waitmsg({'CARDGAME EXIT', Game, Ctx}, 1000)),
+    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players).
+    test:kill_players(Players),
+    ok.
 
 %%% http://www.homepokertourney.com/button.htm
 
@@ -613,9 +613,10 @@ test4() ->
       big_blind_seat = element(2, B),
       call = 10
      },
-    ?match(success, ?waitmsg({'CARDGAME EXIT', Game, Ctx}, 1000)),
+    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players).
+    test:kill_players(Players),
+    ok.
 
 %%% 3 players, small blind is bust
 
@@ -630,9 +631,10 @@ test5() ->
       big_blind_seat = element(2, A),
       call = 10
      },
-    ?match(success, ?waitmsg({'CARDGAME EXIT', Game, Ctx}, 1000)),
+    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players).
+    test:kill_players(Players),
+    ok.
 
 %%% 3 players, big blind is bust
 
@@ -647,9 +649,10 @@ test6() ->
       big_blind_seat = element(2, A),
       call = 10
      },
-    ?match(success, ?waitmsg({'CARDGAME EXIT', Game, Ctx}, 1000)),
+    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players).
+    test:kill_players(Players),
+    ok.
 
 %%% 5 players, small blind is bust
 
@@ -664,9 +667,10 @@ test7() ->
       big_blind_seat = element(2, D),
       call = 10
      },
-    ?match(success, ?waitmsg({'CARDGAME EXIT', Game, Ctx}, 1000)),
+    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players).
+    test:kill_players(Players),
+    ok.
 
 test8() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
@@ -679,9 +683,10 @@ test8() ->
       big_blind_seat = element(2, E),
       call = 10
      },
-    ?match(success, ?waitmsg({'CARDGAME EXIT', Game, Ctx}, 1000)),
+    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players).
+    test:kill_players(Players),
+    ok.
 
 %%% 5 players, big blind is bust
 
@@ -696,9 +701,10 @@ test9() ->
       big_blind_seat = element(2, D),
       call = 10
      },
-    ?match(success, ?waitmsg({'CARDGAME EXIT', Game, Ctx}, 1000)),
+    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players).
+    test:kill_players(Players),
+    ok.
 
 test10() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
@@ -711,9 +717,10 @@ test10() ->
       big_blind_seat = element(2, E),
       call = 10
      },
-    ?match(success, ?waitmsg({'CARDGAME EXIT', Game, Ctx}, 1000)),
+    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players).
+    test:kill_players(Players),
+    ok.
 
 %%% 5 players, both blinds are bust
 
@@ -729,9 +736,10 @@ test11() ->
       big_blind_seat = element(2, D),
       call = 10
      },
-    ?match(success, ?waitmsg({'CARDGAME EXIT', Game, Ctx}, 1000)),
+    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players).
+    test:kill_players(Players),
+    ok.
 
 test12() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
@@ -745,7 +753,8 @@ test12() ->
       big_blind_seat = element(2, E),
       call = 10
      },
-    ?match(success, ?waitmsg({'CARDGAME EXIT', Game, Ctx}, 1000)),
+    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players).
+    test:kill_players(Players),
+    ok.
 

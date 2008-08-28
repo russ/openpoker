@@ -60,7 +60,7 @@ game_id_to_pid(Cmd)
        element(1, Cmd) == ?PP_CHAT;
        element(1, Cmd) == ?PP_SEAT_QUERY;
        element(1, Cmd) == ?PP_NOTIFY_PRIVATE_CARDS ->
-    case find_game(element(2, Cmd)) of
+    case db:find_game(element(2, Cmd)) of
 	Pid when is_pid(Pid) ->
             setelement(2, Cmd, Pid);
 	Any ->
@@ -166,12 +166,5 @@ deep_list_to_tuple([], Acc) ->
 deep_list_to_tuple([H|T], Acc) ->
     deep_list_to_tuple(T, [deep_list_to_tuple(H)|Acc]).
 
-find_game(GID) ->
-    case db:find(game_xref, GID) of
-	{atomic, [XRef]} ->
-	    XRef#game_xref.proc_id;
-	Any ->
-	    io:format("find_game(~w): ~w~n", [GID, Any]),
-	    none
-    end.
-
+test() ->
+    ok.

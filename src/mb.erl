@@ -247,13 +247,12 @@ create_players([Player|Rest])
   when is_record(Player, irc_player) ->
     Nick = list_to_binary(Player#irc_player.nick),
     Balance = Player#irc_player.balance,
-    case db:find(player, nick, Nick) of
-	{atomic, [Player1]} ->
+    case db:find(player_info, nick, Nick) of
+	{atomic, [Info]} ->
 	    if 
-		Player1#player.balance /= Balance ->
-		    db:set(player, Player1#player.oid, 
-			   [{balance, Balance},
-			    {inplay, 0.0}]);
+		Info#player_info.balance /= Balance ->
+		    db:set(player_info, Info#player_info.pid, 
+			   [{balance, Balance}]);
 		true ->
 		    ok
 	    end;

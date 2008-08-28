@@ -2,10 +2,11 @@
 
 -module(db).
 
--export([test/0, set/3, get/3, inc/3, dec/3, move_amt/3]).
--export([delete/1, delete/2, find/1, find/2, find/3, find_game_xref/3]).
--export([setValue/3]).
+-export([test/0, write/1, set/3, get/3, inc/3, dec/3]).
+-export([delete/1, delete_pat/1, delete/2, find/1, find/2, find/3]).
+-export([find_game/1]).
 
+-include_lib("eunit/include/eunit.hrl").
 -include("test.hrl").
 -include("schema.hrl").
 
@@ -31,6 +32,10 @@ fieldnum(Field, [H|T], N) ->
 	    fieldnum(Field, T, N + 1)
     end.
 
+write(Rec) ->
+    F = fun() -> mnesia:write(Rec) end,
+    mnesia:transaction(F).
+                 
 %%% Update Field in Table with Value
 %%% using Key to lookup the record.
 %%% Fun is fun(OldFieldValue, Value)
@@ -104,29 +109,6 @@ set(Data, Fields, [{Field, Value}|Rest])
 	    set(Data1, Fields, Rest)
     end.
 
-%%%% this setValue method is used for Jinterface when value is updated in player account at time of login
-setValue(Table, Key, Values) 
-  when is_atom(Table),
-       is_list(Values) ->
-    Fields = mnesia:table_info(Table, attributes),
-    case find(Table, Key) of
-	{atomic, [Data]} ->
-	    setValue(Data, Fields, Values);
-	Any ->
-	    Any
-    end;
-setValue(Data, Fields, [Field, Value]) 
-  when is_tuple(Data),
-       is_list(Fields),
-       is_atom(Field) ->
-    case fieldnum(Field, Fields) of
-	none ->
-	    {atomic, {error, field_not_found}};
-	N ->
-	   Data1 = setelement(N + 1, Data, Value),
-	   mnesia:transaction(fun() -> mnesia:write(Data1) end),
-	   ok
-    end.
 %%% Retrieve value in Table 
 %%% using Key to lookup the record.
 
@@ -171,44 +153,6 @@ inc(Table, Key, Field)
     F = fun(Balance, Amount) -> Balance + Amount end,
     set(Table, Key, Field, F).
 
-move_amt(Table, Key, {From, To, Value}) 
-  when is_atom(Table),
-       is_atom(From),
-       is_atom(To),
-       is_number(Value) ->
-    Fields = mnesia:table_info(Table, attributes),
-    FromN = fieldnum(From, Fields),
-    ToN = fieldnum(To, Fields),
-    F = fun() ->
-		case mnesia:read({Table, Key}) of
-		    [] ->
-			{error, key_not_found};
-		    [Data] ->
-			FromVal = element(FromN + 1, Data),
-			ToVal = element(ToN + 1, Data),
-			if
-			    FromVal - Value < 0 ->
-				{error, out_of_balance};
-			    true ->
-				Data1 = setelement(FromN + 1,
-						   Data,
-						   FromVal - Value),
-				Data2 = setelement(ToN + 1,
-						   Data1,
-						   ToVal + Value),
-				mnesia:write(Data2)
-			end;
-		    Any ->
-			Any
-		end
-	end,
-    if
-	(FromN == none) or (ToN == none) ->
-	    {atomic, {error, field_not_found}};
-	true ->
-	    mnesia:transaction(F)
-    end.
-
 delete(Table) 
   when is_atom(Table) ->
     mnesia:clear_table(Table).
@@ -216,6 +160,13 @@ delete(Table)
 delete(Table, KeyVal) 
   when is_atom(Table) ->
     F = fun() -> mnesia:delete({Table, KeyVal}) end,
+    mnesia:transaction(F).
+
+delete_pat(Pat) ->
+    F = fun() -> 
+                Recs = mnesia:match_object(Pat),
+                lists:foreach(fun mnesia:delete_object/1, Recs)
+        end,
     mnesia:transaction(F).
 
 %%% Make a {table_name, '_', ...} pattern
@@ -232,11 +183,27 @@ makepat([], Acc) ->
 makepat([_H|T], Acc) ->
     makepat(T, ['_'|Acc]).
 
+find(Pat) 
+  when is_tuple(Pat) ->
+    F = fun() -> mnesia:match_object(Pat) end,
+    mnesia:transaction(F);
+    
 find(Table) 
   when is_atom(Table) ->
     Pat = makepat(Table),
-    F = fun() -> mnesia:match_object(Pat) end,
-    mnesia:transaction(F).
+    find(Pat).
+
+find(Pat, FieldNum) 
+  when is_tuple(Pat),
+       is_number(FieldNum) ->
+    case find(Pat) of
+        {atomic, [R]} ->
+            element(FieldNum, R);
+        {atomic, []} ->
+            {error, key_not_found};
+        Any ->
+            Any
+    end;
 
 %%% Lookup using primary key value
 
@@ -260,24 +227,16 @@ find(Table, Field, Value)
 		end,
 	    mnesia:transaction(F)
     end.
-    
-    %%%%% added to get table Info by passing the table name 
 
-find_game_xref(Table, Field, Value) 
-  when is_atom(Table),
-       is_atom(Field) ->
-    Fields = mnesia:table_info(Table, attributes),
-    case fieldnum(Field, Fields) of
-	none ->
-	    {atomic, {error, field_not_found}};
-	N ->
-	    F = fun() -> 
-			mnesia:index_read(Table, Value, N + 1) 
-		end,
-	    {atomic,Result}= mnesia:transaction(F),
-	    Result
+find_game(GID) ->
+    case db:find(game_xref, GID) of
+	{atomic, [XRef]} ->
+	    XRef#game_xref.proc_id;
+	_ ->
+	    none
     end.
 
+    
 %%% 
 %%% Test harness
 %%%
@@ -289,13 +248,13 @@ test() ->
     ok.
 
 test1() ->
-    ?match(none, fieldnum(foo, [])),
-    ?match(none, fieldnum(foo, [bar, baz])),
-    ?match(1, fieldnum(foo, [foo, bar, baz])),
-    ?match(3, fieldnum(baz, [foo, bar, baz])).
+    ?assertEqual(none, fieldnum(foo, [])),
+    ?assertEqual(none, fieldnum(foo, [bar, baz])),
+    ?assertEqual(1, fieldnum(foo, [foo, bar, baz])),
+    ?assertEqual(3, fieldnum(baz, [foo, bar, baz])).
 
 test2() ->
-    ?match({game_xref, '_', '_', '_', '_','_','_','_','_'}, 
+    ?assertEqual({game_xref, '_', '_', '_', '_','_','_','_','_'}, 
 	   makepat(game_xref)).
 
 test3() ->
@@ -307,37 +266,37 @@ test3() ->
     {atomic, ok} = mnesia:transaction(F),
     %% bad table name
     Result1 = (catch set(foo, 1, {max_login_errors, 3})),
-    ?match({'EXIT',{aborted,{no_exists,foo,attributes}}}, Result1),
+    ?assertEqual({'EXIT',{aborted,{no_exists,foo,attributes}}}, Result1),
     %% bad key value
     Result2 = set(cluster_config, 2, {max_login_errors, 3}),
-    ?match({atomic, {error, key_not_found}}, Result2),
+    ?assertEqual({atomic, {error, key_not_found}}, Result2),
     %% bad field name
     Result3 = set(cluster_config, 1, {foo, 3}),
-    ?match({atomic, {error, field_not_found}}, Result3),
+    ?assertEqual({atomic, {error, field_not_found}}, Result3),
     %% error 
     Fun1 = fun(_, _) -> {error, balance} end,
     Result4 = set(cluster_config, 1, {max_login_errors, 3}, Fun1),
-    ?match({atomic, {error, balance}}, Result4),
+    ?assertEqual({atomic, {error, balance}}, Result4),
     %% should work
     Result5 = set(cluster_config, 1, {max_login_errors, 3}),
-    ?match({atomic, ok}, Result5),
-    ?match({atomic, 3}, get(cluster_config, 1, max_login_errors)),
+    ?assertEqual({atomic, ok}, Result5),
+    ?assertEqual({atomic, 3}, get(cluster_config, 1, max_login_errors)),
     %% bump it up
     Result6 = inc(cluster_config, 1, {max_login_errors, 4}),
-    ?match({atomic, ok}, Result6),
-    ?match({atomic, 7}, get(cluster_config, 1, max_login_errors)),
+    ?assertEqual({atomic, ok}, Result6),
+    ?assertEqual({atomic, 7}, get(cluster_config, 1, max_login_errors)),
     %% bump it down
     Result7 = dec(cluster_config, 1, {max_login_errors, 3}),
-    ?match({atomic, ok}, Result7),
-    ?match({atomic, 4}, get(cluster_config, 1, max_login_errors)),
+    ?assertEqual({atomic, ok}, Result7),
+    ?assertEqual({atomic, 4}, get(cluster_config, 1, max_login_errors)),
     %% list of field values
     {atomic, ok} = set(cluster_config, 1, 
 		       [{logdir, "/tmp/foo"}, 
 			{max_login_errors, 10}]),
-    ?match({atomic, "/tmp/foo"}, get(cluster_config, 1, logdir)),
-    ?match({atomic, 10}, get(cluster_config, 1, max_login_errors)),
+    ?assertEqual({atomic, "/tmp/foo"}, get(cluster_config, 1, logdir)),
+    ?assertEqual({atomic, 10}, get(cluster_config, 1, max_login_errors)),
     %% clean up
-    ?match({atomic, ok}, delete(cluster_config, 1)).
+    ?assertEqual({atomic, ok}, delete(cluster_config, 1)).
 
 		  
 

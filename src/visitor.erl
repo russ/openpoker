@@ -12,12 +12,12 @@
 -include("proto.hrl").
 -include("schema.hrl").
 
--record(data, {
+-record(vis, {
 	  socket = none
 	 }).
 
 new() ->
-    #data {
+    #vis {
     }.
 
 start() ->
@@ -42,16 +42,10 @@ handle_cast('DISCONNECT', Data) ->
 
 handle_cast({'SOCKET', Socket}, Data) 
   when is_pid(Socket) ->
-    Data1 = Data#data {
+    Data1 = Data#vis {
 	      socket = Socket
 	     },
     {noreply, Data1};
-    
-handle_cast({'INPLAY-', _Amount}, Data) ->
-    {noreply, Data};
-    
-handle_cast({'INPLAY+', _Amount}, Data) ->
-    {noreply, Data};
     
 handle_cast({?PP_WATCH, Game}, Data) 
   when is_pid(Game) ->
@@ -99,13 +93,15 @@ handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
     {noreply, Data};
 
 handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
-    case db:find(player, PID) of
-	{atomic, [Player]} ->
+    I = db:find(player_info, PID),
+    P = db:find(player, PID),
+    case {I, P} of
+	{{atomic, [Info]}, {atomic, [Player]}} ->
 	    handle_cast({?PP_PLAYER_INFO, 
-			 Player#player.pid, 
-			 Player#player.inplay,
-			 Player#player.nick,
-			 Player#player.location}, Data);
+			 Player#player.proc_id, 
+                         0.0,
+			 Info#player_info.nick,
+			 Info#player_info.location}, Data);
 	_ ->
 	    oops
     end,
@@ -119,8 +115,8 @@ handle_cast(stop, Data) ->
 
 handle_cast(Event, Data) ->
     if 
-	Data#data.socket /= none ->
-	    Data#data.socket ! {packet, Event};
+	Data#vis.socket /= none ->
+	    Data#vis.socket ! {packet, Event};
 	true ->
 	    ok
     end,

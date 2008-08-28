@@ -84,11 +84,11 @@ code_change(_OldVsn, Limit, _Extra) ->
 
 raise_size(Limit, Player, Stage, GID) when ?GS_PREFLOP =:= Stage; 
                                            ?GS_FLOP =:= Stage ->
-    GameInplay = gen_server:call(Player, {'GAME INPLAY', GID}),
+    GameInplay = gen_server:call(Player, {'INPLAY', GID}),
     {Limit#no_limit.low, GameInplay};
 
 raise_size(Limit, Player, _Stage, GID) ->
-    GameInplay = gen_server:call(Player, {'GAME INPLAY', GID}),
+    GameInplay = gen_server:call(Player, {'INPLAY', GID}),
     {Limit#no_limit.high, GameInplay}.
 
 test() ->

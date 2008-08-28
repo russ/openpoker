@@ -12,7 +12,7 @@
 -include("common.hrl").
 -include("proto.hrl").
 
--record(data, {
+-record(monitor, {
 	  socket,
 	  host, 
 	  port,
@@ -28,7 +28,7 @@ start(GameServer, PollFreq) ->
 init([GameServer, PollFreq]) ->
     process_flag(trap_exit, true),
     {Host, Port} = gen_server:call(GameServer, 'WHERE'),
-    Data = #data {
+    Data = #monitor {
       host = Host,
       port = Port,
       poll_freq = PollFreq,
@@ -74,10 +74,10 @@ code_change(_OldVsn, Data, _Extra) ->
 handle_info_timeout(Data) ->
     {Time, {ok, Sock}} = timer:tc(tcp_server, 
 				  start_client, 
-				  [Data#data.host, Data#data.port, 1024]),
+				  [Data#monitor.host, Data#monitor.port, 1024]),
     gen_tcp:send(Sock, proto:write(?PP_PING)),
-    AvgTime = Data#data.avg_connect_time,
-    Data1 = Data#data {
+    AvgTime = Data#monitor.avg_connect_time,
+    Data1 = Data#monitor {
 	      socket = Sock,
 	      avg_connect_time = if
 				     AvgTime == nil ->
@@ -91,11 +91,11 @@ handle_info_timeout(Data) ->
 
 handle_info_pong(Data) ->
     PongTime = now(),
-    PingTime = Data#data.ping_time,
+    PingTime = Data#monitor.ping_time,
     Elapsed = timer:now_diff(PongTime, PingTime),
-    AvgTime = Data#data.avg_ping_time,
-    gen_tcp:close(Data#data.socket),
-    Data1 = Data#data {
+    AvgTime = Data#monitor.avg_ping_time,
+    gen_tcp:close(Data#monitor.socket),
+    Data1 = Data#monitor {
 	      socket = nil,
 	      avg_ping_time = if
 				  AvgTime == nil ->
@@ -105,11 +105,11 @@ handle_info_pong(Data) ->
 			      end
 	     },
     io:format("~s:~w: ~.6.0f/~.6.0f~n",
-	      [Data1#data.host,
-	       Data1#data.port,
-	       Data1#data.avg_connect_time,
-	       Data1#data.avg_ping_time]),
-    erlang:start_timer(Data1#data.poll_freq, self(), nil),
+	      [Data1#monitor.host,
+	       Data1#monitor.port,
+	       Data1#monitor.avg_connect_time,
+	       Data1#monitor.avg_ping_time]),
+    erlang:start_timer(Data1#monitor.poll_freq, self(), nil),
     {noreply, Data1}.
 	    
 

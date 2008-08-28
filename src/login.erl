@@ -8,146 +8,153 @@
 -include("test.hrl").
 -include("schema.hrl").
 
+login(Nick, Pass, Socket) 
+  when is_binary(Nick),
+       is_binary(Pass),
+       is_pid(Socket) -> % socket handler process
+    login(db:find(player_info, nick, Nick), [Nick, Pass, Socket]).
+
 login({atomic, []}, _) ->
     %% player not found
     {error, ?ERR_BAD_LOGIN};
 
-login({atomic, [Player]}, [_Nick, Pass|_] = Args) 
-  when is_record(Player, player) ->
+login({atomic, [Info]}, [_Nick, Pass|_] = Args) 
+  when is_record(Info, player_info) ->
+    PID = Info#player_info.pid,
+    Player = case db:find(player, PID) of
+                 {atomic, [P]} ->
+                     P;
+                 _ ->
+                     {atomic, ok} = db:delete(player, PID),
+                     #player{ pid = PID }
+             end,
     %% replace dead pids with none
     Player1 = Player#player {
-		socket = fix_pid(Player#player.socket),
-		pid = fix_pid(Player#player.pid)
+                socket = fix_pid(Player#player.socket),
+                pid = fix_pid(Player#player.pid)
 	       },
     %% check player state and login
-    Condition = check_player(Player1, [Pass], 
+    Condition = check_player(Info, Player1, [Pass], 
 			     [
-			      fun is_account_disabled/2,
-			      fun is_bad_password/2,
-			      fun is_player_busy/2,
-			      fun is_player_online/2,
-			      fun is_client_down/2,
-			      fun is_offline/2
+			      fun is_account_disabled/3,
+			      fun is_bad_password/3,
+			      fun is_player_busy/3,
+			      fun is_player_online/3,
+			      fun is_client_down/3,
+			      fun is_offline/3
 			     ]),
-    {Player2, Result} = login(Player1, Condition, Args),
-    F = fun() -> mnesia:write(Player2) end,
-    case mnesia:transaction(F) of
-	{atomic, ok} ->
+    {Player2, Info1, Result} = login(Info, Player1, Condition, Args),
+    case {db:write(Player2), db:write(Info1)} of
+	{{atomic, ok}, {atomic, ok}} ->
 	    Result;
 	_ ->
 	    {error, ?ERR_UNKNOWN}
     end.
 
-login(Nick, Pass, Socket) 
-  when is_list(Nick),
-       is_list(Pass) ->
-    login(list_to_binary(Nick), list_to_binary(Pass), Socket);
-
-login(Nick, Pass, Socket) 
-  when is_binary(Nick),
-       is_binary(Pass),
-       is_pid(Socket) -> % socket handler process
-    login(db:find(player, nick, Nick), [Nick, Pass, Socket]);
-
-login(Player, bad_password, _) ->
-    N = Player#player.login_errors + 1,
+login(Info, Player, bad_password, _) ->
+    N = Info#player_info.login_errors + 1,
     {atomic, MaxLoginErrors} = 
 	db:get(cluster_config, 0, max_login_errors),
     if
 	N > MaxLoginErrors ->
 	    %% disable account
-	    Player1 = Player#player {
-			disabled = true
-		       },
-	    {Player1, {error, ?ERR_ACCOUNT_DISABLED}};
+	    Info1 = Info#player_info { disabled = true },
+	    {Info1, Player, {error, ?ERR_ACCOUNT_DISABLED}};
 	true ->
-	    Player1 = Player#player {
-			login_errors = N
-		       },
-	    {Player1, {error, ?ERR_BAD_LOGIN}}
+	    Info1 = Info#player_info{ login_errors = N },
+	    {Info1, Player, {error, ?ERR_BAD_LOGIN}}
     end;
 
-login(Player, account_disabled, _) ->
-    {Player, {error, ?ERR_ACCOUNT_DISABLED}};
+login(Info, Player, account_disabled, _) ->
+    {Info, Player, {error, ?ERR_ACCOUNT_DISABLED}};
 
-login(Player, player_online, Args) ->
+login(Info, Player, player_online, Args) ->
     %% player is idle
-    logout(Player#player.oid),
-    login(Player, player_offline, Args);
+    logout(Player),
+    login(Info, Player, player_offline, Args);
 
-login(Player, client_down, [_, _, Socket]) ->
+login(Info, Player, client_down, [_, _, Socket]) ->
     %% tell player process to talk to the new socket
-    gen_server:cast(Player#player.pid, {'SOCKET', Socket}),
-    Player1 = Player#player {
-		socket = Socket
-	       },
-    {Player1, {ok, Player#player.pid}};
+    gen_server:cast(Player#player.proc_id, {'SOCKET', Socket}),
+    Player1 = Player#player{ socket = Socket },
+    {Info, Player1, {ok, Player#player.proc_id}};
 
-login(Player, player_busy, Args) ->
-    Temp = login(Player, client_down, Args),
-    Msg = {'RESEND UPDATES', Player#player.pid},
+login(Info, Player, player_busy, Args) ->
+    Temp = login(Info, Player, client_down, Args),
+    Msg = {'RESEND UPDATES', Player#player.proc_id},
     %% resend accumulated game updates
     lists:foreach(fun(Game) -> 
-                          cardgame:cast(Game, Msg) 
+                          case db:find_game(Game) of
+                              none ->
+                                  ok;
+                              Pid ->
+                                  cardgame:cast(Pid, Msg) 
+                          end
                   end,
-                  Player#player.games),
+                  gen_server:call(Player#player.proc_id, 'GAMES')),
     Temp;
 
-login(Player, player_offline, [Nick, _, Socket]) ->
+login(Info, Player, player_offline, [Nick, _, Socket]) ->
     %% start player process
     {ok, Pid} = player:start(Nick),
-    OID = gen_server:call(Pid, 'ID'),
+    ID = gen_server:call(Pid, 'ID'),
     gen_server:cast(Pid, {'SOCKET', Socket}),
     %% update player record
     Player1 = Player#player {
-		oid = OID,
-		pid = Pid,
-		socket = Socket
+		pid = ID,
+		proc_id = Pid,
+                socket = Socket
 	       },
-    {Player1, {ok, Pid}}.
+    {Info, Player1, {ok, Pid}}.
 
 %%% 
 %%% Check player state
 %%%
 
-check_player(Player, Args, [Guard|Rest]) ->
-    case Guard(Player, Args) of
+check_player(Info, Player, Args, [Guard|Rest]) ->
+    case Guard(Info, Player, Args) of
 	{true, Condition} ->
 	    Condition;
 	_ ->
-	    check_player(Player, Args, Rest)
+	    check_player(Info, Player, Args, Rest)
     end;
 
-check_player(_Player, _Args, []) ->
+check_player(_Info, _Player, _Args, []) ->
     %% fall through
     unknown_error.
 
-is_bad_password(Player, [Pass]) ->
+is_bad_password(Info, _, [Pass]) ->
     Hash = erlang:phash2(Pass, 1 bsl 32),
-    Match = Player#player.password == Hash,
+    Match = Info#player_info.password == Hash,
     {not Match, bad_password}.
 
-is_account_disabled(Player, _) ->
-    {Player#player.disabled, account_disabled}.
+is_account_disabled(Info, _, _) ->
+    {Info#player_info.disabled, account_disabled}.
 
-is_player_busy(Player, _) ->
-    {Online, _} = is_player_online(Player, []),
-    Playing = Player#player.games /= [],
+is_player_busy(Info, Player, _) ->
+    {Online, _} = is_player_online(Info, Player, []),
+    Games = if
+                Player#player.proc_id /= none ->
+                    gen_server:call(Player#player.proc_id, 'GAMES');
+                true ->
+                    []
+            end,
+    Playing = Games /= [],
     {Online and Playing, player_busy}.
 
-is_player_online(Player, _) ->
+is_player_online(_, Player, _) ->
     SocketAlive = Player#player.socket /= none,
-    PlayerAlive = Player#player.pid /= none,
+    PlayerAlive = Player#player.proc_id /= none,
     {SocketAlive and PlayerAlive, player_online}.
 
-is_client_down(Player, _) ->
+is_client_down(_, Player, _) ->
     SocketDown = Player#player.socket == none,
-    PlayerAlive = Player#player.pid /= none,
+    PlayerAlive = Player#player.proc_id /= none,
     {SocketDown and PlayerAlive, client_down}.
 
-is_offline(Player, _) ->
+is_offline(_, Player, _) ->
     SocketDown = Player#player.socket == none,
-    PlayerDown = Player#player.pid == none,
+    PlayerDown = Player#player.proc_id == none,
     {SocketDown and PlayerDown, player_offline}.
 
 fix_pid(Pid)
@@ -162,16 +169,18 @@ fix_pid(Pid)
 fix_pid(Pid) ->
     Pid.
 
-logout(OID) ->
-    case db:find(player, OID) of
+logout(ID)
+  when is_number(ID) ->
+    case db:find(player, ID) of
 	{atomic, [Player]} ->
-	    player:stop(Player#player.pid),
-	    {atomic, ok} = db:set(player, OID, 
-				  [{pid, none},
-				   {socket, none}]);
+            logout(Player);
 	_ ->
 	    oops
-    end.
+    end;
+
+logout(Player) 
+  when is_record(Player, player) ->
+    player:stop(Player#player.proc_id).
 
 %%% 
 %%% Handlers

@@ -16,12 +16,12 @@
 -include("test.hrl").
 -include("proto.hrl").
 
--record(data, {
+-record(showdown, {
 	  game
 	 }).
 
 init([Game]) ->
-    Data = #data {
+    Data = #showdown {
       game = Game
      },
     {ok, showdown, Data}.
@@ -49,7 +49,7 @@ handle_event(Event, State, Data) ->
 			       {line, ?LINE},
 			       {message, Event}, 
 			       {self, self()},
-			       {game, Data#data.game}]),
+			       {game, Data#showdown.game}]),
     {next_state, State, Data}.
         
 handle_sync_event(Event, From, State, Data) ->
@@ -58,7 +58,7 @@ handle_sync_event(Event, From, State, Data) ->
 			       {message, Event}, 
 			       {from, From},
 			       {self, self()},
-			       {game, Data#data.game}]),
+			       {game, Data#showdown.game}]),
     {next_state, State, Data}.
         
 handle_info(Info, State, Data) ->
@@ -66,7 +66,7 @@ handle_info(Info, State, Data) ->
 			       {line, ?LINE},
 			       {message, Info}, 
 			       {self, self()},
-			       {game, Data#data.game}]),
+			       {game, Data#showdown.game}]),
     {next_state, State, Data}.
 
 terminate(_Reason, _State, _Data) -> 
@@ -81,7 +81,7 @@ code_change(_OldVsn, State, Data, _Extra) ->
 %%%
 
 showdown_handle_start(Context, Data) ->
-    Game = Data#data.game,
+    Game = Data#showdown.game,
     GID = gen_server:call(Game, 'ID'),
     Seats = gen_server:call(Game, {'SEATS', ?PS_SHOWDOWN}),
     N = length(Seats),
@@ -90,8 +90,7 @@ showdown_handle_start(Context, Data) ->
 	    %% last man standing wins
 	    Total = gen_server:call(Game, 'POT TOTAL'),
 	    Player = gen_server:call(Game, {'PLAYER AT', hd(Seats)}),
-	    gen_server:cast(Player, {'INPLAY+', Total}),
-            gen_server:cast(Player, {'GAME INPLAY+', Total,GID}),
+            gen_server:cast(Player, {'INPLAY+', Total,GID}),
             PID = gen_server:call(Player, 'ID'),
 	    Event = {?PP_NOTIFY_WIN, Player, Total},
             PID = gen_server:call(Player, 'ID'),
@@ -110,9 +109,8 @@ showdown_handle_start(Context, Data) ->
         lists:map(F1, Seats),
             
 	    lists:foreach(fun({{Player, _, _, _}, Amount}) ->
-                                  gen_server:cast(Player, {'INPLAY+', Amount}),
-                                  gen_server:cast(Player, {'GAME INPLAY+', 
-                                                           Amount,GID}),
+                                  gen_server:cast(Player, {'INPLAY+', 
+                                                           Amount, GID}),
                                   Event = {?PP_NOTIFY_WIN, Player, Amount},
 				 gen_server:cast(Game, {'BROADCAST', Event})
 			  end, Winners)
@@ -125,7 +123,7 @@ showdown_handle_join(Player, SeatNum, BuyIn, Data) ->
     blinds:join(Data, Player, SeatNum, BuyIn, showdown, ?PS_FOLD).
 
 showdown_handle_leave(Player, Data) ->
-    gen_server:cast(Data#data.game, {?PP_LEAVE, Player, ?PS_ANY}),
+    gen_server:cast(Data#showdown.game, {?PP_LEAVE, Player, ?PS_ANY}),
     {next_state, showdown, Data}.
 
 showdown_handle_other(Event, Data) ->
