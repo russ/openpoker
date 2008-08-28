@@ -20,7 +20,8 @@
 -record(delayed, {
 	  game,
 	  context,
-	  delay
+	  delay,
+          timer
 	 }).
 
 init([Game, Delay]) ->
@@ -82,7 +83,8 @@ handle_info(Info, State, Data) ->
  			       {game, Data#delayed.game}]),
     {next_state, State, Data}.
 
-terminate(_Reason, _State, _Data) -> 
+terminate(_Reason, _State, Data) -> 
+    catch cardgame:cancel_timer(Data#delayed.timer),
     ok.
 
 code_change(_OldVsn, State, Data, _Extra) ->
@@ -94,11 +96,12 @@ code_change(_OldVsn, State, Data, _Extra) ->
 
 delayed_start_start(Context, Data) ->
     Delay = Data#delayed.delay,
-    cardgame:send_event_after(Delay, 'CHECK'),
+    Timer = cardgame:send_event_after(Delay, 'CHECK'),
     %% reset call amount
     Context1 = setelement(3, Context, 0),
     Data1 = Data#delayed {
-	      context = Context1
+	      context = Context1,
+              timer = Timer
 	     },
     {next_state, delayed_start, Data1}.
 

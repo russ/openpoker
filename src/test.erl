@@ -5,7 +5,7 @@
 -compile([export_all]).
 
 -export([all/0, make_players/1, make_test_game/3, 
-	make_player/1, install_trigger/3, kill_players/1]).
+	make_player/1, install_trigger/3]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -94,7 +94,7 @@ simple_seat_query_test() ->
     Z = cardgame:call(Game, 'JOINED'),
     ?assertEqual(1, Z),
     cardgame:stop(Game),
-    kill_players(Players),
+    cleanup_players(Players),
     ok.
 
 %%% More complex seat query
@@ -134,7 +134,7 @@ complex_seat_query_test() ->
                  Packet2),
     ?assertNot(none == proto:write({?PP_SEAT_STATE, GID, 1, ?SS_TAKEN, PID})),
     cardgame:stop(Game),
-    kill_players(Players),
+    cleanup_players(Players),
     ok.
     
 %%% Delayed start
@@ -149,7 +149,7 @@ delayed_start_test() ->
     cardgame:cast(Game, {'TIMEOUT', 0}),
     ?assertMsg({'CARDGAME EXIT', Game, #test{}}, 1000, []),
     cardgame:stop(Game),
-    kill_players(Players),
+    cleanup_players(Players),
     ok.
 
 %%% Player not found
@@ -359,9 +359,9 @@ find_empty_game_test() ->
 
 simple_game_simulation_test() ->
     flush(),
-    Host = "localhost", 
+    Host = "localhost",
     Port = port(),
-    {ok, Server} = server:start(Host, Port),
+    {ok, Server} = server:start(Host, Port, true),
     timer:sleep(100),
     %% find an empty game
     {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 2, 
@@ -371,22 +371,18 @@ simple_game_simulation_test() ->
     GID = cardgame:call(Game, 'ID'),
     %% create dummy players
     Data
-	= [{ID2, _}, {ID1, _}, _]
+	= [{_, ID2}, {_, ID1}, _]
 	= setup_game(Host, Port, GID,
-		      [{<<"test160-bot1">>, 1, ['BLIND', 'FOLD']},
-		       {<<"test160-bot2">>, 2, ['BLIND']}]),
+		      [{nick(), 1, ['BLIND', 'FOLD']},
+		       {nick(), 2, ['BLIND']}]),
+    timer:sleep(1000),
     %% make sure game is started
     ?assertMsg({'START', GID}, ?START_DELAY * 2, []),
-    %% check balances
-    ?assertEqual({atomic, 0.0}, db:get(player_info, ID1, balance)),
-    ?assertEqual(1000.0, db:find({inplay, GID, ID1, '_'}, #inplay.amount)),
-    ?assertEqual({atomic, 0.0}, db:get(player_info, ID2, balance)),
-    ?assertEqual(1000.0, db:find({inplay, GID, ID2, '_'}, #inplay.amount)),
     %% wait for game to end
     Winners = gb_trees:insert(2, 15.0, gb_trees:empty()),
     ?assertMsg({'END', GID, Winners}, ?PLAYER_TIMEOUT, []),
     timer:sleep(1000),
-    %% check balances again
+    %% check balances
     ?assertEqual({atomic, 995.0}, db:get(player_info, ID1, balance)),
     ?assertEqual({error, key_not_found}, 
                  db:find({inplay, GID, ID1, '_'}, #inplay.amount)),
@@ -395,7 +391,7 @@ simple_game_simulation_test() ->
                  db:find({inplay, GID, ID2, '_'}, #inplay.amount)),
     %% clean up
     cleanup_players(Data),
-    cardgame:cast(Game, stop),
+    cardgame:stop(Game),
     server:stop(Server),
     ok.
 
@@ -414,9 +410,7 @@ leave_after_sb_posted_test() ->
     cardgame:cast(Game, {'NOTE', leave_after_sb_posted_test}),
     GID = cardgame:call(Game, 'ID'),
     %% create dummy players
-    Data
-	= [{_ID2, _}, {_ID1, _}, _]
-	= setup_game(Host, Port, GID,
+    Data = setup_game(Host, Port, GID,
 		      [{<<"leave-after-sb-bot1">>, 1, ['BLIND', 'LEAVE']},
 		       {<<"leave-after-sb-bot2">>, 2, ['LEAVE']}]),
     %% make sure game is started
@@ -425,6 +419,7 @@ leave_after_sb_posted_test() ->
     %% clean up
     timer:sleep(2000),
     cleanup_players(Data),
+    cardgame:stop(Game),
     server:stop(Server),
     ok.
 
@@ -553,10 +548,8 @@ two_games_in_a_row_test() ->
     cardgame:cast(Game, {'NOTE', two_games_in_a_row_test}),
     GID = cardgame:call(Game, 'ID'),
     %% create dummy players
-    Data
-	= [{_ID2, _}, {_ID1, _}, _]
-	= setup_game(Host, Port, GID, 2, % games to play
-                     [{<<"test200-bot1">>, 1, ['BLIND', 'FOLD', 'BLIND', 'FOLD']},
+    Data = setup_game(Host, Port, GID, 2, % games to play
+                      [{<<"test200-bot1">>, 1, ['BLIND', 'FOLD', 'BLIND', 'FOLD']},
                       {<<"test200-bot2">>, 2, ['BLIND', 'BLIND', 'FOLD']}]),
     %% make sure game is started
     ?assertMsg({'START', GID}, ?START_DELAY * 2, []),
@@ -569,6 +562,7 @@ two_games_in_a_row_test() ->
     %% clean up
     timer:sleep(2000),
     cleanup_players(Data),
+    cardgame:stop(Game),
     server:stop(Server),
     ok.
 
@@ -589,13 +583,11 @@ two_games_with_leave_test() ->
     GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'REQUIRED', 3}),
     %% create dummy players
-    Data
-	= [{_ID2, _}, {_ID1, _}, {_ID3, _}, _]
-	= setup_game(Host, Port, GID, 1, % games to play
-                     [{<<"bot1">>, 1, ['BLIND', 'RAISE', 'CALL', 'CHECK', 'CHECK']},
-                      {<<"bot2">>, 2, ['BLIND', 'QUIT']},
-                      {<<"bot3">>, 3, ['RAISE', 'CALL', 'CALL', 'CHECK', 'CHECK']}
-                     ]),
+    Data = setup_game(Host, Port, GID, 1, % games to play
+                      [{<<"bot1">>, 1, ['BLIND', 'RAISE', 'CALL', 'CHECK', 'CHECK']},
+                       {<<"bot2">>, 2, ['BLIND', 'QUIT']},
+                       {<<"bot3">>, 3, ['RAISE', 'CALL', 'CALL', 'CHECK', 'CHECK']}
+                      ]),
     %% make sure game is started
     ?assertMsg({'START', GID}, ?START_DELAY * 2, []),
     %% wait for game to end
@@ -603,6 +595,7 @@ two_games_with_leave_test() ->
     %% clean up
     timer:sleep(2000),
     cleanup_players(Data),
+    cardgame:stop(Game),
     server:stop(Server),
     ok.
 
@@ -640,7 +633,7 @@ split_pot_test() ->
     %% create dummy players
     Actions1 = ['BLIND', 'CHECK', 'RAISE', 'CHECK', 'CHECK'],
     Actions2 = ['BLIND', 'CHECK', 'CALL', 'CHECK', 'CHECK'],
-    Data = [ {_, P2}, {_, P1}, {_, Obs} ]
+    Data = [ {P2, _}, {P1, _}, {Obs, _} ]
 	= setup_game(Host, Port, GID, 2, % games to play
                      [{<<"split-pot-bot1">>, 1, []},
                       {<<"split-pot-bot2">>, 2, []}
@@ -720,7 +713,7 @@ game_simulation_220_test() ->
     cardgame:cast(Game, {'REQUIRED', 3}),
     %% create dummy players
     Data 
-        = [{_, P3}, _, _, _]
+        = [{P3, _}, _, _, _]
 	= setup_game(Host, Port, GID, 1, % games to play
                      [{<<"test220-bot1">>, 1, ['BLIND', %1
                                            'CALL', %1
@@ -748,6 +741,7 @@ game_simulation_220_test() ->
     %% clean up
     timer:sleep(2000),
     cleanup_players(Data),
+    cardgame:stop(Game),
     server:stop(Server),
     ok.
 
@@ -774,14 +768,25 @@ dummy_game() ->
 %%% Utility
 %%%
 
-kill_players([]) ->
+cleanup_players([]) ->
     ok;
 
-kill_players([{Player, _}|Rest]) ->
-    ID = gen_server:call(Player, 'ID'),
-    player:stop(Player),
-    {atomic, ok} = db:delete(player, ID),
-    kill_players(Rest).
+cleanup_players([{0, _}|Rest]) ->
+    cleanup_players(Rest);
+
+cleanup_players([{Player, ID}|Rest]) 
+  when is_pid(Player) ->
+    Alive = is_process_alive(Player),
+    ID1 = if 
+              Alive ->
+                  gen_server:call(Player, 'ID'),
+                  player:stop(Player);
+              true ->
+                  ID
+          end,
+    {atomic, ok} = db:delete(player, ID1),
+    {atomic, ok} = db:delete(player_info, ID1),
+    cleanup_players(Rest).
 
 make_player(Nick) 
   when is_binary(Nick) ->
@@ -892,7 +897,7 @@ connect_observer(Host, Port, GID, GamesToWatch, Trace) ->
     gen_server:cast(Obs, {'GAMES TO PLAY', GamesToWatch}),
     ok = gen_server:call(Obs, {'CONNECT', Host, Port}, 15000),
     gen_server:cast(Obs, {?PP_WATCH, GID}),
-    {0, Obs}.
+    {Obs, 0}.
 
 connect_player(Nick, Host, Port, GID, SeatNum, GamesToPlay, Actions) ->
     {atomic, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
@@ -902,7 +907,7 @@ connect_player(Nick, Host, Port, GID, SeatNum, GamesToPlay, Actions) ->
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, 15000),
     gen_server:cast(Bot, {?PP_LOGIN, Nick, Nick}),
     gen_server:cast(Bot, {?PP_WATCH, GID}),
-    {ID, Bot}.
+    {Bot, ID}.
 
 setup_game(Host, Port, GID, Bots) ->
     setup_game(Host, Port, GID, 1, Bots).
@@ -933,17 +938,6 @@ setup_game(Host, Port, GID, Games, [{Nick, SeatNum, Actions}|Rest], Cleanup)
 
 setup_game(_Host, _Port, _GID, _GamesToPlay, [], Cleanup) ->
     Cleanup.
-
-cleanup_players([]) ->
-    ok;
-
-cleanup_players([{0, _}|Rest]) ->
-    cleanup_players(Rest);
-
-cleanup_players([{ID, Player}|Rest]) ->
-    gen_server:cast(Player, stop),
-    {atomic, ok} = db:delete(player, ID),
-    cleanup_players(Rest).
 
 nick() ->
     list_to_binary(pid_to_list(self()) ++ 

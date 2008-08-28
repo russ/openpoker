@@ -77,6 +77,12 @@ init([Host, Port, TestMode]) ->
     Client = #client {
       server = self()
      },
+    Games = if
+                TestMode ->
+                    [];
+                true ->
+                    start_games()
+            end,
     F = fun(Sock) -> parse_packet(Sock, Client) end, 
     tcp_server:stop(Port),
     {ok, _} = tcp_server:start_raw_server(Port, F, 10240, 10240),
@@ -84,7 +90,7 @@ init([Host, Port, TestMode]) ->
       host = Host,
       port = Port,
       avg = 0,
-      games = start_games(),
+      games = Games,
       test_mode = TestMode
      },
     {ok, Server}.

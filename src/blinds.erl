@@ -3,7 +3,7 @@
 -module(blinds).
 -behaviour(cardgame).
 
--export([stop/1, test/0]).
+-export([stop/1]).
 
 -export([init/1, terminate/3]).
 -export([handle_event/3, handle_info/3, 
@@ -558,19 +558,6 @@ make_game_5_bust(Button_N, SB_N, BB_N) ->
     Game = test:make_test_game(10, Players, Ctx, modules()),
     {Game, Players}.
 
-test() ->
-    test3(),
-    test4(),
-    test5(),
-    test6(),
-    test7(),
-    test8(),
-    test9(),
-    test10(),
-    test11(),
-    test12(),
-    ok.
-
 %% Both blinds are posted
 
 post_blinds_trigger(Game, Event, Pid) ->
@@ -583,7 +570,7 @@ post_blinds_trigger(Game, Event, Pid) ->
     end,
     Game.
 
-test3() ->
+headsup_test() ->
     {Game, Players} = make_game_heads_up(),
     [A, B] = Players,
     test:install_trigger(fun post_blinds_trigger/3, Game, [A, B]),
@@ -595,14 +582,14 @@ test3() ->
      },
     ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players),
+    test:cleanup_players(Players),
     ok.
 
 %%% http://www.homepokertourney.com/button.htm
 
 %%% 3 players, button is bust
 
-test4() ->
+three_players_button_bust_test() ->
     {Game, Players} = make_game_3_bust(),
     [A, B, C] = Players,
     cardgame:cast(Game, {'SET STATE', element(1, A), ?PS_FOLD}),
@@ -615,12 +602,12 @@ test4() ->
      },
     ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players),
+    test:cleanup_players(Players),
     ok.
 
 %%% 3 players, small blind is bust
 
-test5() ->
+three_players_sb_bust_test() ->
     {Game, Players} = make_game_3_bust(),
     [A, B, C] = Players,
     cardgame:cast(Game, {'SET STATE', element(1, B), ?PS_FOLD}),
@@ -633,12 +620,12 @@ test5() ->
      },
     ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players),
+    test:cleanup_players(Players),
     ok.
 
 %%% 3 players, big blind is bust
 
-test6() ->
+three_players_bb_bust_test() ->
     {Game, Players} = make_game_3_bust(),
     [A, B, C] = Players,
     cardgame:cast(Game, {'SET STATE', element(1, C), ?PS_FOLD}),
@@ -651,12 +638,12 @@ test6() ->
      },
     ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players),
+    test:cleanup_players(Players),
     ok.
 
 %%% 5 players, small blind is bust
 
-test7() ->
+five_players_sb_bust_test() ->
     {Game, Players} = make_game_5_bust(),
     [_, B, C, D, E] = Players,
     cardgame:cast(Game, {'SET STATE', element(1, B), ?PS_FOLD}),
@@ -669,10 +656,10 @@ test7() ->
      },
     ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players),
+    test:cleanup_players(Players),
     ok.
 
-test8() ->
+five_players_bust_test() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
     [_, B, C, D, E] = Players,
     cardgame:cast(Game, {'SET STATE', element(1, B), ?PS_FOLD}),
@@ -685,12 +672,12 @@ test8() ->
      },
     ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players),
+    test:cleanup_players(Players),
     ok.
 
 %%% 5 players, big blind is bust
 
-test9() ->
+five_players_bb_bust_test() ->
     {Game, Players} = make_game_5_bust(),
     [_, B, C, D, E] = Players,
     cardgame:cast(Game, {'SET STATE', element(1, C), ?PS_FOLD}),
@@ -703,10 +690,10 @@ test9() ->
      },
     ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players),
+    test:cleanup_players(Players),
     ok.
 
-test10() ->
+five_players_bust1_test() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
     [_, B, C, D, E] = Players,
     cardgame:cast(Game, {'SET STATE', element(1, C), ?PS_FOLD}),
@@ -719,12 +706,12 @@ test10() ->
      },
     ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players),
+    test:cleanup_players(Players),
     ok.
 
 %%% 5 players, both blinds are bust
 
-test11() ->
+five_players_blinds_bust_test() ->
     {Game, Players} = make_game_5_bust(),
     [_, B, C, D, E] = Players,
     cardgame:cast(Game, {'SET STATE', element(1, B), ?PS_FOLD}),
@@ -738,10 +725,10 @@ test11() ->
      },
     ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players),
+    test:cleanup_players(Players),
     ok.
 
-test12() ->
+five_players_blinds_bust1_test() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
     [_, B, C, D, E] = Players,
     cardgame:cast(Game, {'SET STATE', element(1, B), ?PS_FOLD}),
@@ -755,6 +742,6 @@ test12() ->
      },
     ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
     cardgame:stop(Game),
-    test:kill_players(Players),
+    test:cleanup_players(Players),
     ok.
 

@@ -209,6 +209,7 @@ init([Parent, GameType, SeatCount, LimitType, Context, Modules, TableName,Timeou
 	    {ok, dispatch, Ctx1, Timeout};
 
 	{stop, Reason} ->
+            io:format("Init: Stopping game: ~w~n", [Game]),
 	    game:stop(Game),
 	    {stop, Reason};
 
@@ -341,9 +342,6 @@ handle_info(Event, dispatch, Ctx) ->
     end.
 
 terminate(Reason, dispatch, Ctx) ->
-    GID = gen_server:call(Ctx#cardgame.game, 'ID'),
-    db:delete(game_xref, GID),
-    game:stop(Ctx#cardgame.game),
     if
  	Ctx#cardgame.stack /= [] ->
  	    {Module, _} = hd(Ctx#cardgame.stack),
@@ -352,7 +350,8 @@ terminate(Reason, dispatch, Ctx) ->
  	    Module:terminate(Reason, State, Data);
  	true ->
  	    ok
-    end.
+    end,
+    game:stop(Ctx#cardgame.game).
 
 code_change(OldVersion, dispatch, Ctx, Extra) ->
     {Module, _} = hd(Ctx#cardgame.stack),

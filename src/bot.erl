@@ -83,6 +83,9 @@ handle_call('ACTIONS', _From, Bot) ->
 handle_call('SOCKET', _From, Bot) ->
     handle_socket(Bot);
 
+handle_call('ID', _From, Bot) ->
+    handle_id(Bot);
+
 handle_call(Event, From, Bot) ->
     handle_other(Event, From, Bot).
 
@@ -144,6 +147,9 @@ handle_actions(Bot) ->
 
 handle_socket(Bot) ->
     {reply, Bot#bot.socket, Bot}.
+
+handle_id(Bot) ->
+    {reply, Bot#bot.player, Bot}.
 
 handle_other(Event, From, Bot) ->
     error_logger:info_report([{module, ?MODULE}, 
