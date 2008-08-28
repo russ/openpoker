@@ -72,6 +72,7 @@ create_game_test() ->
                                 100,
                                 1000),
     GID = cardgame:call(Game, 'ID'),
+    cardgame:cast(Game, {'NOTE', create_game_test}),
     ?assert(is_number(GID)),
     ?assertEqual(0, cardgame:call(Game, 'JOINED')),
     ?assertEqual({atomic, Game}, db:get(game_xref, GID, proc_id)),
@@ -87,6 +88,7 @@ simple_seat_query_test() ->
     Players = [{Player, _}] = make_players(1),
     Game = make_game(2, Players),
     X = cardgame:call(Game, 'SEAT QUERY'),
+    cardgame:cast(Game, {'NOTE', simple_seat_query_test}),
     ?assertEqual([{1, ?SS_TAKEN, Player},
                   {2, ?SS_EMPTY, none}], X),
     Z = cardgame:call(Game, 'JOINED'),
@@ -103,6 +105,7 @@ complex_seat_query_test() ->
     %% make sure we are notified
     gen_server:cast(Player, {'SOCKET', self()}),
     Game = make_game(Players),
+    cardgame:cast(Game, {'NOTE', complex_seat_query_test}),
     GID = cardgame:call(Game, 'ID'),
     PID = gen_server:call(Player, 'ID'),
     {packet, Packet} = receive
@@ -142,6 +145,7 @@ delayed_start_test() ->
     Game = make_test_game(Players, 
 			  #test{},
 			  [{delayed_start, [0]}]),
+    cardgame:cast(Game, {'NOTE', delayed_start_test}),
     cardgame:cast(Game, {'TIMEOUT', 0}),
     ?assertMsg({'CARDGAME EXIT', Game, #test{}}, 1000, []),
     cardgame:stop(Game),
@@ -363,18 +367,16 @@ simple_game_simulation_test() ->
     {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 2, 
 				{?LT_FIXED_LIMIT, 10, 20},
                                 100, 1000),
+    cardgame:cast(Game, {'NOTE', simple_game_simulation_test}),
     GID = cardgame:call(Game, 'ID'),
-    io:format("111~n"),
     %% create dummy players
     Data
 	= [{ID2, _}, {ID1, _}, _]
 	= setup_game(Host, Port, GID,
 		      [{<<"test160-bot1">>, 1, ['BLIND', 'FOLD']},
 		       {<<"test160-bot2">>, 2, ['BLIND']}]),
-    io:format("222~n"),
     %% make sure game is started
     ?assertMsg({'START', GID}, ?START_DELAY * 2, []),
-    io:format("333~n"),
     %% check balances
     ?assertEqual({atomic, 0.0}, db:get(player_info, ID1, balance)),
     ?assertEqual(1000.0, db:find({inplay, GID, ID1, '_'}, #inplay.amount)),
@@ -409,6 +411,7 @@ leave_after_sb_posted_test() ->
     {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 2, 
 				{?LT_FIXED_LIMIT, 10, 20},
                                 100, 1000),
+    cardgame:cast(Game, {'NOTE', leave_after_sb_posted_test}),
     GID = cardgame:call(Game, 'ID'),
     %% create dummy players
     Data
@@ -547,6 +550,7 @@ two_games_in_a_row_test() ->
     {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 2, 
 				{?LT_FIXED_LIMIT, 10, 20},
                                 100, 1000),
+    cardgame:cast(Game, {'NOTE', two_games_in_a_row_test}),
     GID = cardgame:call(Game, 'ID'),
     %% create dummy players
     Data
@@ -581,6 +585,7 @@ two_games_with_leave_test() ->
     {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 3, 
 				{?LT_FIXED_LIMIT, 10, 20},
                                 100, 1000),
+    cardgame:cast(Game, {'NOTE', two_games_with_leave_test}),
     GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'REQUIRED', 3}),
     %% create dummy players

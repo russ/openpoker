@@ -50,7 +50,8 @@ behaviour_info(Other) ->
 	  statedata,
 	  parent,
 	  context,
-	  original_context
+	  original_context,
+          note
 	 }).
 
 start(GameType, SeatCount, LimitType) ->
@@ -294,6 +295,9 @@ dispatch(Event, From, Ctx) ->
 handle_event('RESTART', dispatch, Ctx) ->
     handle_event_restart(Ctx);
 
+handle_event({'CAST', {'NOTE', Note}}, dispatch, Ctx) ->
+    handle_event_note(Note, Ctx);
+
 handle_event({'CAST', Event = {'RIG', _}}, dispatch, Ctx) ->
     handle_event_cast_rigged(Event, Ctx);
 
@@ -419,6 +423,9 @@ cast(CardGameRef, Event) ->
 %%%
 %%% Handlers
 %%%
+
+handle_event_note(Note, Ctx) ->
+    {next_state, dispatch, Ctx#cardgame{ note = Note }}.
 
 handle_event_restart(Ctx) ->
     start_next_module(Ctx, Ctx#cardgame.modules).
