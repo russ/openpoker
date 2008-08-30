@@ -326,7 +326,7 @@ setup_players(_IRC_ID, _GID, _Host, _Port, _Players, 0, Acc) ->
 setup_players(IRC_ID, GID, Host, Port, [Player|Rest], N, Acc) ->
     %% start bot
     Nick = list_to_binary(Player#irc_player.nick),
-    {ok, Bot} = bot:start(IRC_ID, Nick, N, Player#irc_player.balance),
+    {ok, Bot} = bot:start(Nick, IRC_ID, N, Player#irc_player.balance),
     Pass = <<"foo">>,
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, 15000),
     gen_server:cast(Bot, {'SET ACTIONS', Player#irc_player.actions}),
@@ -553,7 +553,7 @@ find_server(Sock) ->
 	{tcp, Sock, Bin} ->
 	    case proto:read(Bin) of 
 		{?PP_HANDOFF, Port, Host} ->
-		    {Host, Port}
+		    {binary_to_list(Host), Port}
 	    end;
 	{error, closed} ->
 	    io:format("Error retrieving gateway reply~n"),
@@ -610,14 +610,14 @@ setup(Host) ->
 
 setup() ->
     schema:install(),
-    mb:create_players(),
-    mb:setup(localhost).
+    create_players(),
+    setup(localhost).
 
 test() ->
     test(10).
 
 test(N) ->
-    mb:test(localhost, 3000, N).
+    test(localhost, 3000, N).
 
 cleanup() ->
     mnesia:start(),
