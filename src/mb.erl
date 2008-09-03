@@ -684,7 +684,7 @@ start_game(Host, Port, Game, Delay)
     receive
 	{start_game, Result} ->
 	    Result
-    after 12000 ->
+    after 100000 ->
 	    start_game_timeout
     end.
 
