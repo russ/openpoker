@@ -50,7 +50,7 @@
 	  deck, 
 	  %% shared cards list
 	  board = [], 
-	  %% pot process
+	  %% pot structure
 	  pot,
 	  %% game observers
 	  observers = [], 
@@ -71,7 +71,6 @@
 
 new(OID, FSM, GameType, SeatCount, LimitType) ->
     {ok, Deck} = deck:start_link(),
-    {ok, Pot} = pot:start_link(),
     {TypeOfGame,_,_} = LimitType, 
     {ok, Limit} = case LimitType of
 		      {?LT_FIXED_LIMIT, Low, High} ->
@@ -86,7 +85,7 @@ new(OID, FSM, GameType, SeatCount, LimitType) ->
       fsm = FSM,
       type = GameType,
       deck = Deck,
-      pot = Pot,
+      pot = pot:new(),
       seats = create_seats(SeatCount),
       limit = Limit,
       limit_type = TypeOfGame
@@ -125,7 +124,7 @@ init([FSM, GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers])
 
 stop(Game)
   when is_pid(Game) ->
-    gen_server:cast(Game, stop).
+    gen_server:cast(Game, {stop, self()}).
 
 terminate(_Reason, Game) ->
     dispose_seats(Game),
@@ -134,7 +133,6 @@ terminate(_Reason, Game) ->
     %% the stop message directly to the process.
     gen_server:cast(Game#game.limit, stop),
     deck:stop(Game#game.deck),
-    pot:stop(Game#game.pot),
     %% remove ourselves from the db
     db:delete(game_xref, Game#game.gid),
     ok.
@@ -221,7 +219,8 @@ handle_cast({'REQUEST BET', SeatNum, Call, RaiseMin, RaiseMax}, Game) ->
 handle_cast({'RESEND UPDATES', Player}, Game) ->
     handle_cast_resend_updates(Player, Game);
 
-handle_cast(stop, Game) ->
+handle_cast({stop, FSM}, Game) 
+  when FSM == Game#game.fsm ->
     handle_cast_stop(Game);
 
 handle_cast(Event, Game) ->
@@ -325,13 +324,13 @@ code_change(_OldVsn, Game, _Extra) ->
 handle_cast_reset(Game) ->
     broadcast_inplay(Game),
     gen_server:cast(Game#game.deck, 'RESET'),
-    gen_server:cast(Game#game.pot, 'RESET'),
     Game1 = Game#game {
 	      board = [],
 	      call = 0,
 	      raise_count = 0,
 	      seqnum = 0,
-	      event_history = []
+	      event_history = [],
+              pot = pot:reset(Game#game.pot)
 	     },
      reset_hands(Game1),
      Game2 = reset_bets(Game1),
@@ -500,9 +499,9 @@ handle_cast_reset_state(Source, Target, Game) ->
     {noreply, Game1}.
 
 handle_cast_new_stage(Game) ->
-    gen_server:cast(Game#game.pot, 'NEW STAGE'),
     Game1 = reset_bets(Game),
-    {noreply, Game1}.
+    Pot = Game1#game.pot,
+    {noreply, Game1#game{ pot = pot:new_stage(Pot) }}.
 
 handle_cast_add_bet(Player, Amount, Game) ->
     SeatNum = gb_trees:get(Player, Game#game.xref),
@@ -525,10 +524,11 @@ handle_cast_add_bet(Player, Amount, Game) ->
 		    AllIn = false,
 		    Game1 = Game
 	    end,
-	    gen_server:cast(Game1#game.pot, {'ADD BET', Player, Amount, AllIn}),
+            Pot = pot:add(Game1#game.pot, Player, Amount, AllIn),
             gen_server:cast(Player, {'INPLAY-', Amount,GID}),
 	    NewBet = Seat#seat.bet + Amount,
 	    Game2 = Game1#game {
+                      pot = Pot,
 		      seats = setelement(SeatNum,
 					 Game1#game.seats,
 					 Seat#seat {
@@ -616,7 +616,7 @@ handle_call_blinds(Game) ->
 
 handle_call_raise_size(Player, Stage, Game) ->
     GID = Game#game.gid,
-    PotSize = gen_server:call(Game#game.pot, 'TOTAL'),
+    PotSize = pot:total(Game#game.pot),
     Reply = gen_server:call(Game#game.limit,
                             {'RAISE SIZE', GID, PotSize, Player, Stage}),
     {reply, Reply, Game}.
@@ -670,12 +670,10 @@ handle_call_rank_hands(Game) ->
     {reply, rank_hands(Game, Seats), Game}.
 
 handle_call_pots(Game) ->
-    Pots = gen_server:call(Game#game.pot, 'SIDE POTS'),
-    {reply, Pots, Game}.
+    {reply, pot:pots(Game#game.pot), Game}.
 
 handle_call_pot_total(Game) ->
-    Total = gen_server:call(Game#game.pot, 'TOTAL'),
-    {reply, Total, Game}.
+    {reply, pot:total(Game#game.pot), Game}.
 
 handle_call_seats_from(StartFrom, Mask, Game) ->
     {reply, get_seats(Game, StartFrom, Mask), Game}.

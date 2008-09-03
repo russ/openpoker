@@ -1,12 +1,9 @@
 %%% Copyright (C) 2005-2008 Wager Labs, SA
 
 -module(pot).
--behaviour(gen_server).
 
--export([init/1, handle_call/3, handle_cast/2, 
-	 handle_info/2, terminate/2, code_change/3]).
-
--export([start/0, start_link/0, stop/1]).
+-export([new/0, reset/1, new_stage/1, split/3,
+         add/4, pots/1, total/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test.hrl").
@@ -23,134 +20,48 @@
 	 }).
 
 new_side_pot(AllInAmt, Members) ->
-    SidePot = #side_pot{ 
+    #side_pot{ 
       all_in = AllInAmt, 
       members = Members 
-     },
-    SidePot.
+     }.
     
-new_side_pot(AllInAmt) when is_number(AllInAmt) ->
+new_side_pot(AllInAmt) 
+  when is_number(AllInAmt) ->
     new_side_pot(AllInAmt, gb_trees:empty());
 
-new_side_pot(Pot) when is_record(Pot, side_pot) ->
+new_side_pot(Pot) 
+  when is_record(Pot, side_pot) ->
     new_side_pot(Pot#side_pot.all_in, Pot#side_pot.members).
 
 new_side_pot() ->
     new_side_pot(0, gb_trees:empty()).
 
-new_pot() ->
+new() ->
     #pot {}.
 
-start() ->
-    gen_server:start(pot, [], []).
+reset(Pot) 
+  when is_record(Pot, pot) ->
+    new().
 
-start_link() ->
-    gen_server:start_link(pot, [], []).
-
-init(_) ->
-    process_flag(trap_exit, true),
-    {ok, new_pot()}.
-
-stop(PotRef) ->
-    gen_server:cast(PotRef, stop).
-
-terminate(normal, _Pot) ->
-    ok.
-
-handle_cast('RESET', _Pot) ->
-    handle_cast_reset();
-
-handle_cast('NEW STAGE', Pot) ->
-    handle_cast_new_stage(Pot);
-
-handle_cast({'SPLIT', Player, Amount}, Pot) ->
-    handle_cast_split(Player, Amount, Pot);
-
-handle_cast(stop, Pot) ->
-    handle_cast_stop(Pot);
-
-handle_cast({'ADD BET', Player, Amount, IsAllIn}, Pot) ->
-    handle_cast_add_bet(Player, Amount, IsAllIn, Pot);
-
-handle_cast(Event, Pot) ->
-    handle_cast_other(Event, Pot).
-
-handle_call('SIDE POTS', _From, Pot) ->
-    handle_call_side_pots(Pot);
-
-handle_call('TOTAL', _From, Pot) ->
-    handle_call_total(Pot);
-
-handle_call(Event, From, Pot) ->
-    handle_call_other(Event, From, Pot).
-
-handle_info({'EXIT', _Pid, _Reason}, Pot) ->
-    %% child exit?
-    {noreply, Pot};
-
-handle_info(Info, Pot) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {pot, self()}, 
-			      {message, Info}]),
-    {noreply, Pot}.
-
-code_change(_OldVsn, Pot, _Extra) ->
-    {ok, Pot}.
-
-%%%
-%%% Handlers
-%%%
-
-handle_cast_reset() ->
-    {noreply, new_pot()}.
-
-handle_cast_new_stage(Pot) ->
+new_stage(Pot)
+  when is_record(Pot, pot) ->
     Inactive = Pot#pot.inactive 
 	++ Pot#pot.active
 	++ [Pot#pot.current],
-    NewPot = Pot#pot { 
-	       active = [], 
-	       inactive = Inactive, 
-	       current = new_side_pot()
-	      },
-    {noreply, NewPot}.
+    Pot#pot { 
+      active = [], 
+      inactive = Inactive, 
+      current = new_side_pot()
+     }.
 
-handle_cast_split(Player, Amount, Pot) ->
-    {noreply, split(Pot, Player, Amount)}.
-
-handle_cast_stop(Pot) ->
-    {stop, normal, Pot}.
-
-handle_cast_add_bet(Player, Amount, IsAllIn, Pot) ->
-    {NewPot, 0} = add_bet(Pot, Player, Amount, IsAllIn),
-    {noreply, NewPot}.
-
-handle_cast_other(Event, Pot) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {pot, self()}, 
-			      {message, Event}]),
-    {noreply, Pot}.
-
-handle_call_side_pots(Pot) ->
-    Pots = [{total(P), P#side_pot.members} || P <- side_pots(Pot)],
-    {reply, Pots, Pot}.
-
-handle_call_total(Pot) ->
-    {reply, total(Pot), Pot}.
-
-handle_call_other(Event, From, Pot) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {pot, self()}, 
-			      {message, Event}, 
-			      {from, From}]),
-    {noreply, Pot}.
-
-%%%
-%%% Utility
-%%%
+pots(Pot)
+  when is_record(Pot, pot) ->
+    [{total(P), P#side_pot.members} || P <- side_pots(Pot)].
+    
+add(Pot, Player, Amount, IsAllIn)
+  when is_record(Pot, pot) ->
+    {P, 0} = add_bet(Pot, Player, Amount, IsAllIn),
+    P.
 
 %% Ensure that player belongs to the pot
 
@@ -301,7 +212,8 @@ update_counter(Key, Amount, Tree) ->
 %%% Test suite
 %%%
 
-is_member(Pot, Player) when record(Pot, side_pot) ->
+is_member(Pot, Player) 
+  when record(Pot, side_pot) ->
     gb_trees:is_defined(Player, Pot#side_pot.members).
 
 %% Pot is split, Delta > 0
@@ -360,7 +272,7 @@ pot_split_test() ->
 %% % ;;; http://www.homepokertourney.com/allin_examples.htm
 
 all_in_example5_test() ->
-    Pot = new_pot(),
+    Pot = new(),
     { Pot1, Amt1 } = add_bet(Pot, 'A', 100),
     ?assertEqual(0, Amt1),
     { Pot2, Amt2 } = add_bet(Pot1, 'B', 60, true),
@@ -373,7 +285,7 @@ all_in_example5_test() ->
     ?assertEqual(true, is_member(hd(Pot2#pot.active), 'B')).
 
 all_in_example6_test() ->
-    Pot = new_pot(),
+    Pot = new(),
     { Pot1, 0 } = add_bet(Pot, 'A', 100),
     { Pot2, 0 } = add_bet(Pot1, 'B', 100),
     { Pot3, 0 } = add_bet(Pot2, 'C', 60, true),
@@ -387,7 +299,7 @@ all_in_example6_test() ->
     ?assertEqual(true, is_member(hd(Pot3#pot.active), 'C')).
     
 all_in_example7_test() ->
-    Pot = new_pot(),
+    Pot = new(),
     { Pot1, 0 } = add_bet(Pot, 'A', 100),
     { Pot2, 0 } = add_bet(Pot1, 'B', 60, true),
     { Pot3, 0 } = add_bet(Pot2, 'C', 100),
@@ -401,7 +313,7 @@ all_in_example7_test() ->
     ?assertEqual(true, is_member(hd(Pot3#pot.active), 'C')).
     
 all_in_example8_test() ->
-    Pot = new_pot(),
+    Pot = new(),
     { Pot1, 0 } = add_bet(Pot, 'A', 100),
     { Pot2, 0 } = add_bet(Pot1, 'B', 60, true),
     { Pot3, 0 } = add_bet(Pot2, 'C', 100),
@@ -431,7 +343,7 @@ all_in_example8_test() ->
     ?assertEqual(false, is_member(Side3, 'B')).
 
 all_in_example9_test() ->
-    Pot = new_pot(),
+    Pot = new(),
     { Pot1, 0 } = add_bet(Pot, 'A', 10),
     { Pot2, 0 } = add_bet(Pot1, 'B', 10),
     { Pot3, 0 } = add_bet(Pot2, 'C', 7, true),
@@ -455,7 +367,7 @@ all_in_example9_test() ->
     ?assertEqual(false, is_member(Side1, 'C')).
     
 all_in_example10_test() ->
-    Pot = new_pot(),
+    Pot = new(),
     { Pot1, 0 } = add_bet(Pot, 'A', 10),
     { Pot2, 0 } = add_bet(Pot1, 'B', 10),
     { Pot3, 0 } = add_bet(Pot2, 'C', 7, true),
@@ -483,7 +395,7 @@ all_in_example10_test() ->
     ?assertEqual(false, is_member(Side2, 'C')).
 
 all_in_example11_test() ->
-    Pot = new_pot(),
+    Pot = new(),
     { Pot1, 0 } = add_bet(Pot, 'A', 5, true),
     { Pot2, 0 } = add_bet(Pot1, 'B', 10),
     { Pot3, 0 } = add_bet(Pot2, 'C', 8, true),
@@ -508,7 +420,7 @@ all_in_example11_test() ->
     ?assertEqual(false, is_member(Side2, 'C')).
     
 all_in_example12_test() ->
-    Pot = new_pot(),
+    Pot = new(),
     { Pot1, 0 } = add_bet(Pot, 'A', 10),
     { Pot2, 0 } = add_bet(Pot1, 'B', 10),
     { Pot3, 0 } = add_bet(Pot2, 'C', 7, true),
@@ -527,7 +439,7 @@ all_in_example12_test() ->
     ?assertEqual(false, is_member(Side2, 'C')).
 
 all_in_example13_test() ->
-    Pot = new_pot(),
+    Pot = new(),
     { Pot1, 0 } = add_bet(Pot, 'A', 20),
     { Pot2, 0 } = add_bet(Pot1, 'B', 10),
     ?assertEqual(30, total(Pot2)).
