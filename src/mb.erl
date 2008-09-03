@@ -715,6 +715,9 @@ profile() ->
 
 profile(N) ->
     setup(),
-    fprof:apply(mb, test, [localhost, 3000, N]),
-    fprof:profile([{dump, []}]),
-    fprof:analyse([{dest, []}, {cols, 150}, {totals, true}]). 
+    fprof:apply(mb, test, [localhost, 3000, N], 
+                [{file, "/db2/mb.trace"},
+                 verbose
+                ]).
+    %%fprof:profile([{dump, []}]),
+    %%fprof:analyse([{dest, []}, {cols, 150}, {totals, true}]). 
