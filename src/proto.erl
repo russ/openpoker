@@ -24,13 +24,22 @@
 read(Data) ->
     {ok, L, []} = rfc4627:decode(Data),
     T = read_check(deep_list_to_tuple(L)),
-    read(T, size(T)).
+    read(Data, T).
 
-read(Data, 1) ->
-    element(1, Data);
+read(Data, none) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {data, Data}, 
+                               {result, none}
+                               ]),
+    none;
 
-read(Data, _) ->
-    Data.
+read(_Data, T) 
+  when size(T) == 1->
+    element(1, T);
+
+read(_, T) ->
+    T.
 
 write(Data) when not is_tuple(Data) ->
     write({Data});
