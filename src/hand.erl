@@ -1,28 +1,28 @@
 %%% Copyright (C) 2005-2008 Wager Labs, SA
 
 -module(hand).
--behaviour(gen_server).
 
--export([init/1, handle_call/3, handle_cast/2, 
-	 handle_info/2, terminate/2, code_change/3]).
+-export([new/0, new/1, new/2, set/2, add/2, cards/1, rank/1]).
 
--export([start/0, start_link/0, stop/1, test/0, describe/1]).
-
--export([make_card/1, face/1, suit/1, print_bin/1, print_rep/1]).
+-export([make_card/1, face/1, suit/1, print_bin/1, 
+         print_rep/1, describe/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test.hrl").
 
 -record(hand, {
 	  id, 
-	  cards, 
-	  rank,
-	  score,
-	  high
+	  cards = [], 
+	  rank = none,
+	  score = 0,
+	  high = none
 	 }).
 
 new() ->
     new(0, []).
+
+new(Id) ->
+    new(Id, []).
 
 new(Id, Cards) ->
     #hand { 
@@ -30,107 +30,21 @@ new(Id, Cards) ->
      cards = Cards 
     }.
 
-start() ->
-    gen_server:start(hand, [], []).
+set(Hand, Id) ->
+    Hand#hand{ id = Id }.
 
-start_link() ->
-    gen_server:start_link(hand, [], []).
+cards(Hand) 
+  when is_record(Hand, hand) ->
+    {Hand#hand.id, Hand#hand.cards}.
 
-init(_) ->
-    process_flag(trap_exit, true),
-    {ok, new()}.
-
-stop(HandRef) ->
-    gen_server:cast(HandRef, stop).
-
-terminate(normal, _Hand) ->
-    ok.
-
-handle_cast({'ADD CARD', Card}, Hand) ->
-    handle_cast_add_card(Card, Hand);
-
-handle_cast({'RESET', Id}, Hand) ->
-    handle_cast_reset(Id, Hand);
-
-handle_cast(stop, Hand) ->
-    handle_cast_stop(Hand);
-
-handle_cast(Event, Hand) ->
-    handle_cast_other(Event, Hand).
-
-handle_call('CARDS', _From, Hand) ->
-    handle_call_cards(Hand);
-
-handle_call('RANK', _From, Hand) ->
-    handle_call_rank(Hand);
-
-handle_call(Event, From, Hand) ->
-    handle_call_other(Event, From, Hand).
-
-handle_info({'EXIT', _Pid, _Reason}, Hand) ->
-    %% child exit?
-    {noreply, Hand};
-
-handle_info(Info, Hand) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {hand, self()}, 
-			      {message, Info}]),
-    {noreply, Hand}.
-
-code_change(_OldVsn, Hand, _Extra) ->
-    {ok, Hand}.
-
-%%
-%% Handlers
-%%
-
-handle_cast_add_card(Card, Hand) ->
-    NewHand = add(Hand, Card), 
-    {noreply, NewHand}.
-
-handle_cast_reset(Id, Hand) ->
-    NewHand = Hand#hand {
-		id = Id,
-		cards = [],
-		rank = none,
-		score = 0,
-		high = none
-	       },
-    {noreply, NewHand}.
-
-handle_cast_stop(Hand) ->
-    {stop, normal, Hand}.
-
-handle_cast_other(Event, Hand) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {hand, self()}, 
-			      {message, Event}]),
-    {noreply, Hand}.
-
-handle_call_cards(Hand) ->
-    {reply, {Hand#hand.id, Hand#hand.cards}, Hand}.
-
-handle_call_rank(Hand) ->
-    NewHand = rank(Hand),
+rank(Hand)
+  when is_record(Hand, hand) ->
+    NewHand = do_rank(Hand),
     Id = NewHand#hand.id,
     Value = rank_value(NewHand#hand.rank),
     High = NewHand#hand.high,
     Score = NewHand#hand.score,
-    {reply, {Id, Value, High, Score}, NewHand}.
-
-handle_call_other(Event, From, Hand) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {hand, self()}, 
-			      {message, Event}, 
-			      {from, From}]),
-    {noreply, Hand}.
-
-%%
-%% Utility
-%%
+    {Id, Value, High, Score}.
 
 describe({8, High, _Score}) ->
     "straight flush high " 
@@ -190,7 +104,7 @@ add(Hand, Card) ->
       cards = [Card|Hand#hand.cards]
      }.
 
-rank(Hand) ->
+do_rank(Hand) ->
     Rep = make_rep(Hand),
     {Rank, High, Score} = score(Rep),
     Hand#hand {
@@ -488,32 +402,7 @@ suit(Suit) when is_number(Suit) ->
 %%% Test suite
 %%%
 
-test() ->
-    test_make_rep(),
-    test_rank_1(),
-    test_rank_2(),
-    test_rank_3(),
-    test_rank_4(),
-    test_rank_5(),
-    test_rank_6(),
-    test_rank_7(),
-    test_rank_8(),
-    test_rank_9(),
-    test_winner_1(),
-    test_winner_2(),
-    test_winner_3(),
-    test_winner_4(),
-    test_winner_5(),
-    test_winner_6(),
-    test_winner_7(),
-    test_winner_8(),
-    test_winner_9(),
-    test_winner_10(),
-    test_winner_11(),
-    test_winner_12(),
-    ok.
-
-test_make_rep() ->
+make_rep_test() ->
     %%  AKQJT98765432A
     [2#00000010000000,
      2#00101000011000,
@@ -524,7 +413,7 @@ test_make_rep() ->
 -define(score(Cards),
 	score(make_rep(make_cards(Cards)))).
 
-test_rank_1() ->
+rank_high_card_test() ->
     ?assertEqual({junk, 2#00111011000000, 0},
 	   ?score("4D JH 5D 8C QD TD 7H")),
     ?assertEqual({junk, 2#11000110010000, 0},
@@ -532,7 +421,7 @@ test_rank_1() ->
     ?assertEqual({junk, 2#00110010011000, 0},
 	   ?score("4C JH 5C 8D QC 2C 3D")).
     
-test_rank_2() ->
+rank_pair_test() ->
     ?assertEqual({pair, 2#00000000000100, 2#01100100000000},
 	   ?score("KD 3S 5H 3D 6C QH 9S")),
     ?assertEqual({pair, 2#10000000000000, 2#01000100010000},
@@ -540,7 +429,7 @@ test_rank_2() ->
     ?assertEqual({pair, 2#00000000000100, 2#01011000000000},
 	   ?score("9S JH 5D TS 3C KC 3H")).
 
-test_rank_3() ->
+rank_two_pair_test() ->
     ?assertEqual({two_pair, 2#01100000000000, 2#00010000000000},
 	   ?score("QC KD JD QD JC 5C KC")),
     ?assertEqual({two_pair, 2#00000001100000, 2#00010000000000},
@@ -552,7 +441,7 @@ test_rank_3() ->
     ?assertEqual({two_pair, 2#00010000010000, 2#01000000000000},
 	   ?score("9S JH 5D JS 5C KC 3D")).
 
-test_rank_4() ->
+rank_three_kind_test() ->
     ?assertEqual({three_kind, 2#00100000000000, 2#01000100000000},
 	   ?score("KH 9S 5H QD QC QH 3S")),
     ?assertEqual({three_kind, 2#01000000000000, 2#10000100000000},
@@ -560,7 +449,7 @@ test_rank_4() ->
     ?assertEqual({three_kind, 2#00100000000000, 2#01001000000000},
 	   ?score("KS TS QD QS QH 4C 5D")).
 
-test_rank_5() ->
+rank_straight_test() ->
     ?assertEqual({straight, 2#01111100000000, 0},
 	   ?score("KC QS JH TC 9C 4D 3S")),
     ?assertEqual({straight, 2#11111000000000, 0},
@@ -572,7 +461,7 @@ test_rank_5() ->
     ?assertEqual({straight, 2#00000011111000, 0},
 	   ?score("5H 4S JC 8S 7D 6C 3C")).
 
-test_rank_6() ->
+rank_flush_test() ->
     ?assertEqual({flush, 2#00110000011010, 0},
 	   ?score("4D JD 5D JC QD 2D 7H")),
     ?assertEqual({flush, 2#11000100011000, 0},
@@ -580,7 +469,7 @@ test_rank_6() ->
     ?assertEqual({flush, 2#00110000011100, 0},
 	   ?score("4C JC 5C 8D QC 3C 7S")).
 
-test_rank_7() ->
+rank_full_house_test() ->
     ?assertEqual({full_house, (2#00010000000000 bsl 16) bor 2#00100000000000, 0},
  	   ?score("4D JS 5H JD JC QH QS")),
     ?assertEqual({full_house, (2#10000000000000 bsl 16) bor 2#01000000000000, 0},
@@ -590,7 +479,7 @@ test_rank_7() ->
     ?assertEqual({full_house, (2#00100000000000 bsl 16) bor 2#00001000000000, 0},
 	   ?score("TD QH TH TC 6C QD QC")).
 
-test_rank_8() ->
+rank_four_kind_test() ->
     ?assertEqual({four_kind, 2#00100000000000, 2#10000000000000},
 	   ?score("4D AS 5H QD QC QH QS")),
     ?assertEqual({four_kind, 2#01000000000000, 2#10000000000000},
@@ -598,7 +487,7 @@ test_rank_8() ->
     ?assertEqual({four_kind, 2#00100000000000, 2#01000000000000},
 	   ?score("KS TS QD QS QH QC 5D")).
 
-test_rank_9() ->
+rank_straight_flush_test() ->
     ?assertEqual({straight_flush, 2#01111100000000, 0},
 	   ?score("KC QC JC TC 9C 4D AS")),
     ?assertEqual({straight_flush, 2#11111000000000, 0},
@@ -606,7 +495,7 @@ test_rank_9() ->
     ?assertEqual({straight_flush, 2#01111100000000, 0},
 	   ?score("KS QS JS TS 9S AD 7S")).
 
-test_winner_1() ->
+high_card_win_test() ->
     S1 = ?score("4D JH 5D 8C QD TD 7H"),
     S2 = ?score("8C AD 5H 3S KD 9D 4D"),
     S3 = ?score("4C JH 5C 8D QC 2C 3D"),
@@ -617,7 +506,7 @@ test_winner_1() ->
     ?assertEqual(true, S2 > S3),
     ?assertEqual(true, S1 > S3).
 
-test_winner_2() ->
+pair_win_test() ->
     S1 = ?score("KD 3S 5H 3D 6C QH 9S"),
     S2 = ?score("AC 2D 5D AS 4H 9D KD"),
     S3 = ?score("9S JH 5D TS 3C KC 3H"),
@@ -628,7 +517,7 @@ test_winner_2() ->
     ?assertEqual(true, S2 > S3),
     ?assertEqual(true, S1 > S3).
 
-test_winner_3() ->
+two_pair_win_test() ->
     S1 = ?score("4D 3S 5H JD JC QH 5S"),
     S2 = ?score("AC 2D 5D AS 5H 9D 4D"),
     S3 = ?score("9S JH 5D JS 5C KC 3D"),
@@ -638,8 +527,8 @@ test_winner_3() ->
     ?assertEqual(true, S2 > S1),
     ?assertEqual(true, S2 > S3),
     ?assertEqual(true, S3 > S1).
-    
-test_winner_4() ->
+
+three_kind_win_test() ->    
     S1 = ?score("KH 9S 5H QD QC QH 3S"),
     S2 = ?score("AC KC KD KS 7H 9D 4D"),
     S3 = ?score("KS TS QD QS QH 4C 5D"),
@@ -650,7 +539,7 @@ test_winner_4() ->
     ?assertEqual(true, S2 > S3),
     ?assertEqual(true, S3 > S1).
 
-test_winner_5() ->
+straight_win_test() ->
     S1 = ?score("KC QS JH TC 9C 4D 3S"),
     S2 = ?score("AC KS QH JC TC 9D 4D"),
     S3 = ?score("KS QD JS TC 9S 2D 7S"),
@@ -661,7 +550,7 @@ test_winner_5() ->
     ?assertEqual(true, S2 > S3),
     ?assertEqual(true, S1 == S3).
 
-test_winner_6() ->
+flush_win_test() ->
     S1 = ?score("4D JD 5D JC QD 2D 7H"),
     S2 = ?score("8C AD 5D AS KD 9D 4D"),
     S3 = ?score("4C JC 5C 8D QC 3C 7S"),
@@ -675,7 +564,7 @@ test_winner_6() ->
     ?assertEqual(true, S3 > S1),
     ?assertEqual(true, S4 > S1).
 
-test_winner_7() ->
+four_kind_win_test() ->
     S1 = ?score("4D AS 5H QD QC QH QS"),
     S2 = ?score("AC KC KD KS KH 9D 4D"),
     S3 = ?score("KS TS QD QS QH QC 5D"),
@@ -686,7 +575,7 @@ test_winner_7() ->
     ?assertEqual(true, S2 > S3),
     ?assertEqual(true, S1 > S3).
 
-test_winner_8() ->
+straight_flush_win_test() ->
     S1 = ?score("KC QC JC TC 9C 4D AS"),
     S2 = ?score("AC KC QC JC TC 9D 4D"),
     S3 = ?score("KS QS JS TS 9S AD 7S"),
@@ -697,7 +586,7 @@ test_winner_8() ->
     ?assertEqual(true, S2 > S3),
     ?assertEqual(true, S1 == S3).
 
-test_winner_9() ->
+full_house_win_test() ->
     S1 = ?score("4D JS 5H JD JC QH QS"),
     S2 = ?score("AC AD KD AS KH 9D 4D"),
     S3 = ?score("3S JH JD JS KH KC 5D"),
@@ -708,21 +597,21 @@ test_winner_9() ->
     ?assertEqual(true, S2 > S3),
     ?assertEqual(true, S3 > S1).
 
-test_winner_10() ->
+two_pair_win1_test() ->
     S1 = ?score("5C TC 7H KH 5S TS KS"),
     S2 = ?score("5C TC 7H KH 5S KC TH"),
     ?assertEqual(two_pair, element(1, S1)),
     ?assertEqual(two_pair, element(1, S2)),
     ?assertEqual(true, S1 == S2).
 
-test_winner_11() ->    
+high_card_win1_test() ->
     S1 = ?score("KH TC 9H 7D 6H 5D 2S"),
     S2 = ?score("KH TC 9H 7H 6H 3D 2S"),
     ?assertEqual(junk, element(1, S1)),
     ?assertEqual(junk, element(1, S2)),
     ?assertEqual(true, S1 == S2).
 
-test_winner_12() ->    
+full_house_win1_test() ->
     S1 = ?score("2H 2C 5H 5S 5C 7C 4D"),
     S2 = ?score("2H 2C 5H 5S 5D 4D 2D"),
     ?assertEqual(full_house, element(1, S1)),

@@ -127,7 +127,6 @@ stop(Game)
     gen_server:cast(Game, {stop, self()}).
 
 terminate(_Reason, Game) ->
-    dispose_seats(Game),
     %% limit can be any of fixed, pot or no limit.
     %% since we don't know the module we send
     %% the stop message directly to the process.
@@ -332,11 +331,11 @@ handle_cast_reset(Game) ->
 	      event_history = [],
               pot = pot:reset(Game#game.pot)
 	     },
-     reset_hands(Game1),
-     Game2 = reset_bets(Game1),
-     ResetMask = ?PS_ANY band (bnot ?PS_WAIT_BB),
-     Game3 = reset_state(Game2, ResetMask, ?PS_PLAY),
-     {noreply, Game3}.
+    Seats = reset_hands(Game1#game.seats),
+    Game2 = reset_bets(Game1#game{ seats = Seats }),
+    ResetMask = ?PS_ANY band (bnot ?PS_WAIT_BB),
+    Game3 = reset_state(Game2, ResetMask, ?PS_PLAY),
+    {noreply, Game3}.
     
 handle_cast_timeout(Timeout, Game) ->
     Game1 = Game#game { 
@@ -465,11 +464,12 @@ handle_cast_leave_mask(Player, Mask, Game) ->
 handle_cast_draw(Player, Card, Game) ->
     SeatNum = gb_trees:get(Player, Game#game.xref),
     Seat = element(SeatNum, Game#game.seats),
-    gen_server:cast(Seat#seat.hand, {'ADD CARD', Card}),
+    Hand = hand:add(Seat#seat.hand, Card),
+    Seats = setelement(SeatNum, Game#game.seats, Seat#seat{ hand = Hand }),
     GID = Game#game.gid,
     gen_server:cast(Player, {?PP_NOTIFY_DRAW, GID, Card, Game#game.seqnum}),
     Game1 = broadcast(Game, {?PP_NOTIFY_PRIVATE, Player}),
-    {noreply, Game1}.
+    {noreply, Game1#game{ seats = Seats }}.
 
 handle_cast_draw_shared(Card, Game) ->
     Game1 = Game#game {
@@ -588,7 +588,7 @@ handle_call_shared(Game) ->
 handle_call_private_cards(Player, Game) ->
     SeatNum = gb_trees:get(Player, Game#game.xref),
     Seat = element(SeatNum, Game#game.seats),
-    {_,GameCards} = gen_server:call(Seat#seat.hand,'CARDS'),
+    {_,GameCards} = hand:cards(Seat#seat.hand),
     N = erlang:length(GameCards),
     PrivateCards = [lists:nth(N,GameCards),lists:nth(N-1,GameCards)],
     {reply, PrivateCards, Game}.
@@ -704,16 +704,12 @@ rank_hands(Game, Seats) ->
 	end,
     Hands = lists:map(F, Seats),
     Cards = Game#game.board,
-    F1 = fun(Card) ->
-		 F2 = fun(Hand) ->
-			      gen_server:cast(Hand, {'ADD CARD', Card})
-		      end,
-		 lists:foreach(F2, Hands)
+    F1 = fun(Card, Acc) ->
+		 F2 = fun(Hand) -> hand:add(Hand, Card) end, 
+		 lists:map(F2, Acc)
 	 end,
-    lists:foreach(F1, Cards),
-    lists:map(fun(Hand) ->
-		      gen_server:call(Hand, 'RANK')
-	      end, Hands).
+    Hands1 = lists:foldl(F1, Hands, Cards),
+    lists:map(fun hand:rank/1, Hands1).
 
 %% Initialize seats
 
@@ -725,35 +721,15 @@ create_seats(Seats, I) when I =:= 0 ->
     Seats;
 
 create_seats(Seats, I) ->
-    {ok, Hand} = hand:start_link(),
     Seat = #seat {
       player = none,
       bet = 0,
-      hand = Hand,
+      hand = hand:new(),
       state = ?PS_EMPTY,
       cmd_que = []
      },
     NewSeats = setelement(I, Seats, Seat),
     create_seats(NewSeats, I - 1).
-
-%% Cleanup seats
-
-dispose_seats(Game) ->
-    Seats = Game#game.seats,
-    if 
-	Seats =/= none ->
-	    dispose_seats(Seats, size(Seats));
-	true ->
-	    bad
-    end.
-
-dispose_seats(_Seats, 0) ->
-    ok;
-
-dispose_seats(Seats, Count) ->
-    Seat = element(Count, Seats),
-    hand:stop(Seat#seat.hand),
-    dispose_seats(Seats, Count - 1).
 
 %% Reset state
 
@@ -825,16 +801,17 @@ reset_bets(Game, Count) ->
 	    
 %% Reset hands
 
-reset_hands(Game) ->
-    reset_hands(Game, size(Game#game.seats)).
+reset_hands(Seats) ->
+    reset_hands(Seats, size(Seats)).
 
-reset_hands(_, 0) ->
-    ok;
+reset_hands(Seats, 0) ->
+    Seats;
 
-reset_hands(Game, Count) ->
-    Seat = element(Count, Game#game.seats),
-    gen_server:cast(Seat#seat.hand, {'RESET', Seat#seat.player}),
-    reset_hands(Game, Count - 1).
+reset_hands(Seats, Count) ->
+    Seat = element(Count, Seats),
+    Player = Seat#seat.player,
+    Seats1 = setelement(Count, Seats, Seat#seat{ hand = hand:new(Player) }),
+    reset_hands(Seats1, Count - 1).
 	    
 %% Create a list of seats matching a certain state
 
@@ -953,7 +930,7 @@ join_player(Game, Player, SeatNum, State) ->
     XRef = Game#game.xref,
     XRef1 = gb_trees:insert(Player, SeatNum, XRef),
     %% assign hand owner
-    gen_server:cast(Seat#seat.hand, {'RESET', Player}),
+    Hand = hand:set(Seat#seat.hand, Player),
     %% remove from the list of observers
     Observers = lists:delete(Player, Game#game.observers),
     Game#game {
@@ -963,6 +940,7 @@ join_player(Game, Player, SeatNum, State) ->
 			 Seat#seat {
 			   player = Player,
 			   state = State,
+                           hand = Hand,
                            cmd_que = []
 			  }),
       observers = Observers
