@@ -1,12 +1,8 @@
 %%% Copyright (C) 2005-2008 Wager Labs, SA
 
 -module(deck).
--behaviour(gen_server).
 
--export([init/1, handle_call/3, handle_cast/2, 
-	 handle_info/2, terminate/2, code_change/3]).
-
--export([start/0, start_link/0, stop/1, test/0]).
+-export([new/0, reset/1, rig/2, draw/1, test/0]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -22,104 +18,31 @@ new() ->
      cards = shuffle(make_deck())
     }.
 
-start() ->
-    gen_server:start(deck, [], []).
-
-start_link() ->
-    gen_server:start_link(deck, [], []).
-
-init(_) ->
-    process_flag(trap_exit, true),
-    {ok, new()}.
-
-stop(DeckRef) ->
-    gen_server:cast(DeckRef, stop).
-
-terminate(normal, _Data) ->
-    ok.
-
-handle_cast(stop, Data) ->
-    handle_cast_stop(Data);
-
-handle_cast('RESET', Data) ->
-    handle_cast_reset(Data);
-
-handle_cast({'RIG', Cards}, Data) ->
-    handle_cast_rig(Cards, Data);
-
-handle_cast(Event, Data) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {deck, self()}, 
-			      {message, Event}]),
-    {noreply, Data}.
-
-handle_call('DRAW', _From, Data) ->
-    handle_call_draw(Data);
-
-handle_call(Event, From, Data) ->
-    handle_call_other(Event, From, Data).
-
-handle_info({'EXIT', _Pid, _Reason}, Data) ->
-    %% child exit?
-    {noreply, Data};
-
-handle_info(Info, Data) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {deck, self()}, 
-			      {message, Info}]),
-    {noreply, Data}.
-
-code_change(_OldVsn, Deck, _Extra) ->
-    {ok, Deck}.
-
-%%%
-%%% Handlers
-%%%
-
-handle_cast_stop(Data) ->
-    {stop, normal, Data}.
-
-handle_cast_reset(Data) ->
-    Data1 = case Data#deck.rigged of
-		[] ->
-		    %%io:format("Deck is not rigged~n"),
-		    new();
-		Cards ->
-		    %%io:format("Deck is rigged with ~w~n", [Cards]),
-		    Data#deck {
-		      cards = Cards
-		     }
-	    end,
-    {noreply, Data1}.
-
-handle_cast_rig(Cards, Data) ->
-    Data1 = Data#deck {
-	      rigged = Cards,
-	      cards = Cards
-	     },
-    {noreply, Data1}.
-
-handle_call_draw(Data) ->
-    if
-	length(Data#deck.cards) > 0 ->
-	    [Card|Rest] = Data#deck.cards,
-	    Data1 = Data#deck {
-		      cards = Rest
-		     },
-	    {reply, Card, Data1};
-	true ->
-	    {reply, none, Data}
+reset(Deck) 
+  when is_record(Deck, deck) ->
+    case Deck#deck.rigged of
+        [] ->
+            new();
+        Cards ->
+            Deck#deck{ cards = Cards }
     end.
 
-handle_call_other(Event, From, Data) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {deck, self()}, 
-			      {message, Event}, 
-			      {from, From}]),
-    {noreply, Data}.
+rig(Deck, Cards)
+  when is_record(Deck, deck) ->
+    Deck#deck {
+      rigged = Cards,
+      cards = Cards
+     }.
+
+draw(Deck)
+  when is_record(Deck, deck) ->
+    draw(Deck, Deck#deck.cards).
+
+draw(_, []) ->
+    none;
+
+draw(Deck, [H|T]) ->
+    {Deck#deck{ cards = T }, H}.
 
 make_deck() ->
     Face = [ two, 

@@ -88,14 +88,13 @@ code_change(_OldVsn, State, Data, _Extra) ->
 
 deal_cards_start(Context, Data) ->
     Game = Data#deal.game,
-    Deck = gen_server:call(Game, 'DECK'),
     case Data#deal.type of
 	private ->
 	    B = element(2, Context),
 	    Seats = gen_server:call(Game, {'SEATS', B, ?PS_STANDING}),
-	    deal_private(Game, Deck, Seats, Data#deal.n);
+	    deal_private(Game, Seats, Data#deal.n);
 	shared ->
-	    deal_shared(Game, Deck, Data#deal.n)
+	    deal_shared(Game, Data#deal.n)
     end,
     {stop, {normal, Context}, Data}.
 
@@ -116,30 +115,23 @@ deal_cards_other(Event, Data) ->
 %%% Utility
 %%%
 
-deal_shared(_Game, _Deck, 0) ->
+deal_shared(_Game, 0) ->
     ok;
 
-deal_shared(Game, Deck, N) ->
-    Card = gen_server:call(Deck, 'DRAW'),
-    gen_server:cast(Game, {'DRAW SHARED', Card}),
-    deal_shared(Game, Deck, N - 1).
+deal_shared(Game, N) ->
+    gen_server:cast(Game, 'DRAW SHARED'),
+    deal_shared(Game, N - 1).
 
-deal_private(_Game, _Deck, _Seats, 0) ->
+deal_private(_Game, _Seats, 0) ->
     ok;
 
-deal_private(Game, Deck, Seats, N) ->
+deal_private(Game, Seats, N) ->
     F = fun(Seat) ->
-		Card = gen_server:call(Deck, 'DRAW'),
 		Player = gen_server:call(Game, {'PLAYER AT', Seat}),
-		%%
-		%%PID = gen_server:call(Player, 'ID'),
-		%%io:format("Dealing ~w to ~w/~w~n", 
-		%%	  [Card, PID, Seat]),
-		%%
-		gen_server:cast(Game, {'DRAW', Player, Card})
+		gen_server:cast(Game, {'DRAW', Player})
 	end,
     lists:foreach(F, Seats),
-    deal_private(Game, Deck, Seats, N - 1).
+    deal_private(Game, Seats, N - 1).
 
 %%
 %% Test suite

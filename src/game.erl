@@ -46,7 +46,7 @@
 	  limit,
           %% fixed, pot, no limit, etc. 
 	  limit_type, 
-	  %% card deck process
+	  %% card deck
 	  deck, 
 	  %% shared cards list
 	  board = [], 
@@ -70,7 +70,6 @@
 	 }).
 
 new(OID, FSM, GameType, SeatCount, LimitType) ->
-    {ok, Deck} = deck:start_link(),
     {TypeOfGame,_,_} = LimitType, 
     {ok, Limit} = case LimitType of
 		      {?LT_FIXED_LIMIT, Low, High} ->
@@ -84,7 +83,7 @@ new(OID, FSM, GameType, SeatCount, LimitType) ->
       gid = OID,
       fsm = FSM,
       type = GameType,
-      deck = Deck,
+      deck = deck:new(),
       pot = pot:new(),
       seats = create_seats(SeatCount),
       limit = Limit,
@@ -131,7 +130,6 @@ terminate(_Reason, Game) ->
     %% since we don't know the module we send
     %% the stop message directly to the process.
     gen_server:cast(Game#game.limit, stop),
-    deck:stop(Game#game.deck),
     %% remove ourselves from the db
     db:delete(game_xref, Game#game.gid),
     ok.
@@ -190,11 +188,11 @@ handle_cast({?PP_LEAVE, Player}, Game) ->
 handle_cast({?PP_LEAVE, Player, Mask}, Game) ->
     handle_cast_leave_mask(Player, Mask, Game);
 
-handle_cast({'DRAW', Player, Card}, Game) ->
-    handle_cast_draw(Player, Card, Game);
+handle_cast({'DRAW', Player}, Game) ->
+    handle_cast_draw(Player, Game);
 
-handle_cast({'DRAW SHARED', Card}, Game) ->
-    handle_cast_draw_shared(Card, Game);
+handle_cast('DRAW SHARED', Game) ->
+    handle_cast_draw_shared(Game);
 
 handle_cast({'SET STATE', Player, State}, Game) ->
     handle_cast_set_state(Player, State, Game);
@@ -236,9 +234,6 @@ handle_call({'PRIVATE CARDS',Player}, _From, Game) ->
 
 handle_call('FSM', _From, Game) ->
     handle_call_fsm(Game);
-
-handle_call('DECK', _From, Game) ->
-    handle_call_deck(Game);
 
 handle_call('TIMEOUT', _From, Game) ->
     handle_call_timeout(Game);
@@ -322,8 +317,9 @@ code_change(_OldVsn, Game, _Extra) ->
 
 handle_cast_reset(Game) ->
     broadcast_inplay(Game),
-    gen_server:cast(Game#game.deck, 'RESET'),
+    Deck = deck:reset(Game#game.deck),
     Game1 = Game#game {
+              deck = Deck,
 	      board = [],
 	      call = 0,
 	      raise_count = 0,
@@ -359,9 +355,10 @@ handle_cast_broadcast(Event, Game) ->
     Game1 = broadcast(Game, Event),
     {noreply, Game1}.
 
-handle_cast_rig(Deck, Game) ->
-    gen_server:cast(Game#game.deck, {'RIG', Deck}),
-    {noreply, Game}.
+handle_cast_rig(Cards, Game) ->
+    Deck = Game#game.deck,
+    Game1 = Game#game{ deck = deck:rig(Deck, Cards) },
+    {noreply, Game1}.
     
 handle_cast_watch(Player, Game) ->
     Game1 = Game#game { 
@@ -461,7 +458,8 @@ handle_cast_leave_mask(Player, Mask, Game) ->
 	    {noreply, Game}
     end.
 
-handle_cast_draw(Player, Card, Game) ->
+handle_cast_draw(Player, Game) ->
+    {Deck, Card} = deck:draw(Game#game.deck),
     SeatNum = gb_trees:get(Player, Game#game.xref),
     Seat = element(SeatNum, Game#game.seats),
     Hand = hand:add(Seat#seat.hand, Card),
@@ -469,10 +467,16 @@ handle_cast_draw(Player, Card, Game) ->
     GID = Game#game.gid,
     gen_server:cast(Player, {?PP_NOTIFY_DRAW, GID, Card, Game#game.seqnum}),
     Game1 = broadcast(Game, {?PP_NOTIFY_PRIVATE, Player}),
-    {noreply, Game1#game{ seats = Seats }}.
+    Game2 = Game1#game {
+              seats = Seats,
+              deck = Deck
+             },
+    {noreply, Game2}.
 
-handle_cast_draw_shared(Card, Game) ->
+handle_cast_draw_shared(Game) ->
+    {Deck, Card} = deck:draw(Game#game.deck),
     Game1 = Game#game {
+              deck = Deck,
 	      board = [Card|Game#game.board]
 	     },
     Game2 = broadcast(Game1, {?PP_NOTIFY_SHARED, Card}),
@@ -595,9 +599,6 @@ handle_call_private_cards(Player, Game) ->
 
 handle_call_fsm(Game) ->
     {reply, Game#game.fsm, Game}.
-
-handle_call_deck(Game) ->
-    {reply, Game#game.deck, Game}.
 
 handle_call_timeout(Game) ->
     {reply, Game#game.timeout, Game}.
