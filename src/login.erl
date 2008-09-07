@@ -12,20 +12,21 @@ login(Nick, Pass, Socket)
   when is_binary(Nick),
        is_binary(Pass),
        is_pid(Socket) -> % socket handler process
-    login(db:find(player_info, nick, Nick), [Nick, Pass, Socket]).
+    Recs = mnesia:dirty_index_read(player_info, Nick, #player_info.nick),
+    login(Recs, [Nick, Pass, Socket]).
 
-login({atomic, []}, _) ->
+login([], _) ->
     %% player not found
     {error, ?ERR_BAD_LOGIN};
 
-login({atomic, [Info]}, [_Nick, Pass|_] = Args) 
+login([Info], [_Nick, Pass|_] = Args) 
   when is_record(Info, player_info) ->
     PID = Info#player_info.pid,
-    Player = case db:find(player, PID) of
-                 {atomic, [P]} ->
+    Player = case mnesia:dirty_read(player, PID) of
+                 [P] ->
                      P;
                  _ ->
-                     {atomic, ok} = db:delete(player, PID),
+                     ok = mnesia:dirty_delete(player, PID),
                      #player{ pid = PID }
              end,
     %% replace dead pids with none
@@ -44,8 +45,8 @@ login({atomic, [Info]}, [_Nick, Pass|_] = Args)
 			      fun is_offline/3
 			     ]),
     {Player2, Info1, Result} = login(Info, Player1, Condition, Args),
-    case {db:write(Player2), db:write(Info1)} of
-	{{atomic, ok}, {atomic, ok}} ->
+    case {mnesia:dirty_write(Player2), mnesia:dirty_write(Info1)} of
+	{ok, ok} ->
 	    Result;
 	_ ->
 	    {error, ?ERR_UNKNOWN}
@@ -171,8 +172,8 @@ fix_pid(Pid) ->
 
 logout(ID)
   when is_number(ID) ->
-    case db:find(player, ID) of
-	{atomic, [Player]} ->
+    case mnesia:dirty_read(player, ID) of
+	[Player] ->
             logout(Player);
 	_ ->
 	    oops

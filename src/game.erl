@@ -112,10 +112,8 @@ init([FSM, GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers])
       timeout = Timeout,
       min_players = MinPlayers
      },
-    case mnesia:transaction(fun() ->
-				    mnesia:write(Game)
-			    end) of
-	{atomic, ok} ->
+    case mnesia:dirty_write(Game) of
+	ok ->
             {ok, Data};
 	Any ->
 	    {stop, Any}
@@ -131,7 +129,7 @@ terminate(_Reason, Game) ->
     %% the stop message directly to the process.
     gen_server:cast(Game#game.limit, stop),
     %% remove ourselves from the db
-    db:delete(game_xref, Game#game.gid),
+    ok = mnesia:dirty_delete({game_xref, Game#game.gid}),
     ok.
 
 %%% Reset is used each time the game is restarted
@@ -1005,8 +1003,7 @@ setup(GameType, SeatCount, Limit, Delay, Timeout, Max) ->
       player_timeout = Timeout,
       max = Max
      },
-    F = fun() -> mnesia:write(Game) end,
-    mnesia:transaction(F).
+    ok = mnesia:dirty_write(Game).
     
 %%% Use stored commands instead of asking player
 

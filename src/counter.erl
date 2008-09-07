@@ -17,6 +17,4 @@ reset(Type) ->
       type = Type,
       value = 0
      },
-    mnesia:transaction(fun() ->
-			       mnesia:write(Counter)
-		       end).
+    ok = mnesia:dirty_write(Counter).

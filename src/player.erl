@@ -35,10 +35,10 @@ init([Nick])
   when is_binary(Nick) ->
     process_flag(trap_exit, true),
     %% make sure we exist
-    case db:find(player_info, nick, Nick) of
-	{atomic, [Info]} ->
+    case mnesia:dirty_index_read(player_info, Nick, #player_info.nick) of
+	[Info] ->
 	    ID = Info#player_info.pid,
-            {atomic, ok} = create_runtime(ID, self()),
+            ok = create_runtime(ID, self()),
             {ok, new(ID)};
         Any ->
 	    {stop, Any}
@@ -53,7 +53,7 @@ stop(Player, Reason)
     gen_server:cast(Player, {stop, Reason}).
 
 terminate(_Reason, Data) ->
-    db:delete(player, Data#player_data.pid).
+    ok = mnesia:dirty_delete(player, Data#player_data.pid).
 
 handle_cast('LOGOUT', Data) ->
     handle_cast_logout(Data);
@@ -166,14 +166,14 @@ code_change(_OldVsn, Data, _Extra) ->
 
 handle_cast_logout(Data) ->
     ID = Data#player_data.pid,
-    {atomic, Games} = db:get(player, ID, games),
-    if
-        %% not playing anymore, can log out
-        Games == [] ->
+    case mnesia:dirty_index_read(inplay, ID, #inplay.pid) of
+        [] ->
+            %% not playing anymore, can log out
             spawn(fun() -> login:logout(ID) end);
-        true ->
+        Games ->
             %% delay until we leave our last game
-            db:set(player, Data#player_data.pid, {zombie, 1})
+            db:set(player, Data#player_data.pid, {zombie, 1}),
+            leave_games(Data, Games)
     end,
     {noreply, Data}.
 
@@ -222,10 +222,10 @@ handle_cast_notify_leave(GID, Data) ->
     LastGame = gb_trees:size(Xref) == 1,
     if
         LastGame ->
-            {atomic, Zombie} = db:get(player, ID, zombie),
+            [Player] = mnesia:dirty_read(player, ID),
             if 
                 %% player requested logout previously
-                Zombie == 1 ->
+                Player#player.zombie == 1 ->
                     spawn(fun() -> login:logout(ID) end);
                 true ->
                     ok
@@ -280,8 +280,8 @@ handle_cast_seat_query(Game, Data) ->
     {noreply, Data}.
 
 handle_cast_player_info_req(PID, Data) ->
-    case db:find(player_info, PID) of
-	{atomic, [Info]} ->
+    case mnesia:dirty_read(player_info, PID) of
+	[Info] ->
 	    handle_cast({?PP_PLAYER_INFO, 
 			 PID, 
 			 inplay(Data),
@@ -309,8 +309,8 @@ handle_cast_new_game_req(GameType, Expected, Limit, Data) ->
     {noreply, Data}.
 
 handle_cast_balance_req(Data) ->
-    case db:find(player_info, Data#player_data.pid) of
-	{atomic, [Info]} ->
+    case mnesia:dirty_read(player_info, Data#player_data.pid) of
+	[Info] ->
 	    handle_cast({?PP_BALANCE_INFO, 
 			 Info#player_info.balance,
 			 inplay(Data)}, Data);
@@ -371,16 +371,16 @@ handle_call_other(Event, From, Data) ->
 %%%
 
 cast(PID, Event) ->
-    case db:find(player, PID) of
-	{atomic, [Player]} ->
+    case mnesia:dirty_read(player, PID) of
+	[Player] ->
 	    gen_server:cast(Player#player.proc_id, Event);
 	_ ->
 	    none
     end.
 
 call(PID, Event) ->
-    case db:find(player, PID) of
-	{atomic, [Player]} ->
+    case mnesia:dirty_read(player, PID) of
+	[Player] ->
 	    gen_server:call(Player#player.proc_id, Event);
 	_ ->
 	    none
@@ -401,9 +401,9 @@ create(Nick, Pass, Location, Balance)
        is_binary(Pass),
        is_binary(Location),
        is_number(Balance) ->
-    case db:find(player_info, nick, Nick) of
-        {atomic, [_]} ->
-            {atomic, {error, player_exists}};
+    case mnesia:dirty_index_read(player_info, Nick, #player_info.nick) of
+        [_] ->
+            {error, player_exists};
         _ ->
             ID = counter:bump(player),
             Info = #player_info {
@@ -415,8 +415,8 @@ create(Nick, Pass, Location, Balance)
               location = Location,
               balance = Balance
              },
-            {atomic, ok} = db:write(Info),
-            {atomic, ID}
+            ok = mnesia:dirty_write(Info),
+            {ok, ID}
     end.
 
 create_runtime(ID, Pid) 
@@ -427,7 +427,7 @@ create_runtime(ID, Pid)
       proc_id = Pid,
       zombie = 0
      },
-    db:write(Player).
+    ok = mnesia:dirty_write(Player).
 
 inplay(Data) when is_record(Data, player_data) ->
     inplay(Data#player_data.inplay_xref);

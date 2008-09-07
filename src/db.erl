@@ -229,11 +229,11 @@ find(Table, Field, Value)
     end.
 
 find_game(GID) ->
-    case db:find(game_xref, GID) of
-	{atomic, [XRef]} ->
+    case mnesia:dirty_read(game_xref, GID) of
+	[XRef] ->
 	    XRef#game_xref.proc_id;
 	_ ->
-	    none
+	    game_not_found
     end.
 
     
