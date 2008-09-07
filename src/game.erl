@@ -125,6 +125,8 @@ stop(Game)
     gen_server:cast(Game, {stop, self()}).
 
 terminate(_Reason, Game) ->
+    %% force players to leave
+    force_player_leave(Game),
     %% limit can be any of fixed, pot or no limit.
     %% since we don't know the module we send
     %% the stop message directly to the process.
@@ -1098,6 +1100,37 @@ do_buy_in(GID, PID, Amt)
         end,
     mnesia:transaction(F).
 
+force_player_leave(Game) ->
+    Seats = Game#game.seats,
+    force_player_leave(Game, Seats, size(Seats)).
+
+force_player_leave(_, _, 0) ->
+    ok;
+
+force_player_leave(Game, Seats, N) ->
+    Seat = element(N, Seats),
+    Player = Seat#seat.player,
+    Game2 = case Player of 
+                none ->
+                    Game;
+                _ ->
+                    XRef = Game#game.xref,
+                    %% notify player
+                    gen_server:cast(Player, {'NOTIFY LEAVE', Game#game.gid}),
+                    %% notify others
+                    Game1 = broadcast(Game, {?PP_NOTIFY_LEAVE, Player}),
+                    XRef1 = gb_trees:delete(Player, XRef),
+                    Game1#game {
+                      xref = XRef1,
+                      seats = setelement(N,
+                                         Seats,
+                                         Seat#seat {
+                                           player = none,
+                                           state = ?PS_EMPTY
+                                          })
+                     }
+            end,
+    force_player_leave(Game2, Seats, N - 1).
   
 test() ->
     ok.
