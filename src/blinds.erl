@@ -289,6 +289,7 @@ small_blind_handle_timeout(Player, Data) ->
        {state, small_blind},
        {player, Player},
        {game, GID},
+       {note, gen_server:call(Game, 'NOTE')},
        {seat, Seat},
        {now, now()}]),
     timeout(Data, Player, small_blind).
@@ -389,6 +390,7 @@ big_blind_handle_timeout(Player, Data) ->
        {state, big_blind},
        {player, Player},
        {game, GID},
+       {note, gen_server:call(Game, 'NOTE')},
        {seat, Seat},
        {now, now()}]),
     timeout(Data, Player, big_blind).
@@ -544,11 +546,11 @@ make_game_5_bust() ->
     make_game_5_bust(1, 2, 3).
 
 make_game_5_bust(Button_N, SB_N, BB_N) ->
-    A = test:make_player(<<"A">>),
-    B = test:make_player(<<"B">>),
-    C = test:make_player(<<"C">>),
-    D = test:make_player(<<"D">>),
-    E = test:make_player(<<"E">>),
+    A = test:make_player(test:nick()),
+    B = test:make_player(test:nick()),
+    C = test:make_player(test:nick()),
+    D = test:make_player(test:nick()),
+    E = test:make_player(test:nick()),
     Players = [{A, 2}, {B, 4}, {C, 6}, {D, 8}, {E, 9}],
     Ctx = #texas {
       small_blind_seat = element(2, lists:nth(SB_N, Players)),
