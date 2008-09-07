@@ -339,15 +339,14 @@ handle_call_id(Data) ->
 
 handle_call_game_inplay(Game, Data) ->
     Xref = Data#player_data.inplay_xref,
-    TreeDefined = gb_trees:is_defined(Game,Xref),
-    case TreeDefined of
-        true->
-            InplayAmount = gb_trees:get(Game,Xref);
-        %% could not get the gb_tree for this game
-        false->
-            InplayAmount = 0.0
-    end,
-	{reply, InplayAmount, Data}.
+    Exists = gb_trees:is_defined(Game, Xref),
+    Inplay = case Exists of
+                 true ->
+                     gb_trees:get(Game, Xref);
+                 false ->
+                     0.0
+             end,
+    {reply, Inplay, Data}.
 
 handle_call_inplay(Data) ->
     {reply, inplay(Data), Data}.
@@ -441,6 +440,35 @@ inplay([], Total) when is_float(Total) ->
 inplay([{_, Amt}|Rest], Total) ->
     inplay(Rest, Total + Amt).
 
+leave_games(_, []) ->
+    ok;
+
+leave_games(Player, [H|T]) ->
+    GID = H#inplay.gid,
+    case mnesia:dirty_read(game_xref, GID) of
+        [] ->
+            error_logger:info_report([{module, ?MODULE}, 
+                                      {line, ?LINE},
+                                      {self, self()}, 
+                                      {player, Player},
+                                      {pid, H#inplay.pid},
+                                      {gid, GID},
+                                      {message, cannot_leave_game}
+                                     ]);
+        [Game] ->
+            cardgame:send_event(Game#game_xref.proc_id, {?PP_LEAVE, self()});
+        Games = [_|_] ->
+            error_logger:info_report([{module, ?MODULE}, 
+                                      {line, ?LINE},
+                                      {self, self()}, 
+                                      {player, Player},
+                                      {gid, GID},
+                                      {games, Games},
+                                      {message, expected_to_leave_one_game_only}
+                                     ])
+    end,
+    leave_games(Player, T).
+            
 %%%
 %%% Test suite
 %%%
