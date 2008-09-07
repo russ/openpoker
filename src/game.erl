@@ -66,7 +66,8 @@
 	  %% players required to start a game
 	  required_player_count = 2,
 	  %% event history
-	  event_history = []
+	  event_history = [],
+          note
 	 }).
 
 new(OID, FSM, GameType, SeatCount, LimitType) ->
@@ -895,11 +896,16 @@ broadcast(Game, [Player|Rest], Event) ->
     gen_server:cast(Player, Event),
     broadcast(Game, Rest, Event);
     
-broadcast(Game, [], Event) ->
+broadcast(Game, [], Event)
+  when element(1, Event) =/= ?PP_NOTIFY_CHAT;
+       element(1, Event) =/= ?PP_NOTIFY_CANCEL_GAME ->
     Game#game {
       seqnum = Game#game.seqnum + 1,
       event_history = [Event|Game#game.event_history]
-     }.
+     };
+
+broadcast(Game, [], _) ->
+    Game.
 
 resend_updates(Game, Player)
   when is_record(Game, game),
