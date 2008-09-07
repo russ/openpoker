@@ -214,6 +214,9 @@ handle_cast({'REQUEST BET', SeatNum, Call, RaiseMin, RaiseMax}, Game) ->
 handle_cast({'RESEND UPDATES', Player}, Game) ->
     handle_cast_resend_updates(Player, Game);
 
+handle_cast({'NOTE', Note}, Game) ->
+    handle_cast_note(Note, Game);
+
 handle_cast({stop, FSM}, Game) 
   when FSM == Game#game.fsm ->
     handle_cast_stop(Game);
@@ -289,6 +292,9 @@ handle_call({'SEATS', Mask}, _From, Game) ->
 
 handle_call('SEAT QUERY', _From, Game) ->
     handle_call_seat_query(Game);
+
+handle_call('NOTE', _From, Game) ->
+    handle_call_note(Game);
 
 handle_call(Event, From, Game) ->
     handle_call_other(Event, From, Game).
@@ -571,6 +577,10 @@ handle_cast_resend_updates(Player, Game) ->
     resend_updates(Game, Player),
     {noreply, Game}.
 
+handle_cast_note(Note, Game) ->
+    error_logger:info_msg("GID: ~p, Note: ~p~n", [Game#game.gid, Note]),
+    {noreply, Game#game{ note = Note }}.
+
 handle_cast_stop(Game) ->
     {stop, normal, Game}.
 
@@ -682,6 +692,9 @@ handle_call_seats(Mask, Game) ->
 
 handle_call_seat_query(Game) ->
     {reply, seat_query(Game), Game}.
+
+handle_call_note(Game) ->
+    {reply, Game#game.note, Game}.
 
 handle_call_other(Event, From, Game) ->
     error_logger:info_report([{module, ?MODULE}, 

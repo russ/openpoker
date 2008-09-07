@@ -424,6 +424,7 @@ cast(CardGameRef, Event) ->
 %%%
 
 handle_event_note(Note, Ctx) ->
+    gen_server:cast(Ctx#cardgame.game, {'NOTE', Note}),
     {next_state, dispatch, Ctx#cardgame{ note = Note }}.
 
 handle_event_restart(Ctx) ->
