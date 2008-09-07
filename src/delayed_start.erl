@@ -108,21 +108,6 @@ delayed_start_start(Context, Data) ->
 delayed_start_check(Data) ->
     Game = Data#delayed.game,
     Ready = gen_server:call(Game, {'SEATS', ?PS_READY}),
-%%     %% get the game id of the game to be started
-%%     GID = gen_server:call(Game, 'ID'),
-%%     {atomic, Result} = db:find(game_xref, GID),
-%%     %% checking for empty list
-%%     if 
-%%         Result == []->
-%%             %% if list is empty minimum players req count is set to 2
-%%             ReqCount = 2,
-%%             ok;
-%%         true ->
-%%             %% minimum players req count is obtained from game_xref table
-%%             {atomic,[GameXref]} = db:find(game_xref,GID),
-%%             MinPlayersReq = GameXref#game_xref.min_players,
-%%             ReqCount = MinPlayersReq
-%%     end,
     ReqCount = gen_server:call(Game, 'REQUIRED'),
     Start = (length(Ready) >= ReqCount),
     Empty = gen_server:call(Game, 'IS EMPTY'),
