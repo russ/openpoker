@@ -8,9 +8,9 @@
 msg(Code) ->
     case Code of
 	?GAME_CANCELLED ->
-	    "Game is cancelled, not enough players";
+	    <<"Game is cancelled, not enough players">>;
 	?GAME_STARTING ->
-	    "Game is starting";
+	    <<"Game is starting">>;
 	_ ->
-	    "Wrong message code"
+	    <<"Wrong message code">>
     end.
