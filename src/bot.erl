@@ -45,14 +45,14 @@ terminate(_Reason, Bot) ->
 	none ->
 	    ignore;
 	Socket ->
-	    if 
-		(not Bot#bot.done) and (Bot#bot.actions /= []) ->
-		    error_logger:info_report([{message, "Premature connection close"},
+            case {Bot#bot.done, Bot#bot.actions} of
+                {false, [_]} ->
+                    error_logger:info_report([{message, "Premature connection close"},
                                               {module, ?MODULE},
                                               {line, ?LINE},
                                               {bot, Bot},
                                               {actions, Bot#bot.actions}]);
-		true ->
+                _ ->
 		    ok
 	    end,
 	    gen_tcp:close(Socket)
@@ -160,14 +160,14 @@ handle_other(Event, From, Bot) ->
     {noreply, Bot}.
 
 handle_tcp_closed(Socket, Bot) ->
-    if 
-	not Bot#bot.done ->
+    case {Bot#bot.done, Bot#bot.actions} of
+        {false, [_]} ->
 	    error_logger:info_report([{message, "Premature connection close"},
                                       {module, ?MODULE},
                                       {line, ?LINE},
                                       {socket, Socket},
                                       {bot, Bot}]);
-	true ->
+	_ ->
 	    ok
     end,
     {stop, normal, Bot}.
@@ -354,8 +354,6 @@ handle_notify_leave(PID, Bot) ->
     end.
 
 handle_notify_end_last_game(GID, Bot) ->
-    %%io:format("Bot ~w leaving ~w at ~w~n",
-    %%		      [Bot#bot.player, GID, now()]),
     ok = ?tcpsend(Bot#bot.socket, {?PP_LEAVE, GID}),
     ok = ?tcpsend(Bot#bot.socket, ?PP_LOGOUT),
     Bot1 = Bot#bot{ done = true },
