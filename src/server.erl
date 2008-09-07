@@ -18,7 +18,6 @@
 	  port,
 	  host,
 	  avg,
-	  games,
 	  test_mode
 	 }).
 
@@ -77,12 +76,12 @@ init([Host, Port, TestMode]) ->
     Client = #client {
       server = self()
      },
-    Games = if
-                TestMode ->
-                    [];
-                true ->
-                    start_games()
-            end,
+    if
+        not TestMode ->
+            start_games();
+        true ->
+            ok
+    end,
     F = fun(Sock) -> parse_packet(Sock, Client) end, 
     tcp_server:stop(Port),
     {ok, _} = tcp_server:start_raw_server(Port, F, 10240, 10240),
@@ -90,7 +89,6 @@ init([Host, Port, TestMode]) ->
       host = Host,
       port = Port,
       avg = 0,
-      games = Games,
       test_mode = TestMode
      },
     {ok, Server}.
@@ -99,7 +97,7 @@ stop(Server) ->
     gen_server:cast(Server, stop).
 
 terminate(normal, Server) ->
-    kill_games(Server#server.games),
+    kill_games(),
     tcp_server:stop(Server#server.port),
     ok.
 
@@ -270,32 +268,36 @@ find_games(Socket,
 
 start_games() ->
     {atomic, Games} = db:find(game_config),
-    start_games(Games, []).
+    start_games(Games).
 
-start_games([Game|Rest], Acc) ->
-    Acc1 = start_games(Game, Game#game_config.max, Acc),
-    start_games(Rest, Acc1);
+start_games([]) ->
+    ok;
 
-start_games([], Acc) ->
-    Acc.
+start_games([Game|Rest]) ->
+    start_games(Game, Game#game_config.max),
+    start_games(Rest).
 
-start_games(_Game, 0, Acc) ->
-    Acc;
+start_games(_Game, 0) ->
+    ok;
 
-start_games(Game, N, Acc) ->
-    {ok, Pid} = cardgame:start(Game#game_config.type, 
-			       Game#game_config.seat_count, 
-			       Game#game_config.limit,
-			       Game#game_config.start_delay,
-			       Game#game_config.player_timeout),
-    start_games(Game, N - 1, [Pid|Acc]).
+start_games(Game, N) ->
+    {ok, _} = cardgame:start(Game#game_config.type, 
+                             Game#game_config.seat_count, 
+                             Game#game_config.limit,
+                             Game#game_config.start_delay,
+                             Game#game_config.player_timeout),
+    start_games(Game, N - 1).
+
+kill_games() ->
+    {atomic, Games} = db:find(game_xref),
+    kill_games(Games).
 
 kill_games([]) ->
     ok;
 
-kill_games([Pid|Rest]) ->
-    cardgame:stop(Pid),
-    kill_games(Rest).
+kill_games([H|T]) ->
+    cardgame:stop(H#game_xref.proc_id),
+    kill_games(T).
 
 start_test_game(Bin) 
   when is_binary(Bin) ->
