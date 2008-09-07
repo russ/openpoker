@@ -26,13 +26,14 @@ read(Data) ->
     T = read_check(deep_list_to_tuple(L)),
     read(Data, T).
 
-read(Data, none) ->
+read(Data, R = game_not_found) ->
     error_logger:error_report([{module, ?MODULE}, 
 			       {line, ?LINE},
+                               {self, self()},
 			       {data, Data}, 
-                               {result, none}
-                               ]),
-    none;
+                               {error, R}
+                              ]),
+    game_not_found;
 
 read(_Data, T) 
   when size(T) == 1->
