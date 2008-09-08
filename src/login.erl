@@ -2,7 +2,7 @@
 
 -module(login).
 
--export([login/3, logout/1, test/0]).
+-export([login/3, test/0]).
 
 -include("proto.hrl").
 -include("test.hrl").
@@ -32,7 +32,7 @@ login([Info], [_Nick, Pass|_] = Args)
     %% replace dead pids with none
     Player1 = Player#player {
                 socket = fix_pid(Player#player.socket),
-                pid = fix_pid(Player#player.pid)
+                proc_id = fix_pid(Player#player.proc_id)
 	       },
     %% check player state and login
     Condition = check_player(Info, Player1, [Pass], 
@@ -71,7 +71,7 @@ login(Info, Player, account_disabled, _) ->
 
 login(Info, Player, player_online, Args) ->
     %% player is idle
-    logout(Player),
+    gen_server:cast(Player#player.proc_id, 'LOGOUT'),
     login(Info, Player, player_offline, Args);
 
 login(Info, Player, client_down, [_, _, Socket]) ->
@@ -158,6 +158,9 @@ is_offline(_, Player, _) ->
     PlayerDown = Player#player.proc_id == none,
     {SocketDown and PlayerDown, player_offline}.
 
+fix_pid(none) ->
+    none;
+
 fix_pid(Pid)
   when is_pid(Pid) ->
     case util:is_process_alive(Pid) of
@@ -165,23 +168,20 @@ fix_pid(Pid)
 	    Pid;
 	_ ->
 	    none
-    end;
+    end.
 
-fix_pid(Pid) ->
-    Pid.
+%% logout(ID)
+%%   when is_number(ID) ->
+%%     case mnesia:dirty_read(player, ID) of
+%% 	[Player] ->
+%%             logout(Player);
+%% 	_ ->
+%% 	    oops
+%%     end;
 
-logout(ID)
-  when is_number(ID) ->
-    case mnesia:dirty_read(player, ID) of
-	[Player] ->
-            logout(Player);
-	_ ->
-	    oops
-    end;
-
-logout(Player) 
-  when is_record(Player, player) ->
-    player:stop(Player#player.proc_id).
+%% logout(Player) 
+%%   when is_record(Player, player) ->
+%%     player:stop(Player#player.proc_id).
 
 %%% 
 %%% Handlers
