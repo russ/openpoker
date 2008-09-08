@@ -36,7 +36,7 @@
 -define(PP_NOTIFY_END_GAME, 25).
 -define(PP_NOTIFY_WIN, 26).
 -define(PP_NOTIFY_BET, 27).
-%% 28 - unused
+-define(PP_NOTIFY_QUIT, 28).
 -define(PP_NOTIFY_RAISE, 29).
 -define(PP_NOTIFY_CALL, 30).
 -define(PP_PLAYER_STATE, 31).

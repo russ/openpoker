@@ -68,6 +68,9 @@ handle_cast({'GAMES TO PLAY', N}, Bot) ->
 handle_cast(X = {'NOTIFY LEAVE', _}, Bot) ->
     handle_notify_leave_x(X, Bot);
 
+handle_cast('LOGOUT', Bot) ->
+    handle_logout(Bot);
+
 handle_cast(stop, Bot) ->
     handle_stop(Bot);
 
@@ -127,6 +130,9 @@ handle_games_to_play(N, Bot) ->
 handle_notify_leave_x(X, Bot) ->
     gen_server:cast(Bot#bot.player, X),
     {noreply, Bot}.
+
+handle_logout(Bot) ->
+    handle_cast(?PP_LOGOUT, Bot).
 
 handle_stop(Bot) ->
     {stop, normal, Bot}.
@@ -348,7 +354,7 @@ handle_notify_leave(PID, Bot) ->
     if
 	PID == Bot#bot.player ->
 	    ok = ?tcpsend(Bot#bot.socket, ?PP_LOGOUT),
-	    {stop, leave, Bot};
+	    {stop, normal, Bot};
 	true ->
 	    {noreply, Bot}
     end.
@@ -388,6 +394,9 @@ handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, _GameInplay,_SeatNum, _Seq}, Bot) ->
 
 handle({?PP_NOTIFY_CHAT, _GID, _PID, _Seq, _Message}, Bot) ->
     {noreply, Bot};
+
+handle(?PP_NOTIFY_QUIT, Bot) ->
+    {stop, normal, Bot};
 
 handle({?PP_BET_REQ, GID, Amount}, Bot) ->
     handle_bet_req(GID, Amount, Bot);
@@ -486,7 +495,7 @@ process_filters(_Event, Bot, [], Filters) ->
 process_filters(Event, Bot, [Fun|Rest], Filters) ->
     {Filter, Bot1} = Fun(Event, Bot),
     Filters1 = case Filter of
-                   stop ->
+                   done ->
                        %% this filter is finished
                        Filters;
                    none ->
