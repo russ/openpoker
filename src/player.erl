@@ -19,7 +19,8 @@
 	  pid,
 	  socket = none,
           %% game to inplay cross-reference for this player
-	  inplay_xref = gb_trees:empty()   
+	  inplay_xref = gb_trees:empty(),
+          zombie = 0 % % on autoplay until game ends
 	 }).
 
 new(ID) ->
@@ -53,6 +54,7 @@ stop(Player, Reason)
     gen_server:cast(Player, {stop, Reason}).
 
 terminate(_Reason, Data) ->
+    catch handle_cast_other(?PP_NOTIFY_QUIT, Data),
     ok = mnesia:dirty_delete(player, Data#player_data.pid).
 
 handle_cast('LOGOUT', Data) ->
@@ -165,17 +167,17 @@ code_change(_OldVsn, Data, _Extra) ->
 %%% 
 
 handle_cast_logout(Data) ->
-    ID = Data#player_data.pid,
-    case mnesia:dirty_index_read(inplay, ID, #inplay.pid) of
-        [] ->
+    case gb_trees:is_empty(Data#player_data.inplay_xref) of
+        true ->
             %% not playing anymore, can log out
-            spawn(fun() -> login:logout(ID) end);
-        Games ->
+            Self = self(),
+            spawn(fun() -> player:stop(Self) end),
+            {noreply, Data};
+        _ ->
             %% delay until we leave our last game
-            db:set(player, Data#player_data.pid, {zombie, 1}),
-            leave_games(Data, Games)
-    end,
-    {noreply, Data}.
+            leave_games(Data, gb_trees:keys(Data#player_data.inplay_xref)),
+            {noreply, Data#player_data{ zombie = 1 }}
+    end.
 
 handle_cast_disconnect(Data) ->
     %% ignore
@@ -220,16 +222,14 @@ handle_cast_notify_leave(GID, Data) ->
     {atomic, ok} = db:inc(player_info, ID, {balance, Inplay}),
     {atomic, ok} = db:delete_pat({inplay, GID, ID, '_'}),
     LastGame = gb_trees:size(Xref) == 1,
+    Zombie = Data#player_data.zombie == 1,
+    Self = self(),
     if
-        LastGame ->
-            [Player] = mnesia:dirty_read(player, ID),
-            if 
-                %% player requested logout previously
-                Player#player.zombie == 1 ->
-                    spawn(fun() -> login:logout(ID) end);
-                true ->
-                    ok
-            end
+        LastGame and Zombie ->
+            %% player requested logout previously
+            spawn(fun() -> player:stop(Self) end);
+        true ->
+            ok
     end,
     Xref1 = gb_trees:delete(GID, Xref),
     {noreply, Data#player_data{ inplay_xref = Xref1 }}.
@@ -423,8 +423,7 @@ create_runtime(ID, Pid)
        is_pid(Pid) ->
     Player = #player {
       pid = ID,
-      proc_id = Pid,
-      zombie = 0
+      proc_id = Pid
      },
     ok = mnesia:dirty_write(Player).
 
@@ -443,17 +442,15 @@ inplay([{_, Amt}|Rest], Total) ->
 leave_games(_, []) ->
     ok;
 
-leave_games(Player, [H|T]) ->
-    GID = H#inplay.gid,
+leave_games(Player, [GID|Rest]) ->
     case mnesia:dirty_read(game_xref, GID) of
         [] ->
             error_logger:info_report([{module, ?MODULE}, 
                                       {line, ?LINE},
                                       {self, self()}, 
                                       {player, Player},
-                                      {pid, H#inplay.pid},
                                       {gid, GID},
-                                      {message, cannot_leave_game}
+                                      {message, no_games_to_leave}
                                      ]);
         [Game] ->
             cardgame:send_event(Game#game_xref.proc_id, {?PP_LEAVE, self()});
@@ -464,11 +461,11 @@ leave_games(Player, [H|T]) ->
                                       {player, Player},
                                       {gid, GID},
                                       {games, Games},
-                                      {message, expected_to_leave_one_game_only}
+                                      {message, many_games_to_leave}
                                      ])
     end,
-    leave_games(Player, T).
-            
+    leave_games(Player, Rest).
+
 %%%
 %%% Test suite
 %%%

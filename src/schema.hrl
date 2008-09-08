@@ -19,8 +19,7 @@
 -record(player, {
 	  pid,
 	  proc_id = none, % process id
-          socket = none,
-          zombie = 0 % % on autoplay until game ends
+          socket = none
 	 }).
 
 -record(inplay, {
