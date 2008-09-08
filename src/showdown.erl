@@ -112,7 +112,7 @@ showdown_handle_start(Context, Data) ->
                                   gen_server:cast(Player, {'INPLAY+', 
                                                            Amount, GID}),
                                   Event = {?PP_NOTIFY_WIN, Player, Amount},
-				 gen_server:cast(Game, {'BROADCAST', Event})
+                                  gen_server:cast(Game, {'BROADCAST', Event})
 			  end, Winners)
     end,
     gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_END_GAME}}),
