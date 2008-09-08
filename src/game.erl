@@ -899,7 +899,7 @@ broadcast(Game, [Player|Rest], Event) ->
     broadcast(Game, Rest, Event);
     
 broadcast(Game, [], Event)
-  when element(1, Event) =/= ?PP_NOTIFY_CHAT;
+  when element(1, Event) =/= ?PP_NOTIFY_CHAT,
        element(1, Event) =/= ?PP_NOTIFY_CANCEL_GAME ->
     Game#game {
       seqnum = Game#game.seqnum + 1,
