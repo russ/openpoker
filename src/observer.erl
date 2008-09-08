@@ -17,7 +17,6 @@
 	  trace,
 	  parent,
 	  gid,
-	  player,
 	  socket,
 	  winners,
 	  seats,
@@ -29,7 +28,6 @@ new(Parent) ->
     #obs {
      trace = false,
      parent = Parent,
-     player = none,
      socket = none,
      winners = gb_trees:empty(),
      seats = gb_trees:empty(),
@@ -57,23 +55,13 @@ terminate(_Reason, Data) ->
     ok.
 
 handle_cast({'ID', ID}, Data) ->
-    Data1 = Data#obs {
-	      id = ID
-	     },
-    {noreply, Data1};
+    {noreply, Data#obs{ id = ID }};
 
 handle_cast({'TRACE', On}, Data) ->
-    Data1 = Data#obs {
-	      trace = On
-	     },
-    {noreply, Data1};
+    {noreply, Data#obs{ trace = On }};
 
 handle_cast({'GAMES TO PLAY', N}, Data) ->
     {noreply, Data#obs{ games_to_watch = N}};
-
-handle_cast(X = {'NOTIFY LEAVE', _}, Data) ->
-    gen_server:cast(Data#obs.player, X),
-    {noreply, Data};
 
 handle_cast(stop, Data) ->
     {stop, normal, Data};
@@ -84,10 +72,7 @@ handle_cast(Event, Data) ->
 
 handle_call({'CONNECT', Host, Port}, _From, Data) ->
     {ok, Sock} = tcp_server:start_client(Host, Port, 1024),
-    Data1 = Data#obs {
-	      socket = Sock
-	     },
-    {reply, ok, Data1};
+    {reply, ok, Data#obs{ socket = Sock }};
 
 handle_call('ID', _From, Data) ->
     {reply, Data#obs.id, Data};
@@ -101,17 +86,22 @@ handle_call(Event, From, Data) ->
     {noreply, Data}.
 
 handle_info({tcp_closed, _Socket}, Data) ->
-    {stop, normal, Data};
-
-handle_info({tcp, _Socket, <<?PP_PID, PID:32>>}, Data) ->
-    Data1 = Data#obs {
-	      player = PID
-	     },
-    {noreply, Data1};
+    if 
+	Data#obs.trace ->
+	    io:format("Observer ~p: Connection closed!~n", [Data]);
+        true ->
+	    ok
+    end,
+    {stop, normal, Data#obs{ socket = none }};
 
 handle_info({tcp, _Socket, Bin}, Data) ->
     case proto:read(Bin) of
 	none ->
+            error_logger:info_report([{module, ?MODULE}, 
+                                      {line, ?LINE},
+                                      {observer, Data}, 
+                                      {bin, Bin}
+                                     ]),
 	    {noreply, Data};
 	Event ->
 	    handle(Event, Data)
@@ -249,7 +239,7 @@ handle({?PP_NOTIFY_BET, GID, PID, Amount, _Seq}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: BET: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount]);
+		      [GID, PID, Amount / 1.0]);
 	true ->
 	    ok
     end,
@@ -259,7 +249,7 @@ handle({?PP_NOTIFY_CALL, GID, PID, Amount, _Seq}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: CALL: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount]);
+		      [GID, PID, Amount / 1.0]);
 	true ->
 	    ok
     end,
@@ -269,7 +259,7 @@ handle({?PP_NOTIFY_RAISE, GID, PID, Amount, AmtPlusCall, _Seq}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: RAISE: ~w, ~-14.2. f, ~-14.2. f~n",
-		      [GID, PID, Amount, AmtPlusCall]);
+		      [GID, PID, Amount / 1.0, AmtPlusCall / 1.0]);
 	true ->
 	    ok
     end,
@@ -279,7 +269,7 @@ handle({?PP_NOTIFY_SB, GID, PID, Amount, _Seq}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: SB: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount]);
+		      [GID, PID, Amount / 1.0]);
 	true ->
 	    ok
     end,
@@ -289,7 +279,7 @@ handle({?PP_NOTIFY_BB, GID, PID, Amount, _Seq}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: BB: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount]);
+		      [GID, PID, Amount / 1.0]);
 	true ->
 	    ok
     end,
@@ -309,7 +299,7 @@ handle({?PP_NOTIFY_WIN, GID, PID, Amount, _Seq}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: WIN: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount]);
+		      [GID, PID, Amount / 1.0]);
 	true ->
 	    ok
     end,
