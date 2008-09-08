@@ -54,6 +54,7 @@ create_player_test() ->
     ?assert(is_number(ID)),
     {ok, Pid} = player:start(Nick),
     ?assertEqual({atomic, Pid}, db:get(player, ID, proc_id)),
+    gen_server:cast(Pid, 'LOGOUT'),
     ?assertEqual(ok, stop_player(Pid)),
     ?assertEqual({atomic, {error, key_not_found}}, db:get(player, ID, proc_id)),
     ?assertEqual({atomic, []}, db:find(player, ID)),
@@ -210,8 +211,8 @@ login_logout_test() ->
     ?assertEqual({atomic, Pid}, db:get(player, ID, proc_id)),
     ?assertEqual({atomic, Socket}, db:get(player, ID, socket)),
     ?assertEqual(true, util:is_process_alive(Pid)),
-    login:logout(ID),
-    timer:sleep(1000),
+    gen_server:cast(Pid, 'LOGOUT'),
+    ?assertEqual(ok, stop_player(Pid)),
     ?assertEqual(false, util:is_process_alive(Pid)),
     ?assertEqual({atomic, {error, key_not_found}}, db:get(player, ID, pid)),
     ?assertEqual({atomic, {error, key_not_found}}, db:get(player, ID, socket)),
@@ -234,19 +235,13 @@ player_online_not_playing_test() ->
     %% login twice
     {ok, Pid1} = login:login(Nick, Nick, Pid),
     {atomic, Pid1} = db:get(player, ID, proc_id),
-    timer:sleep(100),
+    ?assertEqual(ok, stop_player(Pid)),
     ?assertEqual(false, util:is_process_alive(Pid)),
     ?assertNot(Pid == Pid1),
-    login:logout(ID),
-    timer:sleep(100),
+    gen_server:cast(Pid1, 'LOGOUT'),
+    ?assertEqual(ok, stop_player(Pid1)),
     ?assertEqual({atomic, {error, key_not_found}}, db:get(player, ID, socket)),
-    %%{atomic, ok} = db:delete(player, ID),
-    receive
-	Any ->
-	    ?assertEqual('should be nothing here', Any)
-	after 100 ->
-		ok
-	end,
+    flush(),
     ok.
 
 %%% Player online and playing
@@ -288,9 +283,9 @@ player_online_playing_test() ->
                100, [?PP_NOTIFY_CHAT, ?PP_NOTIFY_CANCEL_GAME]),
     ?assertMsg({?PP_NOTIFY_JOIN, GID, Pid, 1,1000.0, 0}, 
                100, [?PP_NOTIFY_CHAT, ?PP_NOTIFY_CANCEL_GAME]),
-    login:logout(ID),
+    gen_server:cast(Pid, 'LOGOUT'),
+    ?assertEqual(ok, stop_player(Pid)),
     ?assertEqual(ok, stop_game(Game)),
-    {atomic, ok} = db:delete(player, ID),
     ok.
 
 %%% Simulate a disconnected client
@@ -307,8 +302,8 @@ disconnected_client_test() ->
     ?assertEqual({ok, Pid}, login:login(Nick, Nick, Dummy)),
     ?assertEqual({ok, Pid}, login:login(Nick, Nick, Socket)),
     {atomic, Socket} = db:get(player, ID, socket),
-    login:logout(ID),
-    {atomic, ok} = db:delete(player, ID),
+    gen_server:cast(Pid, 'LOGOUT'),
+    ?assertEqual(ok, stop_player(Pid)),
     ok.
 
 %%% Login and logout using a network server
@@ -423,8 +418,8 @@ leave_after_sb_posted_test() ->
     ?assertMsg({'START', GID}, ?START_DELAY * 2, []),
     ?assertMsg({'CANCEL', GID}, ?START_DELAY * 2, []),
     %% clean up
-    ?assertEqual(ok, stop_game(Game)),
     cleanup_players(Data),
+    ?assertEqual(ok, stop_game(Game)),
     server:stop(Server),
     ok.
 
@@ -699,16 +694,16 @@ check_pot(GID, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, N) ->
 
 %%% Leave out of turn
 
-filter_220({?PP_GAME_STAGE, _, ?GS_RIVER, _}, Bot, Player) ->
+leave_filter({?PP_GAME_STAGE, _, ?GS_RIVER, _}, Bot) ->
     io:format("Elvis #~w is leaving the building!~n", [Bot#bot.player]),
-    gen_server:cast(Player, {?PP_LEAVE, Bot#bot.game}),
-    gen_server:cast(Player, ?PP_LOGOUT),
-    {stop, Bot#bot{ done = true }};
+    ok = ?tcpsend(Bot#bot.socket, {?PP_LEAVE, Bot#bot.game}),
+    ok = ?tcpsend(Bot#bot.socket, ?PP_LOGOUT),
+    {done, Bot#bot{ done = true }};
 
-filter_220(_, Bot, _Player) ->
+leave_filter(_, Bot) ->
     {none, Bot}.
         
-game_simulation_220_test() ->
+leave_out_of_turn_test() ->
     flush(),
     Host = "localhost", 
     Port = port(),
@@ -719,31 +714,28 @@ game_simulation_220_test() ->
 				{?LT_FIXED_LIMIT, 10, 20},
                                 100, 1000),
     GID = cardgame:call(Game, 'ID'),
-    cardgame:cast(Game, {'NOTE', game_simulation_220}),
+    cardgame:cast(Game, {'NOTE', leave_out_of_turn}),
     cardgame:cast(Game, {'REQUIRED', 3}),
     %% create dummy players
-    Data 
-        = [{P3, _}, _, _, _]
-	= setup_game(Host, Port, GID, 1, % games to play
-                     [{<<"test220-bot1">>, 1, ['BLIND', %1
-                                           'CALL', %1
-                                           'CHECK', %2
-                                           'CHECK', %3
-                                           'CHECK'
-                                          ]},
-                      {<<"test220-bot2">>, 2, ['BLIND', %1
-                                           'CALL', %1
-                                           'CHECK', %2
-                                           'CHECK', %3
-                                           'CHECK'
-                                          ]},
-                      {<<"test220-bot3">>, 3, []}
+    Data = setup_game(Host, Port, GID, 1, % games to play
+                      [{<<"test220-bot1">>, 1, ['BLIND', %1
+                                                'CALL', %1
+                                                'CHECK', %2
+                                                'CHECK', %3
+                                                'CHECK'
+                                               ]},
+                       {<<"test220-bot2">>, 2, ['BLIND', %1
+                                                'CALL', %1
+                                                'CHECK', %2
+                                                'CHECK', %3
+                                                'CHECK'
+                                               ]},
+                       {<<"test220-bot3">>, 3, ['RAISE', 
+                                                'CALL', 
+                                                'CHECK', 
+                                                {'FILTER', fun leave_filter/2}
+                                               ]}
                      ]),
-    Filter = fun(Event, Bot) ->
-                     filter_220(Event, Bot, P3)
-             end,
-    Actions = ['RAISE', 'CALL', 'CHECK', {'FILTER', Filter}],
-    gen_server:cast(P3, {'SET ACTIONS', Actions}),    
     %% make sure game is started
     ?assertMsg({'START', GID}, ?START_DELAY * 2, []),
     %% wait for game to end
@@ -885,9 +877,17 @@ find_game(Host, Port, GameType) ->
     GID.
 
 flush() ->
+    flush(false).
+
+flush(Debug) ->
     receive
 	X ->
-            io:format("flush: ~p~n", [X]),
+            if 
+                Debug ->
+                    io:format("Flush: ~p~n", [X]);
+                true ->
+                    ok
+            end,
 	    flush()
     after 0 ->
 	    ok
@@ -926,7 +926,7 @@ setup_game(Host, Port, GID, GamesToPlay, Bots)
        is_number(GID),
        is_number(GamesToPlay),
        is_list(Bots) ->
-    X = connect_observer(Host, Port, GID, GamesToPlay, false),
+    X = connect_observer(Host, Port, GID, GamesToPlay, true),
     setup_game(Host, Port, GID, GamesToPlay, Bots, [X]);
     
 setup_game(_Host, _Port, _GID, _GamesToPlay, []) ->
@@ -962,11 +962,16 @@ stop_game(Game) ->
     stop_proc(Game, cardgame).
 
 stop_player(Player) ->
-    stop_proc(Player, player).
+    stop_proc(Player, none).
 
 stop_proc(Proc, Mod) ->
     Ref = erlang:monitor(process, Proc),
-    Mod:stop(Proc),
+    case Mod of 
+        none ->
+            ok;
+        _ ->
+            Mod:stop(Proc)
+    end,
     receive 
         {'DOWN', Ref, _, _, _} ->
             ok
