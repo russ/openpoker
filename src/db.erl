@@ -231,7 +231,7 @@ find(Table, Field, Value)
 find_game(GID) ->
     case mnesia:dirty_read(game_xref, GID) of
 	[XRef] ->
-	    XRef#game_xref.proc_id;
+	    XRef#game_xref.process;
 	_ ->
 	    game_not_found
     end.

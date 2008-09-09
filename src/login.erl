@@ -32,7 +32,7 @@ login([Info], [_Nick, Pass|_] = Args)
     %% replace dead pids with none
     Player1 = Player#player {
                 socket = fix_pid(Player#player.socket),
-                proc_id = fix_pid(Player#player.proc_id)
+                process = fix_pid(Player#player.process)
 	       },
     %% check player state and login
     Condition = check_player(Info, Player1, [Pass], 
@@ -71,18 +71,18 @@ login(Info, Player, account_disabled, _) ->
 
 login(Info, Player, player_online, Args) ->
     %% player is idle
-    gen_server:cast(Player#player.proc_id, 'LOGOUT'),
+    gen_server:cast(Player#player.process, 'LOGOUT'),
     login(Info, Player, player_offline, Args);
 
 login(Info, Player, client_down, [_, _, Socket]) ->
     %% tell player process to talk to the new socket
-    gen_server:cast(Player#player.proc_id, {'SOCKET', Socket}),
+    gen_server:cast(Player#player.process, {'SOCKET', Socket}),
     Player1 = Player#player{ socket = Socket },
-    {Info, Player1, {ok, Player#player.proc_id}};
+    {Info, Player1, {ok, Player#player.process}};
 
 login(Info, Player, player_busy, Args) ->
     Temp = login(Info, Player, client_down, Args),
-    Msg = {'RESEND UPDATES', Player#player.proc_id},
+    Msg = {'RESEND UPDATES', Player#player.process},
     %% resend accumulated game updates
     lists:foreach(fun(Game) -> 
                           case db:find_game(Game) of
@@ -92,7 +92,7 @@ login(Info, Player, player_busy, Args) ->
                                   cardgame:cast(Pid, Msg) 
                           end
                   end,
-                  gen_server:call(Player#player.proc_id, 'GAMES')),
+                  gen_server:call(Player#player.process, 'GAMES')),
     Temp;
 
 login(Info, Player, player_offline, [Nick, _, Socket]) ->
@@ -103,7 +103,7 @@ login(Info, Player, player_offline, [Nick, _, Socket]) ->
     %% update player record
     Player1 = Player#player {
 		pid = ID,
-		proc_id = Pid,
+		process = Pid,
                 socket = Socket
 	       },
     {Info, Player1, {ok, Pid}}.
@@ -135,8 +135,8 @@ is_account_disabled(Info, _, _) ->
 is_player_busy(Info, Player, _) ->
     {Online, _} = is_player_online(Info, Player, []),
     Games = if
-                Player#player.proc_id /= none ->
-                    gen_server:call(Player#player.proc_id, 'GAMES');
+                Player#player.process /= none ->
+                    gen_server:call(Player#player.process, 'GAMES');
                 true ->
                     []
             end,
@@ -145,17 +145,17 @@ is_player_busy(Info, Player, _) ->
 
 is_player_online(_, Player, _) ->
     SocketAlive = Player#player.socket /= none,
-    PlayerAlive = Player#player.proc_id /= none,
+    PlayerAlive = Player#player.process /= none,
     {SocketAlive and PlayerAlive, player_online}.
 
 is_client_down(_, Player, _) ->
     SocketDown = Player#player.socket == none,
-    PlayerAlive = Player#player.proc_id /= none,
+    PlayerAlive = Player#player.process /= none,
     {SocketDown and PlayerAlive, client_down}.
 
 is_offline(_, Player, _) ->
     SocketDown = Player#player.socket == none,
-    PlayerDown = Player#player.proc_id == none,
+    PlayerDown = Player#player.process == none,
     {SocketDown and PlayerDown, player_offline}.
 
 fix_pid(none) ->
@@ -181,7 +181,7 @@ fix_pid(Pid)
 
 %% logout(Player) 
 %%   when is_record(Player, player) ->
-%%     player:stop(Player#player.proc_id).
+%%     player:stop(Player#player.process).
 
 %%% 
 %%% Handlers

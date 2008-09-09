@@ -18,7 +18,7 @@
 
 -record(player, {
 	  pid,
-	  proc_id = none, % process id
+	  process = none, % process id
           socket = none
 	 }).
 
@@ -30,7 +30,7 @@
 
 -record(game_xref, {
 	  gid,
-	  proc_id,
+	  process,
 	  type,
 	  limit,
           table_name,

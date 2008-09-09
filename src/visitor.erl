@@ -98,7 +98,7 @@ handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
     case {I, P} of
 	{[Info], [Player]} ->
 	    handle_cast({?PP_PLAYER_INFO, 
-			 Player#player.proc_id, 
+			 Player#player.process, 
                          0.0,
 			 Info#player_info.nick,
 			 Info#player_info.location}, Data);

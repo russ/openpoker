@@ -105,7 +105,7 @@ init([FSM, GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers])
     %% store game info
     Game = #game_xref {
       gid = OID,
-      proc_id = FSM,
+      process = FSM,
       type = GameType, 
       limit = LimitType,
       table_name = TableName,
@@ -999,7 +999,7 @@ find(GameType, LimitType,
 		 
 find_1(GameType, LimitType) ->
     Q = qlc:q([{G#game_xref.gid,
-		G#game_xref.proc_id,
+		G#game_xref.process,
 		G#game_xref.type,
 		G#game_xref.limit}
 	       || G <- mnesia:table(game_xref),

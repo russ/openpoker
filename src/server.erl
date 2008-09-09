@@ -296,7 +296,7 @@ kill_games([]) ->
     ok;
 
 kill_games([H|T]) ->
-    cardgame:stop(H#game_xref.proc_id),
+    cardgame:stop(H#game_xref.process),
     kill_games(T).
 
 start_test_game(Bin) 

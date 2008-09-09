@@ -372,7 +372,7 @@ handle_call_other(Event, From, Data) ->
 cast(PID, Event) ->
     case mnesia:dirty_read(player, PID) of
 	[Player] ->
-	    gen_server:cast(Player#player.proc_id, Event);
+	    gen_server:cast(Player#player.process, Event);
 	_ ->
 	    none
     end.
@@ -380,7 +380,7 @@ cast(PID, Event) ->
 call(PID, Event) ->
     case mnesia:dirty_read(player, PID) of
 	[Player] ->
-	    gen_server:call(Player#player.proc_id, Event);
+	    gen_server:call(Player#player.process, Event);
 	_ ->
 	    none
     end.
@@ -423,7 +423,7 @@ create_runtime(ID, Pid)
        is_pid(Pid) ->
     Player = #player {
       pid = ID,
-      proc_id = Pid
+      process = Pid
      },
     ok = mnesia:dirty_write(Player).
 
@@ -453,7 +453,7 @@ leave_games(Player, [GID|Rest]) ->
                                       {message, no_games_to_leave}
                                      ]);
         [Game] ->
-            cardgame:send_event(Game#game_xref.proc_id, {?PP_LEAVE, self()});
+            cardgame:send_event(Game#game_xref.process, {?PP_LEAVE, self()});
         Games = [_|_] ->
             error_logger:info_report([{module, ?MODULE}, 
                                       {line, ?LINE},
