@@ -567,7 +567,7 @@ find_server(Sock) ->
     end.
 
 rig_deck(Game) ->
-    {ok, Deck} = deck:start(),
+    Deck = deck:new(),
     Players = Game#irc_game.players,
     Count = size(Players),
     Cards1 = player_cards(Players, Deck, 1, Count, []),
@@ -575,7 +575,6 @@ rig_deck(Game) ->
     %%io:format("Cards1: ~w~n", [Cards1]),
     %%io:format("Cards2: ~w~n", [Cards2]),
     Cards = Cards1 ++ Cards2 ++ Game#irc_game.board,
-    deck:stop(Deck),
     Cards.
 
 player_cards(_Players, _Deck, _N, 0, Acc) ->
@@ -583,21 +582,22 @@ player_cards(_Players, _Deck, _N, 0, Acc) ->
 
 player_cards(Players, Deck, N, Count, Acc) ->
     Player = element(Count, Players),
-    Card = if
-	       length(Player#irc_player.cards) < N ->
-		   %%Nick = Player#irc_player.nick,
-		   %%io:format("~s has ~w~n", [Nick, Player#irc_player.cards]),
-		   %%io:format("No card at round ~w, drawing from deck~n",
-		   %%	     [N]),
-		   gen_server:call(Deck, 'DRAW');
-	       true ->
-		   X = lists:nth(N, Player#irc_player.cards),
-		   %%Nick = Player#irc_player.nick,
-		   %%io:format("Dealing ~w to ~s~n", 
-		   %%	     [X, Nick]),
-		   X
-	   end,
-    player_cards(Players, Deck, N, Count - 1, [Card|Acc]).
+    {Deck1, Card} = 
+        if
+            length(Player#irc_player.cards) < N ->
+                %%Nick = Player#irc_player.nick,
+                %%io:format("~s has ~w~n", [Nick, Player#irc_player.cards]),
+                %%io:format("No card at round ~w, drawing from deck~n",
+                %%	     [N]),
+                deck:draw(Deck);
+            true ->
+                X = lists:nth(N, Player#irc_player.cards),
+                %%Nick = Player#irc_player.nick,
+                %%io:format("Dealing ~w to ~s~n", 
+                %%	     [X, Nick]),
+                {Deck, X}
+        end,
+    player_cards(Players, Deck1, N, Count - 1, [Card|Acc]).
 
 setup(Host) ->
     mb:cleanup(),
