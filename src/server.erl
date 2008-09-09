@@ -299,16 +299,14 @@ kill_games([H|T]) ->
     cardgame:stop(H#game_xref.process),
     kill_games(T).
 
-start_test_game(Bin) 
-  when is_binary(Bin) ->
-    {GameType, Expected, Limit, Delay, Timeout, Cards} = 
-	binary_to_term(Bin),
+start_test_game(Data) ->
+    {GameType, Expected, Limit, Delay, Timeout, Cards} = Data,
     {ok, Pid} = cardgame:start(GameType,
 			       Expected,
 			       Limit,
 			       Delay,
 			       Timeout),
-    cardgame:cast(Pid, {'RIG', Cards}),
+    cardgame:cast(Pid, {'RIG', tuple_to_list(Cards)}),
     cardgame:cast(Pid, {'REQUIRED', Expected}),
     GID = cardgame:call(Pid, 'ID'),
     {?PP_GOOD, ?PP_MAKE_TEST_GAME, GID}.

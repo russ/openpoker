@@ -28,7 +28,8 @@ reset(Deck)
     end.
 
 rig(Deck, Cards)
-  when is_record(Deck, deck) ->
+  when is_record(Deck, deck),
+       is_list(Cards) ->
     Deck#deck {
       rigged = Cards,
       cards = Cards

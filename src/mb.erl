@@ -566,7 +566,8 @@ find_server(Sock) ->
 	    none
     end.
 
-rig_deck(Game) ->
+rig_deck(Game) 
+  when is_record(Game, irc_game) ->
     Deck = deck:new(),
     Players = Game#irc_game.players,
     Count = size(Players),
@@ -574,8 +575,8 @@ rig_deck(Game) ->
     Cards2 = player_cards(Players, Deck, 2, Count, []),
     %%io:format("Cards1: ~w~n", [Cards1]),
     %%io:format("Cards2: ~w~n", [Cards2]),
-    Cards = Cards1 ++ Cards2 ++ Game#irc_game.board,
-    Cards.
+    Cards1 ++ Cards2 ++ lists:map(fun hand:card_to_int/1, 
+                                  Game#irc_game.board).
 
 player_cards(_Players, _Deck, _N, 0, Acc) ->
     Acc;
@@ -591,11 +592,11 @@ player_cards(Players, Deck, N, Count, Acc) ->
                 %%	     [N]),
                 deck:draw(Deck);
             true ->
-                X = lists:nth(N, Player#irc_player.cards),
+                {Face, Suit} = lists:nth(N, Player#irc_player.cards),
                 %%Nick = Player#irc_player.nick,
                 %%io:format("Dealing ~w to ~s~n", 
                 %%	     [X, Nick]),
-                {Deck, X}
+                {Deck, hand:card_to_int(Face, Suit)}
         end,
     player_cards(Players, Deck1, N, Count - 1, [Card|Acc]).
 
@@ -687,7 +688,7 @@ start_game(Host, Port, Game, Delay)
     end.
 
 start_game(Sock, Packet) ->
-    T = {?PP_MAKE_TEST_GAME, term_to_binary(Packet)},
+    T = {?PP_MAKE_TEST_GAME, Packet},
     ok = gen_tcp:send(Sock, proto:write(T)),
     receive
 	{tcp, Sock, Bin} ->

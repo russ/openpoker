@@ -5,7 +5,8 @@
 -export([new/0, new/1, new/2, set/2, add/2, cards/1, rank/1]).
 
 -export([make_card/1, face/1, suit/1, print_bin/1, 
-         card_to_int/2, int_to_card/1, print_rep/1, describe/1]).
+         card_to_int/1, card_to_int/2, int_to_card/1, 
+         print_rep/1, describe/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test.hrl").
@@ -397,6 +398,9 @@ suit(Suit) when is_number(Suit) ->
 	3 -> hearts;
 	4 -> spades
     end.
+
+card_to_int({Face, Suit}) ->
+    card_to_int(Face, Suit).
 
 card_to_int(Face, Suit) ->
     (hand:face(Face) bsl 16) bor hand:suit(Suit).
