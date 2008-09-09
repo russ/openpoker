@@ -5,7 +5,7 @@
 -export([new/0, new/1, new/2, set/2, add/2, cards/1, rank/1]).
 
 -export([make_card/1, face/1, suit/1, print_bin/1, 
-         print_rep/1, describe/1]).
+         card_to_int/2, int_to_card/1, print_rep/1, describe/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test.hrl").
@@ -143,11 +143,11 @@ make_rep(Hand) when record(Hand, hand) ->
 make_rep(Cards) when list(Cards) ->
     make_rep(Cards, {0, 0, 0, 0}).
 
-make_rep([{Face, Suit}|T], Rep) -> 
-    Suit1 = suit(Suit),
-    Old = element(Suit1, Rep),
-    Face1 = face(Face),
-    make_rep(T, setelement(Suit1, Rep, Old bor Face1));
+make_rep([H|T], Rep) when is_integer(H) -> 
+    Face = H bsr 16,
+    Suit = H band 16#ffff,
+    Old = element(Suit, Rep),
+    make_rep(T, setelement(Suit, Rep, Old bor Face));
 
 make_rep([], Rep) ->
     tuple_to_list(Rep).
@@ -347,7 +347,7 @@ make_card([H, T]) ->
 	       $H -> hearts;
 	       $S -> spades
 	   end,
-    {Rank, Suit}.
+    card_to_int(Rank, Suit).
 
 face(Face) when atom(Face)->
     1 bsl case Face of
@@ -397,7 +397,15 @@ suit(Suit) when is_number(Suit) ->
 	3 -> hearts;
 	4 -> spades
     end.
-    
+
+card_to_int(Face, Suit) ->
+    (hand:face(Face) bsl 16) bor hand:suit(Suit).
+
+int_to_card(Int) ->
+    Face = Int bsr 16,
+    Suit = Int band 16#ffff,
+    {hand:face(Face), hand:suit(Suit)}.
+         
 %%%
 %%% Test suite
 %%%

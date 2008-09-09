@@ -285,9 +285,10 @@ handle({?PP_NOTIFY_BB, GID, PID, Amount, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_SHARED, GID, {Face, Suit}, _Seq}, Data) ->
+handle({?PP_NOTIFY_SHARED, GID, Card, _Seq}, Data) ->
     if
 	Data#obs.trace ->
+            {Face, Suit} = hand:int_to_card(Card),
 	    io:format("~w: BOARD: {~w, ~w}~n",
 		      [GID, Face, Suit]);
 	true ->

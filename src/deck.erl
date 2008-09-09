@@ -65,7 +65,7 @@ make_deck() ->
     make_deck(Face, Suit, []).
 
 make_deck(Face, [Suit|Rest], Acc) when atom(Face) ->
-    make_deck(Face, Rest, [{ Face, Suit }|Acc]);
+    make_deck(Face, Rest, [hand:card_to_int(Face, Suit)|Acc]);
 
 make_deck(_Face, [], Acc) ->
     Acc;

@@ -456,7 +456,7 @@ handle({?PP_NOTIFY_BB, _GID, _SeatNum, _Seq}, Bot) ->
 handle({?PP_GOOD, _, _}, Bot) ->
     {noreply, Bot};
 
-handle({Cmd, _GID, {_Face, _Suit}, _Seq}, Bot) 
+handle({Cmd, _GID, _Card, _Seq}, Bot) 
   when Cmd == ?PP_NOTIFY_DRAW;
        Cmd == ?PP_NOTIFY_SHARED ->
     {noreply, Bot};

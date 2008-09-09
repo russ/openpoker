@@ -49,13 +49,11 @@ write(Data) ->
     rfc4627:encode(deep_tuple_to_list(write_check(Data))).
 
 read_check(Data) ->
-    Data1 = game_id_to_pid(Data),
-    data_to_card(Data1).
+    game_id_to_pid(Data).
 
 write_check(Data) ->
-    Data1 = card_to_data(Data),
-    Data2 = pid_to_player_id(Data1),
-    pid_to_game_id(Data2).
+    Data1 = pid_to_player_id(Data),
+    pid_to_game_id(Data1).
 
 game_id_to_pid(Cmd) 
   when element(1, Cmd) == ?PP_WATCH; 
@@ -88,32 +86,6 @@ pid_to_game_id(Cmd)
 pid_to_game_id(Cmd) ->
     Cmd.
 
-data_to_card({Cmd, GID, Face, Suit, Seq}) 
-  when Cmd == ?PP_NOTIFY_DRAW;
-       Cmd == ?PP_NOTIFY_SHARED ->
-    {Cmd, GID, {hand:face(1 bsl Face), hand:suit(Suit)}, Seq};
-
-data_to_card(Cmd) ->
-    Cmd.
-
-card_to_data({Cmd, GID, {Face, Suit}, Seq})
-  when Cmd == ?PP_NOTIFY_DRAW;
-       Cmd == ?PP_NOTIFY_SHARED ->
-    {Cmd, GID, (bits:log2(hand:face(Face))), (hand:suit(Suit)), Seq};
-       
-card_to_data({Cmd, GID, Player, Cards, Seq})
-  when Cmd == ?PP_NOTIFY_PRIVATE_CARDS ->
-    [{Face1, Suit1}, {Face2, Suit2}] = Cards,
-    PID = gen_server:call(Player,'ID'),
-    {Cmd, GID, PID, [{ (bits:log2(hand:face(Face1))), 
-                       (hand:suit(Suit1)) },
-                     { (bits:log2(hand:face(Face2))), 
-                       (hand:suit(Suit2)) }],
-     Seq};
-
-card_to_data(Cmd) ->
-    Cmd.
-
 pid_to_player_id(Cmd) 
   when element(1, Cmd) == ?PP_NOTIFY_CHAT ->
     Player = element(3, Cmd),
@@ -129,6 +101,7 @@ pid_to_player_id(Cmd)
   when element(1, Cmd) == ?PP_NOTIFY_JOIN;
        element(1, Cmd) == ?PP_NOTIFY_GAME_INPLAY;
        element(1, Cmd) == ?PP_NOTIFY_PRIVATE;
+       element(1, Cmd) == ?PP_NOTIFY_PRIVATE_CARDS;
        element(1, Cmd) == ?PP_NOTIFY_LEAVE;
        element(1, Cmd) == ?PP_NOTIFY_CHAT;
        element(1, Cmd) == ?PP_NOTIFY_WIN;
