@@ -77,7 +77,7 @@ handle_cast({'RUN', Game, Host, Port, Trace, Delay}, Data) ->
 	    ok
     end,
     %% start test game
-    GID = start_game(Host, Port, Game, Delay),
+    {ok, GID} = start_game(Host, Port, Game, Delay),
     Observer = setup_observer(self(), GID, Host, Port, Trace),
     Players = setup_players(Game, GID, Host, Port),
     TestGame = #test_game {
@@ -305,7 +305,7 @@ test(DB, _Key, _Mb, 0, _Host, _Port, _Trace, _Delay) ->
 
 test(DB, Key, Mb, Max, Host, Port, Trace, Delay) ->
     %%F = fun() ->
-    {Host1, Port1} =  find_server(Host, Port),
+    {Host1, Port1} = find_server(Host, Port),
     [Game] = dets:lookup(DB, Key),
     Game1 = fix_nicks(Game),
     update_players(Game1),
@@ -665,24 +665,25 @@ start_game(Host, Port, Game, Delay)
     F = fun()  ->
 		case tcp_server:start_client(Host, Port, 1024) of
 		    {ok, Sock} ->
-			Result = start_game(Sock, Packet),
+			{ok, Result} = start_game(Sock, Packet),
 			ok = gen_tcp:close(Sock),
 			Parent ! {start_game, Result};
-		    {error, Reason} ->
-			error_logger:info_report([{module, ?MODULE}, 
-						  {line, ?LINE},
-						  {where, start_game},
-						  {self, self()}, 
-						  {message, Reason}]),
-			Parent ! {start_game, none}
+		    Any ->
+			Parent ! {error, Any}
 		end
 	end,
     spawn(F),
     receive
 	{start_game, Result} ->
-	    Result
-    after 100000 ->
-	    start_game_timeout
+	    {ok, Result};
+        {error, Reason} ->
+            error_logger:info_report([{module, ?MODULE}, 
+                                      {line, ?LINE},
+                                      {where, start_game},
+                                      {self, self()}, 
+                                      {message, Reason}])
+    after 5000 ->
+	    {error, start_game_timeout}
     end.
 
 start_game(Sock, Packet) ->
@@ -692,7 +693,7 @@ start_game(Sock, Packet) ->
 	{tcp, Sock, Bin} ->
 	    case proto:read(Bin) of 
 		{?PP_GOOD, ?PP_MAKE_TEST_GAME, GID} ->
-		    GID;
+		    {ok, GID};
 		Any ->
 		    {error, Any}
 	    end;
@@ -702,7 +703,7 @@ start_game(Sock, Packet) ->
 	Any ->
 	    io:format("start_game: received ~w~n", [Any]),
 	    start_game(Sock, Packet)
-    after 100000 ->
+    after 5000 ->
 	    io:format("start_game: timeout, exiting~n"),
 	    none
     end.
