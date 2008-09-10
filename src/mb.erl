@@ -680,7 +680,7 @@ start_game(Host, Port, Game, Delay)
                                       {where, start_game},
                                       {self, self()}, 
                                       {message, Reason}])
-    after 5000 ->
+    after 600000 ->
 	    {error, start_game_timeout}
     end.
 
@@ -701,7 +701,7 @@ start_game(Sock, Packet) ->
 	Any ->
 	    io:format("start_game: received ~w~n", [Any]),
 	    start_game(Sock, Packet)
-    after 5000 ->
+    after 600000 ->
 	    io:format("start_game: timeout, exiting~n"),
 	    none
     end.
