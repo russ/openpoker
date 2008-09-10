@@ -25,7 +25,8 @@ new(Nick, IRC_ID, SeatNum, Balance)
       seat_num = SeatNum,
       irc_game_id = IRC_ID,
       done = false,
-      games_to_play = 1
+      games_to_play = 1,
+      connect_attempts = 0
      },
     Bot.
 
@@ -142,11 +143,15 @@ handle_other(Event, Bot) ->
     {noreply, Bot}.
 
 handle_connect(Host, Port, Bot) ->
-    {ok, Sock} = tcp_server:start_client(Host, Port, 1024),
-    Bot1 = Bot#bot {
-	     socket = Sock
-	    },
-    {reply, ok, Bot1}.
+    case tcp_server:start_client(Host, Port, 1024) of
+        {ok, Sock} ->
+            {reply, ok, Bot#bot{ socket = Sock }};
+        {error, eaddrnotavail} ->
+            N = Bot#bot.connect_attempts,
+            timer:sleep(random:uniform(2000) + 
+                        random:uniform(10000) * N),
+            handle_connect(Host, Port, Bot#bot{ connect_attempts = N + 1 })
+    end.
     
 handle_actions(Bot) ->
     {reply, Bot#bot.actions, Bot}.

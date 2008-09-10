@@ -22,6 +22,7 @@
 	  seat_num,
 	  irc_game_id,
 	  done,
-          games_to_play
+          games_to_play,
+          connect_attempts
 	 }).
 

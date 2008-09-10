@@ -6,7 +6,7 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 
--export([start/0, stop/1, setup/1, setup/0, cleanup/0]).
+-export([start/0, stop/1, setup/1, setup/0, setup/2, cleanup/0]).
 
 -export([remove/1, print/1, filter/0, create_players/0,
 	 test/0, test/1, test/3, test/4, test/5, count/0]).
@@ -324,7 +324,7 @@ setup_players(IRC_ID, GID, Host, Port, [Player|Rest], N, Acc) ->
     Nick = list_to_binary(Player#irc_player.nick),
     {ok, Bot} = bot:start(Nick, IRC_ID, N, Player#irc_player.balance),
     Pass = <<"foo">>,
-    ok = gen_server:call(Bot, {'CONNECT', Host, Port}, 15000),
+    ok = gen_server:call(Bot, {'CONNECT', Host, Port}, infinity),
     gen_server:cast(Bot, {'SET ACTIONS', Player#irc_player.actions}),
     gen_server:cast(Bot, {?PP_LOGIN, Nick, Pass}),
     gen_server:cast(Bot, {?PP_WATCH, GID}),
@@ -515,7 +515,7 @@ setup_observer(Parent, GID, Host, Port, Trace) ->
     {ok, Observer} = observer:start(Parent),
     gen_server:cast(Observer, {'TRACE', Trace}),
     %% watch game
-    ok = gen_server:call(Observer, {'CONNECT', Host, Port}, 15000),
+    ok = gen_server:call(Observer, {'CONNECT', Host, Port}, infinity),
     gen_server:cast(Observer, {?PP_WATCH, GID}),
     Observer.
 
@@ -681,6 +681,9 @@ start_game(Host, Port, Game, Delay)
     receive
 	{start_game, Result} ->
 	    {ok, Result};
+        {error, eaddrnotavail} ->
+            timer:sleep(random:uniform(10000)),
+            start_game(Host, Port, Game, Delay);
         {error, Reason} ->
             error_logger:info_report([{module, ?MODULE}, 
                                       {line, ?LINE},

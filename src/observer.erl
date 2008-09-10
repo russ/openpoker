@@ -70,9 +70,14 @@ handle_cast(Event, Data) ->
     ok = ?tcpsend(Data#obs.socket, Event),
     {noreply, Data}.
 
-handle_call({'CONNECT', Host, Port}, _From, Data) ->
-    {ok, Sock} = tcp_server:start_client(Host, Port, 1024),
-    {reply, ok, Data#obs{ socket = Sock }};
+handle_call(X = {'CONNECT', Host, Port}, From, Data) ->
+    case tcp_server:start_client(Host, Port, 1024) of
+        {ok, Sock} ->
+            {reply, ok, Data#obs{ socket = Sock }};
+        {error, eaddrnotavail} ->
+            timer:sleep(random:uniform(5000)),
+            handle_call(X, From, Data)
+    end;
 
 handle_call('ID', _From, Data) ->
     {reply, Data#obs.id, Data};
