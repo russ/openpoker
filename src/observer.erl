@@ -177,7 +177,7 @@ handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, GameInplay,SeatNum, _Seq}, Data) ->
 handle({?PP_NOTIFY_CHAT, GID, PID, _Seq, Message}, Data) ->
     if
 	Data#obs.trace ->
-	    io:format("~w: CHAT: ~w: ~s~n",
+	    io:format("~w: CHAT: ~w: ~p~n",
 		      [GID, PID, Message]);
 	true ->
 	    ok
