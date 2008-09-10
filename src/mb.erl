@@ -660,6 +660,19 @@ fix_nicks(Id, Players, Size) ->
     Players1 = setelement(Size, Players, Player1),
     fix_nicks(Id, Players1, Size - 1).
 
+do_start_game(Host, Port, Parent, Packet) ->
+    case tcp_server:start_client(Host, Port, 1024) of
+        {ok, Sock} ->
+            {ok, Result} = start_game(Sock, Packet),
+            ok = gen_tcp:close(Sock),
+            Parent ! {start_game, Result};
+        {error, eaddrnotavail} ->
+            timer:sleep(random:uniform(10000)),
+            do_start_game(Host, Port, Parent, Packet);
+        Any ->
+            Parent ! {error, Any}
+    end.
+
 start_game(Host, Port, Game, Delay)
   when is_record(Game, irc_game) ->
     Parent = self(),
@@ -670,23 +683,10 @@ start_game(Host, Port, Game, Delay)
 	      Delay, % game start delay
 	      ?PLAYER_TIMEOUT, 
 	      Cards},
-    F = fun()  ->
-		case tcp_server:start_client(Host, Port, 1024) of
-		    {ok, Sock} ->
-			{ok, Result} = start_game(Sock, Packet),
-			ok = gen_tcp:close(Sock),
-			Parent ! {start_game, Result};
-		    Any ->
-			Parent ! {error, Any}
-		end
-	end,
-    spawn(F),
+    spawn(fun()  -> do_start_game(Host, Port, Parent, Packet) end),
     receive
 	{start_game, Result} ->
 	    {ok, Result};
-        {error, eaddrnotavail} ->
-            timer:sleep(random:uniform(10000)),
-            start_game(Host, Port, Game, Delay);
         {error, Reason} ->
             error_logger:info_report([{module, ?MODULE}, 
                                       {line, ?LINE},
