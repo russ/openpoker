@@ -548,9 +548,11 @@ find_server(Sock) ->
     receive
 	{tcp, Sock, Bin} ->
 	    case proto:read(Bin) of 
-		{?PP_HANDOFF, Port, Host} ->
-		    {binary_to_list(Host), Port}
-	    end;
+		{?PP_HANDOFF, Port, Host} when is_binary(Host) ->
+		    {binary_to_list(Host), Port};
+		{?PP_HANDOFF, Port, Host} when is_list(Host) ->
+		    {Host, Port}
+            end;
 	{error, closed} ->
 	    io:format("Error retrieving gateway reply~n"),
 	    none;
