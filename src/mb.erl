@@ -249,14 +249,10 @@ create_players([Player|Rest])
     Balance = Player#irc_player.balance,
     case mnesia:dirty_index_read(player_info, Nick, #player_info.nick) of
 	[Info] ->
-	    if 
-		Info#player_info.balance /= Balance ->
-                    Info1 = Info#player_info{ balance = Balance },
-                    ok = mnesia:dirty_write(Info1);
-		true ->
-		    ok
-	    end;
-	[] ->
+            PID = Info#player_info.pid,
+            player:delete_balance(PID),
+            player:update_balance(PID, Balance);
+        [] ->
 	    player:create(Nick, <<"foo">>, <<"">>, Balance)
     end,
     create_players(Rest).
@@ -628,7 +624,8 @@ cleanup() ->
 	    mnesia:clear_table(game_xref),
             mnesia:clear_table(timeout_history),
 	    counter:reset(game),
-	    db:set(cluster_config, 0, {enable_dynamic_games, true});
+            CC = #cluster_config{ id = 0, enable_dynamic_games = true},
+            ok = mnesia:dirty_write(CC);
 	Any ->
 	    io:format("mb:cleanup: mnesia error ~w~n", [Any])
     end,

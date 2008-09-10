@@ -11,7 +11,6 @@
 	  nick,
 	  password,
 	  location,
-	  balance = 0.0,
 	  login_errors = 0,
 	  disabled = false % player is disabled
 	 }).
@@ -22,10 +21,14 @@
           socket = none
 	 }).
 
+-record(balance, {
+          pid, 
+          amount % integer
+         }).
+
 -record(inplay, {
-          gid,
-          pid,
-          amount
+          gidpid, 
+          amount % integer
          }).
 
 -record(game_xref, {

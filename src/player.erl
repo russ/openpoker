@@ -6,7 +6,7 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 -export([start/1, stop/1, stop/2, cast/2, call/2, test/0]).
--export([create/4]).
+-export([create/4, delete_balance/1, update_balance/2, update_inplay/3]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -219,8 +219,8 @@ handle_cast_notify_leave(GID, Data) ->
                  false->
                      0.0
              end,
-    {atomic, ok} = db:inc(player_info, ID, {balance, Inplay}),
-    {atomic, ok} = db:delete_pat({inplay, GID, ID, '_'}),
+    mnesia:dirty_update_counter(balance, ID, trunc(Inplay * 10000)),
+    ok = mnesia:dirty_delete(inplay, {GID, ID}),
     LastGame = gb_trees:size(Xref) == 1,
     Zombie = Data#player_data.zombie == 1,
     Self = self(),
@@ -293,9 +293,9 @@ handle_cast_player_info_req(PID, Data) ->
     {noreply, Data}.
 
 handle_cast_new_game_req(GameType, Expected, Limit, Data) ->
-    {atomic, DynamicGames} = db:get(cluster_config, 0, enable_dynamic_games),
+    [CC] = mnesia:dirty_read(cluster_config, 0),
     if
-	DynamicGames ->
+	CC#cluster_config.enable_dynamic_games ->
 	    case cardgame:start(GameType, Expected, Limit) of
 		{ok, Pid} ->
 		    GID = cardgame:call(Pid, 'ID'),
@@ -309,11 +309,11 @@ handle_cast_new_game_req(GameType, Expected, Limit, Data) ->
     {noreply, Data}.
 
 handle_cast_balance_req(Data) ->
-    case mnesia:dirty_read(player_info, Data#player_data.pid) of
-	[Info] ->
+    case mnesia:dirty_read(balance, Data#player_data.pid) of
+	[Balance] ->
 	    handle_cast({?PP_BALANCE_INFO, 
-			 Info#player_info.balance,
-			 inplay(Data)}, Data);
+			 Balance#balance.amount,
+			 trunc(inplay(Data) * 10000)}, Data);
 	_ ->
 	    oops
     end,
@@ -411,10 +411,10 @@ create(Nick, Pass, Location, Balance)
               %% store a hash of the password
               %% instead of the password itself
               password = erlang:phash2(Pass, 1 bsl 32),
-              location = Location,
-              balance = Balance
+              location = Location
              },
             ok = mnesia:dirty_write(Info),
+            update_balance(ID, Balance),
             {ok, ID}
     end.
 
@@ -465,6 +465,19 @@ leave_games(Player, [GID|Rest]) ->
                                      ])
     end,
     leave_games(Player, Rest).
+
+delete_balance(PID) ->
+    mnesia:dirty_delete(balance, PID).
+
+update_balance(PID, Amount) ->
+    mnesia:dirty_update_counter(balance, 
+                                PID, 
+                                trunc(Amount * 10000)).    
+    
+update_inplay(GID, PID, Amount) ->
+    mnesia:dirty_update_counter(inplay, 
+                                {GID, PID}, 
+                                trunc(Amount * 10000)).    
 
 %%%
 %%% Test suite

@@ -19,6 +19,7 @@ install(Nodes) when is_list(Nodes) ->
     install_counter(Nodes),
     install_player_info(Nodes),
     install_player(Nodes),
+    install_balance(Nodes),
     install_inplay(Nodes),
     install_game_xref(Nodes),
     install_cluster_config(Nodes),
@@ -49,16 +50,20 @@ install_player(Nodes) ->
                              {attributes, record_info(fields, player)}
                             ]).
 
+install_balance(Nodes) ->
+    {atomic, ok} =
+        mnesia:create_table(balance, 
+                            [
+                             {disc_copies, Nodes}, 
+                             {type, set}, 
+                             {attributes, record_info(fields, balance)}
+                            ]).
 install_inplay(Nodes) ->
-    %% player inplay balance per table,
-    %% swept back into player_info.balance 
-    %% when player leaves a table
     {atomic, ok} =
         mnesia:create_table(inplay, 
                             [
                              {disc_copies, Nodes}, 
-                             {type, bag}, 
-                             {index, [pid]},
+                             {type, set}, 
                              {attributes, record_info(fields, inplay)}
                             ]).
 
@@ -138,4 +143,7 @@ populate() ->
     
 reset_counters()->
     counter:reset(game),
-    counter:reset(player).
+    counter:reset(player),
+    counter:reset(inplay_xref),
+    ok.
+

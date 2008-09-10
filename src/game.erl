@@ -409,7 +409,7 @@ handle_cast_join(Player, SeatNum, BuyIn, State, Game) ->
 	    %% from balance to inplay
 	    ID = gen_server:call(Player, 'ID'),
             case do_buy_in(GID, ID, BuyIn) of
-		{atomic, ok} ->
+		ok ->
                     %% add the game specific inplay for player
                     gen_server:cast(Player, {'INPLAY=', BuyIn, GID}),
 		    %% take seat and broadcast the fact
@@ -1084,21 +1084,19 @@ do_buy_in(GID, PID, Amt)
   when is_number(GID),
        is_number(PID),
        is_number(Amt) ->
-    F = fun() ->
-                case mnesia:read({player_info, PID}) of
-                    [] ->
-                        {error, key_not_found};
-                    [Info] ->
-                        Balance = Info#player_info.balance,
-                        Info1 = Info#player_info{ balance = Balance - Amt },
-                        ok = mnesia:write(Info1),
-                        Inplay = #inplay{ gid = GID, pid = PID, amount = Amt },
-                        ok = mnesia:write(Inplay);
-                    Any ->
-                        Any
-                end
-        end,
-    mnesia:transaction(F).
+    BuyIn = trunc(Amt * 10000),
+    case mnesia:dirty_read(balance, PID) of
+        [] ->
+            {error, no_balance_found};
+        [B] when BuyIn > B#balance.amount ->
+            {error, not_enough_money};
+        [_] ->
+            player:update_inplay(GID, PID, Amt),
+            player:update_balance(PID, - Amt),
+            ok;
+        Any ->
+            Any
+    end.
 
 force_player_leave(Game) ->
     Seats = Game#game.seats,

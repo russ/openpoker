@@ -54,8 +54,8 @@ login([Info], [_Nick, Pass|_] = Args)
 
 login(Info, Player, bad_password, _) ->
     N = Info#player_info.login_errors + 1,
-    {atomic, MaxLoginErrors} = 
-	db:get(cluster_config, 0, max_login_errors),
+    [CC] = mnesia:dirty_read(cluster_config, 0),
+    MaxLoginErrors = CC#cluster_config.max_login_errors,
     if
 	N > MaxLoginErrors ->
 	    %% disable account
