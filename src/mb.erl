@@ -597,18 +597,21 @@ player_cards(Players, Deck, N, Count, Acc) ->
     player_cards(Players, Deck1, N, Count - 1, [Card|Acc]).
 
 setup(Host) ->
+    setup(Host, true).
+
+setup(Host, TestMode) ->
     mb:cleanup(),
     timer:sleep(1000),
     %% start server in test mode 
     %% to enable starting of test games
-    server:start(Host, 6000, true),
+    server:start(Host, 6000, TestMode),
     gateway:start(node(), 3000, 500000),
     ok.
 
 setup() ->
     schema:install(),
     create_players(),
-    setup(localhost).
+    setup(localhost, true).
 
 test() ->
     test(10).
