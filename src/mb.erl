@@ -599,6 +599,10 @@ player_cards(Players, Deck, N, Count, Acc) ->
 setup(Host) ->
     setup(Host, true).
 
+setup(Host, TestMode) 
+  when is_list(Host) ->
+    setup(list_to_atom(Host), TestMode);
+
 setup(Host, TestMode) ->
     mb:cleanup(),
     timer:sleep(1000),
