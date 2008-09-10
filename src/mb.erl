@@ -608,7 +608,8 @@ setup(Host, TestMode)
     setup(list_to_atom(Host), TestMode);
 
 setup(Host, TestMode) ->
-    mb:cleanup(),
+    schema:install(),
+    create_players(),
     timer:sleep(1000),
     %% start server in test mode 
     %% to enable starting of test games
@@ -617,8 +618,6 @@ setup(Host, TestMode) ->
     ok.
 
 setup() ->
-    schema:install(),
-    create_players(),
     setup(localhost, true).
 
 test() ->
