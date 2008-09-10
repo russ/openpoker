@@ -551,7 +551,9 @@ find_server(Sock) ->
 		{?PP_HANDOFF, Port, Host} when is_binary(Host) ->
 		    {binary_to_list(Host), Port};
 		{?PP_HANDOFF, Port, Host} when is_list(Host) ->
-		    {Host, Port}
+		    {Host, Port};
+                _ ->
+                    find_server(Sock)
             end;
 	{error, closed} ->
 	    io:format("Error retrieving gateway reply~n"),
