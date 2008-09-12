@@ -14,11 +14,16 @@
 -include("schema.hrl").
 -include("test.hrl").
 
+-define(STATS_TIMEOUT, 10000).
+
 -record(server, {
 	  port,
 	  host,
 	  avg,
-	  test_mode
+	  test_mode,
+          start,
+          count,
+          size
 	 }).
 
 -record(client, {
@@ -89,8 +94,12 @@ init([Host, Port, TestMode]) ->
       host = Host,
       port = Port,
       avg = 0,
+      count = 0,
+      size = 0,
+      start = now(),
       test_mode = TestMode
      },
+    erlang:send_after(?STATS_TIMEOUT, self(), 'STATS'),
     {ok, Server}.
 
 stop(Server) ->
@@ -101,6 +110,11 @@ terminate(normal, Server) ->
     tcp_server:stop(Server#server.port),
     ok.
 
+handle_cast({'BUMP', Size}, Server) ->
+    N = Server#server.count,
+    Total = Server#server.size,
+    {noreply, Server#server{ count = N + 1, size = Total + Size }};
+  
 handle_cast(stop, Server) ->
     {stop, normal, Server};
 
@@ -138,6 +152,28 @@ handle_call(Event, From, Server) ->
 			      {from, From}]),
     {noreply, Server}.
 
+handle_info('STATS', Server) ->
+    End = now(),
+    Elapsed = timer:now_diff(End, Server#server.start) / 1000000,
+    Count = Server#server.count,
+    Size = Server#server.size,
+    RPS = trunc(Count / Elapsed),
+    BPS = trunc(Size / Elapsed),
+    error_logger:info_report([{module, ?MODULE}, 
+                              {elapsed, Elapsed},
+                              {requests, Count},
+                              {bytes, Size},
+                              {requests_per_second, RPS},
+                              {bytes_per_second, BPS}
+                             ]),
+    Server1 = Server#server{ 
+                start = End,
+                count = 0,
+                size = 0
+               },
+    erlang:send_after(?STATS_TIMEOUT, self(), 'STATS'),
+    {noreply, Server1};
+
 handle_info({'EXIT', _Pid, _Reason}, Server) ->
     %% child exit?
     {noreply, Server};
@@ -155,6 +191,7 @@ code_change(_OldVsn, Server, _Extra) ->
 parse_packet(Socket, Client) ->
     receive
 	{tcp, Socket, Bin} ->
+            gen_server:cast(Client#client.server, {'BUMP', size(Bin)}),
 	    case proto:read(Bin) of
 		{?PP_LOGIN, Nick, Pass} ->
 		    case login:login(Nick, Pass, self()) of

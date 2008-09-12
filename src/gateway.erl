@@ -52,7 +52,7 @@ find_server(MaxPlayers) ->
 	    Count = gen_server:call(Pid, 'USER COUNT'),
 	    if
 		Count < MaxPlayers ->
-		    io:format("~s:~w: ~w players~n", [Host, Port, Count]),
+		    %%io:format("~s:~w: ~w players~n", [Host, Port, Count]),
 		    {Host, Port};
 		true ->
 		    io:format("~s:~w is full...~n", [Host, Port]),
