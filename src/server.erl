@@ -43,7 +43,7 @@ start(Host, Port) ->
 
 start(Host, Port, TestMode) ->
     mnesia:start(),
-    case mnesia:wait_for_tables([game_config, game_xref], 10000) of 
+    case mnesia:wait_for_tables([tab_game_config, tab_game_xref], 10000) of 
 	ok ->
 	    case gen_server:start(server, [Host, Port, TestMode], []) of
 		{ok, Pid} ->
@@ -304,36 +304,36 @@ find_games(Socket,
 		  end, L).
 
 start_games() ->
-    {atomic, Games} = db:find(game_config),
+    {atomic, Games} = db:find(tab_game_config),
     start_games(Games).
 
 start_games([]) ->
     ok;
 
 start_games([Game|Rest]) ->
-    start_games(Game, Game#game_config.max),
+    start_games(Game, Game#tab_game_config.max),
     start_games(Rest).
 
 start_games(_Game, 0) ->
     ok;
 
 start_games(Game, N) ->
-    {ok, _} = cardgame:start(Game#game_config.type, 
-                             Game#game_config.seat_count, 
-                             Game#game_config.limit,
-                             Game#game_config.start_delay,
-                             Game#game_config.player_timeout),
+    {ok, _} = cardgame:start(Game#tab_game_config.type, 
+                             Game#tab_game_config.seat_count, 
+                             Game#tab_game_config.limit,
+                             Game#tab_game_config.start_delay,
+                             Game#tab_game_config.player_timeout),
     start_games(Game, N - 1).
 
 kill_games() ->
-    {atomic, Games} = db:find(game_xref),
+    {atomic, Games} = db:find(tab_game_xref),
     kill_games(Games).
 
 kill_games([]) ->
     ok;
 
 kill_games([H|T]) ->
-    cardgame:stop(H#game_xref.process),
+    cardgame:stop(H#tab_game_xref.process),
     kill_games(T).
 
 start_test_game(Data) ->

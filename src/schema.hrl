@@ -1,11 +1,11 @@
 %%% Copyright (C) 2005-2008 Wager Labs, SA
 
--record(counter, {
+-record(tab_counter, {
 	  type,
 	  value
 	 }).
 
--record(player_info, {
+-record(tab_player_info, {
 	  pid,
 	  user_id, % external user id
 	  nick,
@@ -15,23 +15,23 @@
 	  disabled = false % player is disabled
 	 }).
 
--record(player, {
+-record(tab_player, {
 	  pid,
 	  process = none, % process id
           socket = none
 	 }).
 
--record(balance, {
+-record(tab_balance, {
           pid, 
           amount % integer
          }).
 
--record(inplay, {
+-record(tab_inplay, {
           gidpid, 
           amount % integer
          }).
 
--record(game_xref, {
+-record(tab_game_xref, {
 	  gid,
 	  process,
 	  type,
@@ -42,7 +42,7 @@
           min_players
 	 }).
 
--record(seat_history, {
+-record(tab_seat_history, {
 	  nick,
 	  hand,
 	  state
@@ -50,7 +50,7 @@
 
 %% app config
 
--record(game_config, {
+-record(tab_game_config, {
 	  id,
 	  type,
 	  seat_count,
@@ -60,7 +60,7 @@
 	  max
 	 }).
 
--record(cluster_config, {
+-record(tab_cluster_config, {
 	  id,
 	  gateways = [],
 	  mnesia_masters = [],
@@ -70,7 +70,7 @@
 	  enable_dynamic_games = false
 	 }).
 
--record(tourney_config, {
+-record(tab_tourney_config, {
           id,
           type, % normal or sit&go
           max_players,

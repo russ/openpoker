@@ -10,10 +10,10 @@ bump(Type) ->
     bump(Type, 1).
 
 bump(Type, Inc) ->
-    mnesia:dirty_update_counter(counter, Type, Inc).    
+    mnesia:dirty_update_counter(tab_counter, Type, Inc).    
 
 reset(Type) ->
-    Counter = #counter {
+    Counter = #tab_counter {
       type = Type,
       value = 0
      },

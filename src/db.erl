@@ -54,9 +54,9 @@ find(Pat, FieldNum)
     end.
 
 find_game(GID) ->
-    case mnesia:dirty_read(game_xref, GID) of
+    case mnesia:dirty_read(tab_game_xref, GID) of
 	[XRef] ->
-	    XRef#game_xref.process;
+	    XRef#tab_game_xref.process;
 	_ ->
 	    game_not_found
     end.

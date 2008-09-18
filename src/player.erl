@@ -36,9 +36,9 @@ init([Nick])
   when is_binary(Nick) ->
     process_flag(trap_exit, true),
     %% make sure we exist
-    case mnesia:dirty_index_read(player_info, Nick, #player_info.nick) of
+    case mnesia:dirty_index_read(tab_player_info, Nick, #tab_player_info.nick) of
 	[Info] ->
-	    ID = Info#player_info.pid,
+	    ID = Info#tab_player_info.pid,
             ok = create_runtime(ID, self()),
             {ok, new(ID)};
         Any ->
@@ -55,7 +55,7 @@ stop(Player, Reason)
 
 terminate(_Reason, Data) ->
     catch handle_cast_other(?PP_NOTIFY_QUIT, Data),
-    ok = mnesia:dirty_delete(player, Data#player_data.pid).
+    ok = mnesia:dirty_delete(tab_player, Data#player_data.pid).
 
 handle_cast('LOGOUT', Data) ->
     handle_cast_logout(Data);
@@ -219,8 +219,8 @@ handle_cast_notify_leave(GID, Data) ->
                  false->
                      0.0
              end,
-    mnesia:dirty_update_counter(balance, ID, trunc(Inplay * 10000)),
-    ok = mnesia:dirty_delete(inplay, {GID, ID}),
+    mnesia:dirty_update_counter(tab_balance, ID, trunc(Inplay * 10000)),
+    ok = mnesia:dirty_delete(tab_inplay, {GID, ID}),
     LastGame = gb_trees:size(Xref) == 1,
     Zombie = Data#player_data.zombie == 1,
     Self = self(),
@@ -280,22 +280,22 @@ handle_cast_seat_query(Game, Data) ->
     {noreply, Data}.
 
 handle_cast_player_info_req(PID, Data) ->
-    case mnesia:dirty_read(player_info, PID) of
+    case mnesia:dirty_read(tab_player_info, PID) of
 	[Info] ->
 	    handle_cast({?PP_PLAYER_INFO, 
 			 PID, 
 			 inplay(Data),
-			 Info#player_info.nick,
-			 Info#player_info.location}, Data);
+			 Info#tab_player_info.nick,
+			 Info#tab_player_info.location}, Data);
 	_ ->
 	    oops
     end,
     {noreply, Data}.
 
 handle_cast_new_game_req(GameType, Expected, Limit, Data) ->
-    [CC] = mnesia:dirty_read(cluster_config, 0),
+    [CC] = mnesia:dirty_read(tab_cluster_config, 0),
     if
-	CC#cluster_config.enable_dynamic_games ->
+	CC#tab_cluster_config.enable_dynamic_games ->
 	    case cardgame:start(GameType, Expected, Limit) of
 		{ok, Pid} ->
 		    GID = cardgame:call(Pid, 'ID'),
@@ -309,10 +309,10 @@ handle_cast_new_game_req(GameType, Expected, Limit, Data) ->
     {noreply, Data}.
 
 handle_cast_balance_req(Data) ->
-    case mnesia:dirty_read(balance, Data#player_data.pid) of
+    case mnesia:dirty_read(tab_balance, Data#player_data.pid) of
 	[Balance] ->
 	    handle_cast({?PP_BALANCE_INFO, 
-			 Balance#balance.amount,
+			 Balance#tab_balance.amount,
 			 trunc(inplay(Data) * 10000)}, Data);
 	_ ->
 	    oops
@@ -370,17 +370,17 @@ handle_call_other(Event, From, Data) ->
 %%%
 
 cast(PID, Event) ->
-    case mnesia:dirty_read(player, PID) of
+    case mnesia:dirty_read(tab_player, PID) of
 	[Player] ->
-	    gen_server:cast(Player#player.process, Event);
+	    gen_server:cast(Player#tab_player.process, Event);
 	_ ->
 	    none
     end.
 
 call(PID, Event) ->
-    case mnesia:dirty_read(player, PID) of
+    case mnesia:dirty_read(tab_player, PID) of
 	[Player] ->
-	    gen_server:call(Player#player.process, Event);
+	    gen_server:call(Player#tab_player.process, Event);
 	_ ->
 	    none
     end.
@@ -400,12 +400,12 @@ create(Nick, Pass, Location, Balance)
        is_binary(Pass),
        is_binary(Location),
        is_number(Balance) ->
-    case mnesia:dirty_index_read(player_info, Nick, #player_info.nick) of
+    case mnesia:dirty_index_read(tab_player_info, Nick, #tab_player_info.nick) of
         [_] ->
             {error, player_exists};
         _ ->
             ID = counter:bump(player),
-            Info = #player_info {
+            Info = #tab_player_info {
               pid = ID,
               nick = Nick,
               %% store a hash of the password
@@ -421,7 +421,7 @@ create(Nick, Pass, Location, Balance)
 create_runtime(ID, Pid) 
   when is_number(ID),
        is_pid(Pid) ->
-    Player = #player {
+    Player = #tab_player {
       pid = ID,
       process = Pid
      },
@@ -443,7 +443,7 @@ leave_games(_, []) ->
     ok;
 
 leave_games(Player, [GID|Rest]) ->
-    case mnesia:dirty_read(game_xref, GID) of
+    case mnesia:dirty_read(tab_game_xref, GID) of
         [] ->
             error_logger:info_report([{module, ?MODULE}, 
                                       {line, ?LINE},
@@ -453,7 +453,7 @@ leave_games(Player, [GID|Rest]) ->
                                       {message, no_games_to_leave}
                                      ]);
         [Game] ->
-            cardgame:send_event(Game#game_xref.process, {?PP_LEAVE, self()});
+            cardgame:send_event(Game#tab_game_xref.process, {?PP_LEAVE, self()});
         Games = [_|_] ->
             error_logger:info_report([{module, ?MODULE}, 
                                       {line, ?LINE},
@@ -467,15 +467,15 @@ leave_games(Player, [GID|Rest]) ->
     leave_games(Player, Rest).
 
 delete_balance(PID) ->
-    mnesia:dirty_delete(balance, PID).
+    mnesia:dirty_delete(tab_balance, PID).
 
 update_balance(PID, Amount) ->
-    mnesia:dirty_update_counter(balance, 
+    mnesia:dirty_update_counter(tab_balance, 
                                 PID, 
                                 trunc(Amount * 10000)).    
     
 update_inplay(GID, PID, Amount) ->
-    mnesia:dirty_update_counter(inplay, 
+    mnesia:dirty_update_counter(tab_inplay, 
                                 {GID, PID}, 
                                 trunc(Amount * 10000)).    
 

@@ -12,7 +12,7 @@ login(Nick, Pass, Socket)
   when is_binary(Nick),
        is_binary(Pass),
        is_pid(Socket) -> % socket handler process
-    Recs = mnesia:dirty_index_read(player_info, Nick, #player_info.nick),
+    Recs = mnesia:dirty_index_read(tab_player_info, Nick, #tab_player_info.nick),
     login(Recs, [Nick, Pass, Socket]).
 
 login([], _) ->
@@ -20,19 +20,19 @@ login([], _) ->
     {error, ?ERR_BAD_LOGIN};
 
 login([Info], [_Nick, Pass|_] = Args) 
-  when is_record(Info, player_info) ->
-    PID = Info#player_info.pid,
-    Player = case mnesia:dirty_read(player, PID) of
+  when is_record(Info, tab_player_info) ->
+    PID = Info#tab_player_info.pid,
+    Player = case mnesia:dirty_read(tab_player, PID) of
                  [P] ->
                      P;
                  _ ->
-                     ok = mnesia:dirty_delete(player, PID),
-                     #player{ pid = PID }
+                     ok = mnesia:dirty_delete(tab_player, PID),
+                     #tab_player{ pid = PID }
              end,
     %% replace dead pids with none
-    Player1 = Player#player {
-                socket = fix_pid(Player#player.socket),
-                process = fix_pid(Player#player.process)
+    Player1 = Player#tab_player {
+                socket = fix_pid(Player#tab_player.socket),
+                process = fix_pid(Player#tab_player.process)
 	       },
     %% check player state and login
     Condition = check_player(Info, Player1, [Pass], 
@@ -53,16 +53,16 @@ login([Info], [_Nick, Pass|_] = Args)
     end.
 
 login(Info, Player, bad_password, _) ->
-    N = Info#player_info.login_errors + 1,
-    [CC] = mnesia:dirty_read(cluster_config, 0),
-    MaxLoginErrors = CC#cluster_config.max_login_errors,
+    N = Info#tab_player_info.login_errors + 1,
+    [CC] = mnesia:dirty_read(tab_cluster_config, 0),
+    MaxLoginErrors = CC#tab_cluster_config.max_login_errors,
     if
 	N > MaxLoginErrors ->
 	    %% disable account
-	    Info1 = Info#player_info { disabled = true },
+	    Info1 = Info#tab_player_info { disabled = true },
 	    {Info1, Player, {error, ?ERR_ACCOUNT_DISABLED}};
 	true ->
-	    Info1 = Info#player_info{ login_errors = N },
+	    Info1 = Info#tab_player_info{ login_errors = N },
 	    {Info1, Player, {error, ?ERR_BAD_LOGIN}}
     end;
 
@@ -71,18 +71,18 @@ login(Info, Player, account_disabled, _) ->
 
 login(Info, Player, player_online, Args) ->
     %% player is idle
-    gen_server:cast(Player#player.process, 'LOGOUT'),
+    gen_server:cast(Player#tab_player.process, 'LOGOUT'),
     login(Info, Player, player_offline, Args);
 
 login(Info, Player, client_down, [_, _, Socket]) ->
     %% tell player process to talk to the new socket
-    gen_server:cast(Player#player.process, {'SOCKET', Socket}),
-    Player1 = Player#player{ socket = Socket },
-    {Info, Player1, {ok, Player#player.process}};
+    gen_server:cast(Player#tab_player.process, {'SOCKET', Socket}),
+    Player1 = Player#tab_player{ socket = Socket },
+    {Info, Player1, {ok, Player#tab_player.process}};
 
 login(Info, Player, player_busy, Args) ->
     Temp = login(Info, Player, client_down, Args),
-    Msg = {'RESEND UPDATES', Player#player.process},
+    Msg = {'RESEND UPDATES', Player#tab_player.process},
     %% resend accumulated game updates
 %%     lists:foreach(fun(Game) -> 
 %%                           case db:find_game(Game) of
@@ -101,7 +101,7 @@ login(Info, Player, player_offline, [Nick, _, Socket]) ->
     ID = gen_server:call(Pid, 'ID'),
     gen_server:cast(Pid, {'SOCKET', Socket}),
     %% update player record
-    Player1 = Player#player {
+    Player1 = Player#tab_player {
 		pid = ID,
 		process = Pid,
                 socket = Socket
@@ -126,17 +126,17 @@ check_player(_Info, _Player, _Args, []) ->
 
 is_bad_password(Info, _, [Pass]) ->
     Hash = erlang:phash2(Pass, 1 bsl 32),
-    Match = Info#player_info.password == Hash,
+    Match = Info#tab_player_info.password == Hash,
     {not Match, bad_password}.
 
 is_account_disabled(Info, _, _) ->
-    {Info#player_info.disabled, account_disabled}.
+    {Info#tab_player_info.disabled, account_disabled}.
 
 is_player_busy(Info, Player, _) ->
     {Online, _} = is_player_online(Info, Player, []),
     Games = if
-                Player#player.process /= none ->
-                    gen_server:call(Player#player.process, 'GAMES');
+                Player#tab_player.process /= none ->
+                    gen_server:call(Player#tab_player.process, 'GAMES');
                 true ->
                     []
             end,
@@ -144,18 +144,18 @@ is_player_busy(Info, Player, _) ->
     {Online and Playing, player_busy}.
 
 is_player_online(_, Player, _) ->
-    SocketAlive = Player#player.socket /= none,
-    PlayerAlive = Player#player.process /= none,
+    SocketAlive = Player#tab_player.socket /= none,
+    PlayerAlive = Player#tab_player.process /= none,
     {SocketAlive and PlayerAlive, player_online}.
 
 is_client_down(_, Player, _) ->
-    SocketDown = Player#player.socket == none,
-    PlayerAlive = Player#player.process /= none,
+    SocketDown = Player#tab_player.socket == none,
+    PlayerAlive = Player#tab_player.process /= none,
     {SocketDown and PlayerAlive, client_down}.
 
 is_offline(_, Player, _) ->
-    SocketDown = Player#player.socket == none,
-    PlayerDown = Player#player.process == none,
+    SocketDown = Player#tab_player.socket == none,
+    PlayerDown = Player#tab_player.process == none,
     {SocketDown and PlayerDown, player_offline}.
 
 fix_pid(none) ->

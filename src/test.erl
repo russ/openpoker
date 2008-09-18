@@ -24,7 +24,7 @@
 all() ->
     mnesia:start(),
     schema:install(),
-    ok = mnesia:wait_for_tables([game_config], 10000),
+    ok = mnesia:wait_for_tables([tab_game_config], 10000),
     test(),
     db:test(),
     proto:test(),
@@ -53,11 +53,11 @@ create_player_test() ->
     {ok, ID} = player:create(Nick, Nick, <<"">>, 100),
     ?assert(is_number(ID)),
     {ok, Pid} = player:start(Nick),
-    [P] = mnesia:dirty_read(player, ID),
-    ?assertEqual(Pid, P#player.process),
+    [P] = mnesia:dirty_read(tab_player, ID),
+    ?assertEqual(Pid, P#tab_player.process),
     gen_server:cast(Pid, 'LOGOUT'),
     ?assertEqual(ok, stop_player(Pid)),
-    ?assertEqual([], mnesia:dirty_read(player, ID)),
+    ?assertEqual([], mnesia:dirty_read(tab_player, ID)),
     ok.
     
 %%% Create game
@@ -75,11 +75,11 @@ create_game_test() ->
     cardgame:cast(Game, {'NOTE', create_game}),
     ?assert(is_number(GID)),
     ?assertEqual(0, cardgame:call(Game, 'JOINED')),
-    [Xref] = mnesia:dirty_read(game_xref, GID),
-    ?assertEqual(Game, Xref#game_xref.process),
+    [Xref] = mnesia:dirty_read(tab_game_xref, GID),
+    ?assertEqual(Game, Xref#tab_game_xref.process),
     cardgame:stop(Game),
     timer:sleep(100),
-    ?assertEqual([], mnesia:dirty_read(game_xref, GID)),
+    ?assertEqual([], mnesia:dirty_read(tab_game_xref, GID)),
     ok.
 
 %%% Basic seat query
@@ -165,14 +165,14 @@ player_not_found_test() ->
 
 disable_account_test() ->
     flush(),
-    [CC] = mnesia:dirty_read(cluster_config, 0),
-    Max = CC#cluster_config.max_login_errors,
+    [CC] = mnesia:dirty_read(tab_cluster_config, 0),
+    Max = CC#tab_cluster_config.max_login_errors,
     Nick = nick(),
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
     test80_1(Nick, Max),
-    [Info] = mnesia:dirty_read(player_info, ID),
-    ?assertEqual(Max, Info#player_info.login_errors),
-    ok = mnesia:dirty_delete(player_info, ID),
+    [Info] = mnesia:dirty_read(tab_player_info, ID),
+    ?assertEqual(Max, Info#tab_player_info.login_errors),
+    ok = mnesia:dirty_delete(tab_player_info, ID),
     ok.
 
 test80_1(Nick, 0) ->
@@ -183,9 +183,9 @@ test80_1(Nick, 0) ->
 test80_1(Nick, N) ->
     ?assertEqual({error, ?ERR_BAD_LOGIN}, 
                  login:login(Nick, <<"@#%@#%">>, self())), 
-    [Info] = mnesia:dirty_index_read(player_info, Nick, #player_info.nick),
+    [Info] = mnesia:dirty_index_read(tab_player_info, Nick, #tab_player_info.nick),
     Disabled = N == 0,
-    ?assertEqual(Disabled, Info#player_info.disabled),
+    ?assertEqual(Disabled, Info#tab_player_info.disabled),
     test80_1(Nick, N - 1).
 
 %%% Account disabled
@@ -194,13 +194,13 @@ account_disabled_test() ->
     flush(),
     Nick = nick(),
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
-    [Info] = mnesia:dirty_read(player_info, ID),
-    ok = mnesia:dirty_write(Info#player_info{ disabled = true}),
+    [Info] = mnesia:dirty_read(tab_player_info, ID),
+    ok = mnesia:dirty_write(Info#tab_player_info{ disabled = true}),
     ?assertEqual({error, ?ERR_ACCOUNT_DISABLED}, 
 	   login:login(Nick, <<"@#%@#%">>, self())), 
     ?assertEqual({error, ?ERR_ACCOUNT_DISABLED}, 
 	   login:login(Nick, Nick, self())), 
-    ok = mnesia:dirty_delete(player_info, ID),
+    ok = mnesia:dirty_delete(tab_player_info, ID),
     ok.
 
 %%% Log in and log out
@@ -212,15 +212,15 @@ login_logout_test() ->
     ID = gen_server:call(Pid, 'ID'),
     Socket = self(),
     ?assertEqual({ok, Pid}, login:login(Nick, Nick, Socket)),
-    [P] = mnesia:dirty_read(player, ID),
-    ?assertEqual(Pid, P#player.process),
-    ?assertEqual(Socket, P#player.socket),
+    [P] = mnesia:dirty_read(tab_player, ID),
+    ?assertEqual(Pid, P#tab_player.process),
+    ?assertEqual(Socket, P#tab_player.socket),
     ?assertEqual(true, util:is_process_alive(Pid)),
     gen_server:cast(Pid, 'LOGOUT'),
     ?assertEqual(ok, stop_player(Pid)),
     ?assertEqual(false, util:is_process_alive(Pid)),
-    ?assertMatch([], mnesia:dirty_read(player, ID)),
-    ok = mnesia:dirty_delete(player, ID),
+    ?assertMatch([], mnesia:dirty_read(tab_player, ID)),
+    ok = mnesia:dirty_delete(tab_player, ID),
     ok.
     
 %%% Player online but not playing
@@ -233,20 +233,20 @@ player_online_not_playing_test() ->
     Socket = self(),
     %% login once
     ?assertEqual({ok, Pid}, login:login(Nick, Nick, Socket)),
-    [P] = mnesia:dirty_read(player, ID),
-    ?assertEqual(Pid, P#player.process),
-    ?assertEqual(Socket, P#player.socket),
+    [P] = mnesia:dirty_read(tab_player, ID),
+    ?assertEqual(Pid, P#tab_player.process),
+    ?assertEqual(Socket, P#tab_player.socket),
     ?assertEqual(true, util:is_process_alive(Pid)),
     %% login twice
     {ok, Pid1} = login:login(Nick, Nick, Pid),
-    [P1] = mnesia:dirty_read(player, ID),
-    Pid1 = P1#player.process,
+    [P1] = mnesia:dirty_read(tab_player, ID),
+    Pid1 = P1#tab_player.process,
     ?assertEqual(ok, stop_player(Pid)),
     ?assertEqual(false, util:is_process_alive(Pid)),
     ?assertNot(Pid == Pid1),
     gen_server:cast(Pid1, 'LOGOUT'),
     ?assertEqual(ok, stop_player(Pid1)),
-    ?assertMatch([], mnesia:dirty_read(player, ID)),
+    ?assertMatch([], mnesia:dirty_read(tab_player, ID)),
     flush(),
     ok.
 
@@ -265,12 +265,12 @@ player_online_playing_test() ->
     GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'NOTE', player_online_playing}),
     timer:sleep(200),
-    ?assertMatch([_], mnesia:dirty_read(inplay, {GID, ID})),
+    ?assertMatch([_], mnesia:dirty_read(tab_inplay, {GID, ID})),
     %% login twice
     ?assertEqual({ok, Pid}, login:login(Nick, Nick, Socket)),
-    ?assertMatch([_], mnesia:dirty_read(inplay, {GID, ID})),
-    [P] = mnesia:dirty_read(player, ID),
-    ?assertEqual(Socket, P#player.socket),
+    ?assertMatch([_], mnesia:dirty_read(tab_inplay, {GID, ID})),
+    [P] = mnesia:dirty_read(tab_player, ID),
+    ?assertEqual(Socket, P#tab_player.socket),
     %% check inplay
     ?assertEqual(true, is_process_alive(Pid)),
     Inplay2 = gen_server:call(Pid, 'INPLAY'),
@@ -300,7 +300,7 @@ disconnected_client_test() ->
     ?assertEqual(false, util:is_process_alive(Dummy)),
     ?assertEqual({ok, Pid}, login:login(Nick, Nick, Dummy)),
     ?assertEqual({ok, Pid}, login:login(Nick, Nick, Socket)),
-    ?assertMatch([_], mnesia:dirty_read(player, ID)),
+    ?assertMatch([_], mnesia:dirty_read(tab_player, ID)),
     gen_server:cast(Pid, 'LOGOUT'),
     ?assertEqual(ok, stop_player(Pid)),
     ok.
@@ -337,7 +337,7 @@ network_login_logout_test() ->
     ?assertEqual(success, ?waittcp({?PP_GOOD, ?PP_LOGOUT, 0}, 2000)),
     gen_tcp:close(Socket1),
     %% clean up
-    ok = mnesia:dirty_delete(player, ID),
+    ok = mnesia:dirty_delete(tab_player, ID),
     server:stop(Server),
     ok.
 
@@ -383,12 +383,12 @@ simple_game_simulation_test() ->
     ?assertMsg({'END', GID, Winners}, ?PLAYER_TIMEOUT, []),
     timer:sleep(1000),
     %% check balances
-    [B1] = mnesia:dirty_read(balance, ID1),
-    [B2] = mnesia:dirty_read(balance, ID2),
-    ?assertEqual(9950000, B1#balance.amount),
-    ?assertEqual(10050000, B2#balance.amount),
-    ?assertEqual([], mnesia:dirty_read(inplay, {GID, ID1})),
-    ?assertEqual([], mnesia:dirty_read(inplay, {GID, ID2})),
+    [B1] = mnesia:dirty_read(tab_balance, ID1),
+    [B2] = mnesia:dirty_read(tab_balance, ID2),
+    ?assertEqual(9950000, B1#tab_balance.amount),
+    ?assertEqual(10050000, B2#tab_balance.amount),
+    ?assertEqual([], mnesia:dirty_read(tab_inplay, {GID, ID1})),
+    ?assertEqual([], mnesia:dirty_read(tab_inplay, {GID, ID2})),
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),
@@ -439,13 +439,17 @@ dynamic_game_start_test() ->
     Packet = {?PP_NEW_GAME_REQ, ?GT_IRC_TEXAS, 1,
 	      {?LT_FIXED_LIMIT, 10, 20}},
     %% disable dynamic games
-    [CC] = mnesia:dirty_read(cluster_config, 0),
-    ok = mnesia:dirty_write(CC#cluster_config{ enable_dynamic_games = false }),
+    [CC] = mnesia:dirty_read(tab_cluster_config, 0),
+    ok = mnesia:dirty_write(CC#tab_cluster_config{ 
+                              enable_dynamic_games = false 
+                             }),
     ?tcpsend(Socket, Packet),
     ?assertEqual(success, ?waittcp({?PP_BAD, ?PP_NEW_GAME_REQ, 
                                     ?ERR_START_DISABLED}, 2000)),
     %% enable dynamic games
-    ok = mnesia:dirty_write(CC#cluster_config{ enable_dynamic_games = true}),
+    ok = mnesia:dirty_write(CC#tab_cluster_config{ 
+                              enable_dynamic_games = true
+                             }),
     ?tcpsend(Socket, Packet),
     GID = receive
 	      {tcp, _, Bin1} ->
@@ -463,7 +467,7 @@ dynamic_game_start_test() ->
     ?assertEqual(success, ?waittcp({?PP_SEAT_STATE, GID, 1, ?PS_EMPTY, 0}, 2000)),
     %% clean up
     gen_tcp:close(Socket),
-    ok = mnesia:dirty_delete(player, ID),
+    ok = mnesia:dirty_delete(tab_player, ID),
     server:stop(Server),
     ok.
 
@@ -483,18 +487,18 @@ query_own_balance_test() ->
     %% balance check 
     ?tcpsend(Socket, ?PP_BALANCE_REQ),
     ?assertEqual(success, ?waittcp({?PP_BALANCE_INFO, 10000000, 0}, 2000)),
-    [P1] = mnesia:dirty_read(balance, ID),
-    ?assertEqual(10000000, P1#balance.amount),
+    [P1] = mnesia:dirty_read(tab_balance, ID),
+    ?assertEqual(10000000, P1#tab_balance.amount),
     %% move some money
     player:update_balance(ID, -150.00),
     %% another balance check 
     ?tcpsend(Socket, ?PP_BALANCE_REQ),
     ?assertEqual(success, ?waittcp({?PP_BALANCE_INFO, 8500000, 0}, 2000)),
-    [P2] = mnesia:dirty_read(balance, ID),
-    ?assertEqual(8500000, P2#balance.amount),
+    [P2] = mnesia:dirty_read(tab_balance, ID),
+    ?assertEqual(8500000, P2#tab_balance.amount),
     %% clean up
     gen_tcp:close(Socket),
-    ok = mnesia:dirty_delete(player, ID),
+    ok = mnesia:dirty_delete(tab_player, ID),
     server:stop(Server),
     ok.
 
@@ -517,9 +521,9 @@ test190(_Host, _Port, []) ->
     ok;
 
 test190(Host, Port, [Info|Rest])
-  when is_record(Info, player_info) ->
-    Nick = Info#player_info.nick,
-    ID = Info#player_info.pid,
+  when is_record(Info, tab_player_info) ->
+    Nick = Info#tab_player_info.nick,
+    ID = Info#tab_player_info.pid,
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, {?PP_LOGIN, Nick, Nick}),
     ?assertEqual(success, ?waittcp({?PP_PID, ID}, 2000)),
@@ -780,7 +784,7 @@ cleanup_players([{Player, _ID}|Rest])
         ID1 ->
             gen_server:cast(Player, 'LOGOUT'),
             ?assertEqual(ok, stop_player(Player)),
-            ok = mnesia:dirty_delete(player_info, ID1)
+            ok = mnesia:dirty_delete(tab_player_info, ID1)
     end,
     cleanup_players(Rest).
 

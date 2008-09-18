@@ -103,7 +103,7 @@ init([FSM, GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers])
     OID = counter:bump(game),
     Data = new(OID, FSM, GameType, SeatCount, LimitType),
     %% store game info
-    Game = #game_xref {
+    Game = #tab_game_xref {
       gid = OID,
       process = FSM,
       type = GameType, 
@@ -132,7 +132,7 @@ terminate(_Reason, Game) ->
     %% the stop message directly to the process.
     gen_server:cast(Game#game.limit, stop),
     %% remove ourselves from the db
-    ok = mnesia:dirty_delete({game_xref, Game#game.gid}),
+    ok = mnesia:dirty_delete({tab_game_xref, Game#game.gid}),
     ok.
 
 %%% Reset is used each time the game is restarted
@@ -998,13 +998,13 @@ find(GameType, LimitType,
     {atomic, lists:filter(F1, L)}.
 		 
 find_1(GameType, LimitType) ->
-    Q = qlc:q([{G#game_xref.gid,
-		G#game_xref.process,
-		G#game_xref.type,
-		G#game_xref.limit}
-	       || G <- mnesia:table(game_xref),
-		  G#game_xref.type == GameType,
-		  element(1, G#game_xref.limit) == LimitType]),
+    Q = qlc:q([{G#tab_game_xref.gid,
+		G#tab_game_xref.process,
+		G#tab_game_xref.type,
+		G#tab_game_xref.limit}
+	       || G <- mnesia:table(tab_game_xref),
+		  G#tab_game_xref.type == GameType,
+		  element(1, G#tab_game_xref.limit) == LimitType]),
     L = qlc:e(Q),
     lists:map(fun({GID, Pid, Type, Limit}) ->
 		      Expected = cardgame:call(Pid, 'SEAT COUNT'),
@@ -1015,7 +1015,7 @@ find_1(GameType, LimitType) ->
 	      end, L).
 
 setup(GameType, SeatCount, Limit, Delay, Timeout, Max) ->
-    Game = #game_config {
+    Game = #tab_game_config {
       id = erlang:phash2(now(), 1 bsl 32),
       type = GameType,
       seat_count = SeatCount,
@@ -1085,10 +1085,10 @@ do_buy_in(GID, PID, Amt)
        is_number(PID),
        is_number(Amt) ->
     BuyIn = trunc(Amt * 10000),
-    case mnesia:dirty_read(balance, PID) of
+    case mnesia:dirty_read(tab_balance, PID) of
         [] ->
             {error, no_balance_found};
-        [B] when BuyIn > B#balance.amount ->
+        [B] when BuyIn > B#tab_balance.amount ->
             {error, not_enough_money};
         [_] ->
             player:update_inplay(GID, PID, Amt),

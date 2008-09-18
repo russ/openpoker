@@ -93,15 +93,15 @@ handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
     {noreply, Data};
 
 handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
-    I = mnesia:dirty_read(player_info, PID),
-    P = mnesia:dirty_read(player, PID),
+    I = mnesia:dirty_read(tab_player_info, PID),
+    P = mnesia:dirty_read(tab_player, PID),
     case {I, P} of
 	{[Info], [Player]} ->
 	    handle_cast({?PP_PLAYER_INFO, 
-			 Player#player.process, 
+			 Player#tab_player.process, 
                          0.0,
-			 Info#player_info.nick,
-			 Info#player_info.location}, Data);
+			 Info#tab_player_info.nick,
+			 Info#tab_player_info.location}, Data);
 	_ ->
 	    oops
     end,

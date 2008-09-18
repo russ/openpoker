@@ -32,61 +32,61 @@ install(Nodes) when is_list(Nodes) ->
 install_player_info(Nodes) ->
     %% static player info
     {atomic, ok} =
-        mnesia:create_table(player_info, 
+        mnesia:create_table(tab_player_info, 
                             [
                              {disc_copies, Nodes}, 
                              {index, [nick]}, 
                              {type, set}, 
-                             {attributes, record_info(fields, player_info)}
+                             {attributes, record_info(fields, tab_player_info)}
                             ]).
 
 install_player(Nodes) ->
     %% player 
     {atomic, ok} =
-        mnesia:create_table(player, 
+        mnesia:create_table(tab_player, 
                             [
                              {ram_copies, Nodes}, 
                              {type, set}, 
-                             {attributes, record_info(fields, player)}
+                             {attributes, record_info(fields, tab_player)}
                             ]).
 
 install_balance(Nodes) ->
     {atomic, ok} =
-        mnesia:create_table(balance, 
+        mnesia:create_table(tab_balance, 
                             [
                              {disc_copies, Nodes}, 
                              {type, set}, 
-                             {attributes, record_info(fields, balance)}
+                             {attributes, record_info(fields, tab_balance)}
                             ]).
 install_inplay(Nodes) ->
     {atomic, ok} =
-        mnesia:create_table(inplay, 
+        mnesia:create_table(tab_inplay, 
                             [
                              {disc_copies, Nodes}, 
                              {type, set}, 
-                             {attributes, record_info(fields, inplay)}
+                             {attributes, record_info(fields, tab_inplay)}
                             ]).
 
 install_game_xref(Nodes) ->
     %% online game
     {atomic, ok} =
-        mnesia:create_table(game_xref, 
+        mnesia:create_table(tab_game_xref, 
                             [
                              {ram_copies, Nodes}, 
                              {type, set}, 
-                             {attributes, record_info(fields, game_xref)}
+                             {attributes, record_info(fields, tab_game_xref)}
                             ]).
 
 install_cluster_config(Nodes) ->
     %% cluster configuration
     {atomic, ok} =
-        mnesia:create_table(cluster_config, 
+        mnesia:create_table(tab_cluster_config, 
                             [
                              {disc_copies, Nodes}, 
                              {type, set}, 
-                             {attributes, record_info(fields, cluster_config)}
+                             {attributes, record_info(fields, tab_cluster_config)}
                             ]),
-    Conf = #cluster_config {
+    Conf = #tab_cluster_config {
       id = 0,
       mnesia_masters = Nodes
      },
@@ -97,30 +97,30 @@ install_cluster_config(Nodes) ->
 
 install_game_config(Nodes) ->
     {atomic, ok} = 
-        mnesia:create_table(game_config, 
+        mnesia:create_table(tab_game_config, 
                             [
                              {disc_copies, Nodes}, 
                              {type, set}, 
-                             {attributes, record_info(fields, game_config)}
+                             {attributes, record_info(fields, tab_game_config)}
                             ]).
 
 install_tourney_config(Nodes) ->
     {atomic, ok} =
-        mnesia:create_table(tourney_config, 
+        mnesia:create_table(tab_tourney_config, 
                             [
                              {disc_copies, Nodes}, 
                              {type, set}, 
-                             {attributes, record_info(fields, tourney_config)}
+                             {attributes, record_info(fields, tab_tourney_config)}
                             ]).
 
 install_counter(Nodes) ->
     %% counter
     {atomic, ok} = 
-        mnesia:create_table(counter, 
+        mnesia:create_table(tab_counter, 
                             [
                              {disc_copies, Nodes}, 
                              {type, set}, 
-                             {attributes, record_info(fields, counter)}
+                             {attributes, record_info(fields, tab_counter)}
                             ]).
     
 populate() ->
