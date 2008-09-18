@@ -282,8 +282,6 @@ player_online_playing_test() ->
                100, [?PP_NOTIFY_CHAT, ?PP_NOTIFY_CANCEL_GAME]),
     ?assertMsg({?PP_NOTIFY_GAME_INPLAY, GID, Pid, 1000.0,1, 1}, 
                100, [?PP_NOTIFY_CHAT, ?PP_NOTIFY_CANCEL_GAME]),
-    ?assertMsg({?PP_NOTIFY_JOIN, GID, Pid, 1,1000.0, 0}, 
-               100, [?PP_NOTIFY_CHAT, ?PP_NOTIFY_CANCEL_GAME]),
     gen_server:cast(Pid, 'LOGOUT'),
     ?assertEqual(ok, stop_player(Pid)),
     ?assertEqual(ok, stop_game(Game)),
