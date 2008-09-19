@@ -10,7 +10,7 @@
 
 -include("test.hrl").
 -include("common.hrl").
--include("proto.hrl").
+-include("pp.hrl").
 
 -record(fixed_limit, {
 	  high,

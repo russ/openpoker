@@ -10,7 +10,7 @@
 
 -include("test.hrl").
 -include("common.hrl").
--include("proto.hrl").
+-include("pp.hrl").
 
 new(Nick, IRC_ID, SeatNum, Balance) 
   when is_binary(Nick) ->

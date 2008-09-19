@@ -12,7 +12,7 @@
 -export([deal_cards/2]).
 
 -include("common.hrl").
--include("proto.hrl").
+-include("pp.hrl").
 -include("texas.hrl").
 -include("test.hrl").
 

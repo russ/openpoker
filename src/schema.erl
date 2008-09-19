@@ -6,7 +6,7 @@
 
 -include("schema.hrl").
 -include("common.hrl").
--include("proto.hrl").
+-include("pp.hrl").
 
 install() ->
     install([node()]).

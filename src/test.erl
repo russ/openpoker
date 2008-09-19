@@ -9,7 +9,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--include("proto.hrl").
+-include("pp.hrl").
 -include("texas.hrl").
 -include("common.hrl").
 -include("schema.hrl").

@@ -10,7 +10,7 @@
 
 -include("test.hrl").
 -include("common.hrl").
--include("proto.hrl").
+-include("pp.hrl").
 -include("schema.hrl").
 
 -record(pot_limit, {

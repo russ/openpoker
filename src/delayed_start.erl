@@ -14,7 +14,7 @@
 -include("common.hrl").
 -include("lang.hrl").
 -include("test.hrl").
--include("proto.hrl").
+-include("pp.hrl").
 -include("schema.hrl").
 
 -record(delayed, {

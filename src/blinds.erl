@@ -15,7 +15,7 @@
 -include("common.hrl").
 -include("test.hrl").
 -include("texas.hrl").
--include("proto.hrl").
+-include("pp.hrl").
 -include("schema.hrl").
 
 -record(blinds, {

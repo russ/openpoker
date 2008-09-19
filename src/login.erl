@@ -4,7 +4,7 @@
 
 -export([login/3, test/0]).
 
--include("proto.hrl").
+-include("pp.hrl").
 -include("test.hrl").
 -include("schema.hrl").
 

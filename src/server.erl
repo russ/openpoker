@@ -9,7 +9,7 @@
 -export([start/1, start/2, start/3, stop/1, test/0]).
 
 -include("common.hrl").
--include("proto.hrl").
+-include("pp.hrl").
 -include("texas.hrl").
 -include("schema.hrl").
 -include("test.hrl").

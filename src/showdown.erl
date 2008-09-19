@@ -14,7 +14,7 @@
 -include("common.hrl").
 -include("schema.hrl").
 -include("test.hrl").
--include("proto.hrl").
+-include("pp.hrl").
 
 -record(showdown, {
 	  game
