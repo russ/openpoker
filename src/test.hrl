@@ -60,7 +60,7 @@
 	fun() ->
 		receive
 		    {tcp, _, Bin} ->
-			case proto:read(Bin) of
+			case pp:old_read(Bin) of
 			    Message ->
 				success;
 			    Any -> 
@@ -80,7 +80,7 @@
                 F = fun(F) ->
                             receive
                                 {tcp, _, Bin} ->
-                                    case proto:read(Bin) of
+                                    case pp:old_read(Bin) of
                                         M ->
                                             DoSkip = lists:member(element(1, M), Skip),
                                             if 
@@ -104,7 +104,7 @@
 
 -define(tcpsend(Socket, Data),
 	fun() ->
-		XXX = proto:write(Data),
+		XXX = pp:old_write(Data),
 		case gen_tcp:send(Socket, XXX) of
 		    ok ->
 			ok;

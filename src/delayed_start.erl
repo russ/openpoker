@@ -46,11 +46,13 @@ delayed_start({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
 delayed_start({?PP_LEAVE, Player}, Data) ->
     delayed_start_leave(Player, Data);
 
-delayed_start({?PP_SIT_OUT, Player}, Data) ->
-    delayed_star_sitout(Player, Data);
+delayed_start(R, Data) 
+  when is_record(R, sit_out) ->
+    delayed_start_sit_out(R, Data);
 
-delayed_start({?PP_COME_BACK, Player}, Data) ->
-    delayed_start_comeback(Player, Data);
+delayed_start(R, Data)
+  when is_record(R, come_back) ->
+    delayed_start_come_back(R, Data);
 
 delayed_start(Event, Data) ->
     delayed_start_other(Event, Data).
@@ -137,14 +139,12 @@ delayed_start_leave(Player, Data) ->
     gen_server:cast(Game, {?PP_LEAVE, Player, ?PS_ANY}),
     {next_state, delayed_start, Data}.
 
-delayed_star_sitout(Player, Data) ->
-    Game = Data#delayed.game,
-    gen_server:cast(Game, {'SET STATE', Player, ?PS_SIT_OUT}),
+delayed_start_sit_out(R, Data) ->
+    gen_server:cast(Data#delayed.game, R),
     {next_state, delayed_start, Data}.
 
-delayed_start_comeback(Player, Data) ->
-    Game = Data#delayed.game,
-    gen_server:cast(Game, {'SET STATE', Player, ?PS_PLAY}),
+delayed_start_come_back(R, Data) ->
+    gen_server:cast(Data#delayed.game, R),
     {next_state, delayed_start, Data}.
 
 delayed_start_other(Event, Data) ->

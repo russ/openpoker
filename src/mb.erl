@@ -327,7 +327,8 @@ setup_players(IRC_ID, GID, Host, Port, [Player|Rest], N, Acc) ->
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, infinity),
     gen_server:cast(Bot, {'SET ACTIONS', Player#irc_player.actions}),
     gen_server:cast(Bot, {?PP_LOGIN, Nick, Pass}),
-    gen_server:cast(Bot, {?PP_WATCH, GID}),
+    [Game] = mnesia:dirty_read(tab_game_xref, GID),
+    gen_server:cast(Bot, #watch{ game = Game#tab_game_xref.process }),
     setup_players(IRC_ID, GID, Host, Port, Rest, N - 1, [{Bot, N}|Acc]).
 
 ircdb_nicks(Game) ->
@@ -516,7 +517,8 @@ setup_observer(Parent, GID, Host, Port, Trace) ->
     gen_server:cast(Observer, {'TRACE', Trace}),
     %% watch game
     ok = gen_server:call(Observer, {'CONNECT', Host, Port}, infinity),
-    gen_server:cast(Observer, {?PP_WATCH, GID}),
+    [Game] = mnesia:dirty_read(tab_game_xref, GID),
+    gen_server:cast(Observer, #watch{ game = Game#tab_game_xref.process }),
     Observer.
 
 find_server(Host, Port) ->
@@ -547,7 +549,7 @@ find_server(Host, Port) ->
 find_server(Sock) ->
     receive
 	{tcp, Sock, Bin} ->
-	    case proto:read(Bin) of 
+	    case pp:old_read(Bin) of 
 		{?PP_HANDOFF, Port, Host} when is_binary(Host) ->
 		    {binary_to_list(Host), Port};
 		{?PP_HANDOFF, Port, Host} when is_list(Host) ->
@@ -699,10 +701,10 @@ start_game(Host, Port, Game, Delay)
 
 start_game(Sock, Packet) ->
     T = {?PP_MAKE_TEST_GAME, Packet},
-    ok = gen_tcp:send(Sock, proto:write(T)),
+    ok = gen_tcp:send(Sock, pp:old_write(T)),
     receive
 	{tcp, Sock, Bin} ->
-	    case proto:read(Bin) of 
+	    case pp:old_read(Bin) of 
 		{?PP_GOOD, ?PP_MAKE_TEST_GAME, GID} ->
 		    {ok, GID};
 		Any ->

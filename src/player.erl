@@ -81,13 +81,13 @@ handle_cast({'INPLAY-', Amount, Game}, Data)
 handle_cast({'NOTIFY LEAVE', GID}, Data) ->
     handle_cast_notify_leave(GID, Data);
 
-handle_cast({?PP_WATCH, Game}, Data) 
-  when is_pid(Game) ->
-    handle_cast_watch(Game, Data);
+handle_cast(R, Data) 
+  when is_record(R, watch) ->
+    handle_cast_watch(R, Data);
 
-handle_cast({?PP_UNWATCH, Game}, Data) 
-  when is_pid(Game) ->
-    handle_cast_unwatch(Game, Data);
+handle_cast(R, Data) 
+  when is_record(R, unwatch) ->
+    handle_cast_unwatch(R, Data);
 
 handle_cast({Event, Game, Amount}, Data)
   when Event == ?PP_CALL;
@@ -100,14 +100,14 @@ handle_cast({?PP_JOIN, Game, SeatNum, BuyIn}, Data) ->
 handle_cast({?PP_LEAVE, Game}, Data) ->
     handle_cast_leave(Game, Data);
 
-handle_cast({Event, Game}, Data) 
-  when Event == ?PP_FOLD;
-       Event == ?PP_SIT_OUT;
-       Event == ?PP_COME_BACK ->
-    handle_cast_fold_etc(Event, Game, Data);
-
 handle_cast({?PP_CHAT, Game, Message}, Data) ->
     handle_cast_chat(Game, Message, Data);
+
+handle_cast(R = #sit_out{ done = none }, Data) ->
+    handle_cast_sit_out(R, Data);
+
+handle_cast(R = #come_back{ done = none }, Data) ->
+    handle_cast_come_back(R, Data);
 
 handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
     handle_cast_seat_query(Game, Data);
@@ -165,6 +165,22 @@ code_change(_OldVsn, Data, _Extra) ->
 %%%
 %%% Handlers
 %%% 
+
+handle_cast_watch(R, Data) ->
+    cardgame:cast(R#watch.game, R#watch{ player = self() }),
+    {noreply, Data}.
+
+handle_cast_unwatch(R, Data) ->
+    cardgame:cast(R#watch.game, R#watch{ player = self() }),
+    {noreply, Data}.
+
+handle_cast_sit_out(R, Data) ->
+    cardgame:send_event(R#sit_out.game, R#sit_out{ player = self() }),
+    {noreply, Data}.
+
+handle_cast_come_back(R, Data) ->
+    cardgame:send_event(R#come_back.game, R#come_back{ player = self() }),
+    {noreply, Data}.
 
 handle_cast_logout(Data) ->
     case gb_trees:is_empty(Data#player_data.inplay_xref) of
@@ -233,14 +249,6 @@ handle_cast_notify_leave(GID, Data) ->
     end,
     Xref1 = gb_trees:delete(GID, Xref),
     {noreply, Data#player_data{ inplay_xref = Xref1 }}.
-
-handle_cast_watch(Game, Data) ->
-    cardgame:cast(Game, {?PP_WATCH, self()}),
-    {noreply, Data}.
-
-handle_cast_unwatch(Game, Data) ->
-    cardgame:cast(Game, {?PP_UNWATCH, self()}),
-    {noreply, Data}.
 
 handle_cast_call_raise(Event, Game, Amount, Data) ->
     cardgame:send_event(Game, {Event, self(), Amount}),

@@ -27,7 +27,6 @@ all() ->
     ok = mnesia:wait_for_tables([tab_game_config], 10000),
     test(),
     db:test(),
-    proto:test(),
     hand:test(),
     pot:test(),
     player:test(),
@@ -133,7 +132,7 @@ complex_seat_query_test() ->
                  Packet1),
     ?assertEqual({packet, {?PP_SEAT_STATE, GID, 1, ?SS_TAKEN, PID}}, 
                  Packet2),
-    ?assertNot(none == proto:write({?PP_SEAT_STATE, GID, 1, ?SS_TAKEN, PID})),
+    ?assertNot(none == pp:old_write({?PP_SEAT_STATE, GID, 1, ?SS_TAKEN, PID})),
     cleanup_players(Players),
     ?assertEqual(ok, stop_game(Game)),
     ok.
@@ -372,7 +371,7 @@ simple_game_simulation_test() ->
     %% create dummy players
     Data
 	= [{_, ID2}, {_, ID1}, _]
-	= setup_game(Host, Port, GID,
+	= setup_game(Host, Port, Game,
 		      [{nick(), 1, ['BLIND', 'FOLD']},
 		       {nick(), 2, ['BLIND']}]),
     timer:sleep(1000),
@@ -409,7 +408,7 @@ leave_after_sb_posted_test() ->
     cardgame:cast(Game, {'NOTE', leave_after_sb_posted}),
     GID = cardgame:call(Game, 'ID'),
     %% create dummy players
-    Data = setup_game(Host, Port, GID,
+    Data = setup_game(Host, Port, Game,
 		      [{<<"leave-after-sb-bot1">>, 1, ['BLIND']},
 		       {<<"leave-after-sb-bot2">>, 2, ['LEAVE']}]),
     io:format("Data: ~p~n", [Data]),
@@ -453,7 +452,7 @@ dynamic_game_start_test() ->
     ?tcpsend(Socket, Packet),
     GID = receive
 	      {tcp, _, Bin1} ->
-		  case proto:read(Bin1) of 
+		  case pp:old_read(Bin1) of 
 		      {?PP_GOOD, ?PP_NEW_GAME_REQ, Temp} ->
 			  Temp
 		  end;
@@ -547,7 +546,7 @@ two_games_in_a_row_test() ->
     cardgame:cast(Game, {'NOTE', two_games_in_a_row}),
     GID = cardgame:call(Game, 'ID'),
     %% create dummy players
-    Data = setup_game(Host, Port, GID, 2, % games to play
+    Data = setup_game(Host, Port, Game, 2, % games to play
                       [{nick("test200"), 1, ['BLIND', 'FOLD', 'BLIND', 'FOLD']},
                        {nick("test200"), 2, ['BLIND', 'BLIND', 'FOLD']}]),
     %% make sure game is started
@@ -585,7 +584,7 @@ two_games_with_leave_test() ->
     GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'REQUIRED', 3}),
     %% create dummy players
-    Data = setup_game(Host, Port, GID, 1, % games to play
+    Data = setup_game(Host, Port, Game, 1, % games to play
                       [{<<"bot1">>, 1, ['BLIND', 'RAISE', 'CALL', 'CHECK', 'CHECK']},
                        {<<"bot2">>, 2, ['BLIND', 'QUIT']},
                        {<<"bot3">>, 3, ['RAISE', 'CALL', 'CALL', 'CHECK', 'CHECK']}
@@ -636,7 +635,7 @@ split_pot_test() ->
     Actions1 = ['BLIND', 'CHECK', 'RAISE', 'CHECK', 'CHECK'],
     Actions2 = ['BLIND', 'CHECK', 'CALL', 'CHECK', 'CHECK'],
     Data = [ {P2, _}, {P1, _}, {Obs, _} ]
-	= setup_game(Host, Port, GID, 2, % games to play
+	= setup_game(Host, Port, Game, 2, % games to play
                      [{<<"split-pot-bot1">>, 1, []},
                       {<<"split-pot-bot2">>, 2, []}
                      ]),
@@ -717,7 +716,7 @@ leave_out_of_turn_test() ->
     cardgame:cast(Game, {'NOTE', leave_out_of_turn}),
     cardgame:cast(Game, {'REQUIRED', 3}),
     %% create dummy players
-    Data = setup_game(Host, Port, GID, 1, % games to play
+    Data = setup_game(Host, Port, Game, 1, % games to play
                       [{<<"test220-bot1">>, 1, ['BLIND', %1
                                                 'CALL', %1
                                                 'CHECK', %2
@@ -759,7 +758,7 @@ dummy_game() ->
     cardgame:cast(Game, {'NOTE', dummy_game}),
     cardgame:cast(Game, {'REQUIRED', 4}),
     %% create dummy players
-    setup_game(Host, Port, GID,
+    setup_game(Host, Port, Game,
 	       [{<<"test14-bot1">>, 1, ['SIT OUT']},
 		{<<"test14-bot2">>, 2, ['SIT OUT']},
 		{<<"test14-bot3">>, 3, ['SIT OUT']},
@@ -861,7 +860,7 @@ find_game(Host, Port, GameType) ->
 		      ?OP_IGNORE, 0}), % waiting
     GID = receive
 	      {tcp, _, Bin} ->
-		  case proto:read(Bin) of 
+		  case pp:old_read(Bin) of 
 		      {?PP_GAME_INFO, ID, GameType,
 		       _Expected, _Joined, _Waiting,
 		       {?LT_FIXED_LIMIT, _Low, _High}} ->
@@ -893,58 +892,58 @@ flush(Debug) ->
 	    ok
     end.
 
-connect_observer(Host, Port, GID) ->
-    connect_observer(Host, Port, GID, 1, false).
+connect_observer(Host, Port, Game) ->
+    connect_observer(Host, Port, Game, 1, false).
 
-connect_observer(Host, Port, GID, Trace) ->
-    connect_observer(Host, Port, GID, 1, Trace).
+connect_observer(Host, Port, Game, Trace) ->
+    connect_observer(Host, Port, Game, 1, Trace).
 
-connect_observer(Host, Port, GID, GamesToWatch, Trace) ->
+connect_observer(Host, Port, Game, GamesToWatch, Trace) ->
     {ok, Obs} = observer:start(self()),
     gen_server:cast(Obs, {'TRACE', Trace}),
     gen_server:cast(Obs, {'GAMES TO PLAY', GamesToWatch}),
     ok = gen_server:call(Obs, {'CONNECT', Host, Port}, 15000),
-    gen_server:cast(Obs, {?PP_WATCH, GID}),
+    gen_server:cast(Obs, #watch{ game = Game }),
     {Obs, 0}.
 
-connect_player(Nick, Host, Port, GID, SeatNum, GamesToPlay, Actions) ->
+connect_player(Nick, Host, Port, Game, SeatNum, GamesToPlay, Actions) ->
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
     {ok, Bot} = bot:start(Nick, SeatNum, SeatNum, 1000.0),
     gen_server:cast(Bot, {'SET ACTIONS', Actions}),
     gen_server:cast(Bot, {'GAMES TO PLAY', GamesToPlay}),
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, 15000),
     gen_server:cast(Bot, {?PP_LOGIN, Nick, Nick}),
-    gen_server:cast(Bot, {?PP_WATCH, GID}),
+    gen_server:cast(Bot, #watch{ game = Game }),
     {Bot, ID}.
 
-setup_game(Host, Port, GID, Bots) ->
-    setup_game(Host, Port, GID, 1, Bots).
+setup_game(Host, Port, Game, Bots) ->
+    setup_game(Host, Port, Game, 1, Bots).
     
-setup_game(Host, Port, GID, GamesToPlay, Bots)
+setup_game(Host, Port, Game, GamesToPlay, Bots)
   when is_list(Host),
        is_number(Port),
-       is_number(GID),
+       is_pid(Game),
        is_number(GamesToPlay),
        is_list(Bots) ->
-    X = connect_observer(Host, Port, GID, GamesToPlay, true),
-    setup_game(Host, Port, GID, GamesToPlay, Bots, [X]);
+    X = connect_observer(Host, Port, Game, GamesToPlay, true),
+    setup_game(Host, Port, Game, GamesToPlay, Bots, [X]);
     
-setup_game(_Host, _Port, _GID, _GamesToPlay, []) ->
+setup_game(_Host, _Port, _Game, _GamesToPlay, []) ->
     [].
 
-setup_game(Host, Port, GID, Games, [{Nick, SeatNum, Actions}|Rest], Cleanup) 
+setup_game(Host, Port, Game, Games, [{Nick, SeatNum, Actions}|Rest], Cleanup) 
   when is_list(Host),
        is_number(Port),
-       is_number(GID),
+       is_pid(Game),
        is_binary(Nick),
        is_number(SeatNum),
        is_number(Games),
        is_list(Actions),
        is_list(Cleanup) ->
-    X = connect_player(Nick, Host, Port, GID, SeatNum, Games, Actions),
-    setup_game(Host, Port, GID, Games, Rest, [X|Cleanup]);
+    X = connect_player(Nick, Host, Port, Game, SeatNum, Games, Actions),
+    setup_game(Host, Port, Game, Games, Rest, [X|Cleanup]);
 
-setup_game(_Host, _Port, _GID, _GamesToPlay, [], Cleanup) ->
+setup_game(_Host, _Port, _Game, _GamesToPlay, [], Cleanup) ->
     Cleanup.
 
 nick() ->

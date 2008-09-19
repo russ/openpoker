@@ -2,6 +2,8 @@
 
 -module(pp).
 
+-export([old_write/1, old_read/1]).
+
 -export([read/1, write/1, test/0]).
 
 -include("test.hrl").
@@ -17,6 +19,12 @@
                 ]).
 
 -define(PP_VER, 1).
+
+old_write(Data) ->
+    term_to_binary(Data).
+
+old_read(Bin) when is_binary(Bin) ->
+    binary_to_term(Bin).
 
 nick() ->
     string().

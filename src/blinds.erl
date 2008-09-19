@@ -71,11 +71,13 @@ small_blind({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
 small_blind({?PP_LEAVE, Player}, Data) ->
     small_blind_handle_leave(Player, Data);
 
-small_blind({?PP_SIT_OUT, Player}, Data) ->
-    small_blind_handle_sitout(Player, Data);
+small_blind(R, Data) 
+  when is_record(R, sit_out) ->
+    small_blind_handle_sit_out(R, Data);
 
-small_blind({?PP_COME_BACK, Player}, Data) ->
-    small_blind_handle_comeback(Player, Data);
+small_blind(R, Data) 
+  when is_record(R, come_back) ->
+    small_blind_handle_come_back(R, Data);
 
 small_blind(Event, Data) ->
     small_blind_other(Event, Data).
@@ -95,11 +97,13 @@ big_blind({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
 big_blind({?PP_LEAVE, Player}, Data) ->
     big_blind_handle_leave(Player, Data);
 
-big_blind({?PP_SIT_OUT, Player}, Data) ->
-    big_blind_handle_sitout(Player, Data);
+big_blind(R, Data) 
+  when is_record(R, sit_out) ->
+    big_blind_handle_sit_out(R, Data);
 
-big_blind({?PP_COME_BACK, Player}, Data) ->
-    big_blind_handle_comeback(Player, Data);
+big_blind(R, Data) 
+  when is_record(R, come_back) ->
+    big_blind_handle_come_back(R, Data);
 
 big_blind(Event, Data) ->
     big_blind_handle_other(Event, Data).
@@ -300,11 +304,11 @@ small_blind_handle_join(Player, SeatNum, BuyIn, Data) ->
 small_blind_handle_leave(Player, Data) ->
     leave(Data, Player, small_blind).
 
-small_blind_handle_sitout(Player, Data) ->
-    sit_out(Data, Player, small_blind).
+small_blind_handle_sit_out(R, Data) ->
+    sit_out(Data, R, small_blind).
 
-small_blind_handle_comeback(Player, Data) ->
-    come_back(Data, Player, small_blind).
+small_blind_handle_come_back(R, Data) ->
+    come_back(Data, R, small_blind).
 
 small_blind_other(Event, Data) ->
     handle_event(Event, small_blind, Data).
@@ -401,11 +405,11 @@ big_blind_handle_join(Player, SeatNum, BuyIn, Data) ->
 big_blind_handle_leave(Player, Data) ->
     leave(Data, Player, big_blind).
 
-big_blind_handle_sitout(Player, Data) ->
-    sit_out(Data, Player, big_blind).
+big_blind_handle_sit_out(R, Data) ->
+    sit_out(Data, R, big_blind).
 
-big_blind_handle_comeback(Player, Data) ->
-    come_back(Data, Player, big_blind).
+big_blind_handle_come_back(R, Data) ->
+    come_back(Data, R, big_blind).
 
 big_blind_handle_other(Event, Data) ->
     handle_event(Event, big_blind, Data).
@@ -464,12 +468,12 @@ leave(Data, Player, State) ->
     end,
     {next_state, State, Data}.
 
-sit_out(Data, Player, State) ->
-    gen_server:cast(Data#blinds.game, {'SET STATE', Player, ?PS_SIT_OUT}),
+sit_out(Data, R, State) ->
+    gen_server:cast(Data#blinds.game, R),
     {next_state, State, Data}.
 
-come_back(Data, Player, State) ->
-    gen_server:cast(Data#blinds.game, {'SET STATE', Player, ?PS_PLAY}),
+come_back(Data, R, State) ->
+    gen_server:cast(Data#blinds.game, R),
     {next_state, State, Data}.
 
 advance_button(Data) ->

@@ -46,15 +46,27 @@ handle_cast({'SOCKET', Socket}, Data)
 	      socket = Socket
 	     },
     {noreply, Data1};
-    
-handle_cast({?PP_WATCH, Game}, Data) 
-  when is_pid(Game) ->
-    cardgame:cast(Game, {?PP_WATCH, self()}),
+
+handle_cast(R, Data) 
+  when is_record(R, watch) ->
+    cardgame:cast(R#watch.game, #watch{ game = self() }),
     {noreply, Data};
 
-handle_cast({?PP_UNWATCH, Game}, Data) 
-  when is_pid(Game) ->
-    cardgame:cast(Game, {?PP_UNWATCH, self()}),
+handle_cast(R, Data) 
+  when is_record(R, unwatch) ->
+    cardgame:cast(R#unwatch.game, #unwatch{ game = self() }),
+    {noreply, Data};
+
+handle_cast(R, Data)
+  when is_record(R, call);
+       is_record(R, raise);
+       is_record(R, join);
+       is_record(R, leave);
+       is_record(R, fold);
+       is_record(R, sit_out);
+       is_record(R, come_back);
+       is_record(R, chat);
+       is_record(R, dynamic_start_game) ->
     {noreply, Data};
 
 handle_cast({Event, _Game, _Amount}, Data)
@@ -66,15 +78,6 @@ handle_cast({?PP_JOIN, _Game, _SeatNum, _BuyIn}, Data) ->
     {noreply, Data};
 
 handle_cast({?PP_LEAVE, _Game}, Data) ->
-    {noreply, Data};
-
-handle_cast({Event, _Game}, Data) 
-  when Event == ?PP_FOLD;
-       Event == ?PP_SIT_OUT;
-       Event == ?PP_COME_BACK ->
-    {noreply, Data};
-
-handle_cast({?PP_CHAT, _Game, _Message}, Data) ->
     {noreply, Data};
 
 handle_cast({?PP_SEAT_QUERY, Game}, Data) ->

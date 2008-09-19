@@ -153,7 +153,7 @@ handle_cast({'REQUIRED', N}, Game) ->
 %%% Broadcast event to players and observers
 
 handle_cast({'BROADCAST', Event}, Game) ->
-    handle_cast_broadcast(Event, Game);
+    handle_cast_broadcast(Game, Event);
 
 %%% Only used for testing to rig the deck 
 
@@ -162,11 +162,21 @@ handle_cast({'RIG', Deck}, Game) ->
 
 %%% Watch the game without joining
 
-handle_cast({?PP_WATCH, Player}, Game) ->
-    handle_cast_watch(Player, Game);
+handle_cast(R, Game) 
+  when is_record(R, watch) ->
+    handle_cast_watch(R, Game);
 
-handle_cast({?PP_UNWATCH, Player}, Game) ->
-    handle_cast_unwatch(Player, Game);
+handle_cast(R, Game) 
+  when is_record(R, unwatch) ->
+    handle_cast_unwatch(R, Game);
+    
+handle_cast(R, Game) 
+  when is_record(R, notify_sb) ->
+    handle_cast_notify_sb(R, Game);
+
+handle_cast(R, Game) 
+  when is_record(R, notify_bb) ->
+    handle_cast_notify_bb(R, Game);
 
 %%% Need to be watching the game or playing
 %%% to be able to send chat messages.
@@ -358,7 +368,7 @@ handle_cast_required(N, Game) ->
 	     },
     {noreply, Game1}.
 
-handle_cast_broadcast(Event, Game) ->
+handle_cast_broadcast(Game, Event) ->
     Game1 = broadcast(Game, Event),
     {noreply, Game1}.
 
@@ -367,15 +377,15 @@ handle_cast_rig(Cards, Game) ->
     Game1 = Game#game{ deck = deck:rig(Deck, Cards) },
     {noreply, Game1}.
     
-handle_cast_watch(Player, Game) ->
+handle_cast_watch(R, Game) ->
     Game1 = Game#game { 
-	      observers = [Player|Game#game.observers]
+	      observers = [R#watch.player|Game#game.observers]
 	     },
     {noreply, Game1}.
 
-handle_cast_unwatch(Player, Game) ->
+handle_cast_unwatch(R, Game) ->
     Game1 = Game#game { 
-	      observers = lists:delete(Player, Game#game.observers)
+	      observers = lists:delete(R#unwatch.player, Game#game.observers)
 	     },
     {noreply, Game1}.
     
@@ -389,6 +399,14 @@ handle_cast_chat(Player, Message, Game) ->
 		true ->
 		    Game
 	    end,
+    {noreply, Game1}.
+
+handle_cast_notify_sb(R, Game) ->
+    Game1 = broadcast(Game, R#notify_sb{ game = Game#game.fsm }),
+    {noreply, Game1}.
+    
+handle_cast_notify_bb(R, Game) ->
+    Game1 = broadcast(Game, R#notify_bb{ game = Game#game.fsm }),
     {noreply, Game1}.
 
 handle_cast_join(Player, SeatNum, BuyIn, State, Game) ->
@@ -866,12 +884,12 @@ add_seqnum(Game, Event)
     add_seqnum(Game, tuple_to_list(Event));
 
 add_seqnum(Game, [?PP_NOTIFY_CHAT, Player, Msg]) ->
-    [?PP_NOTIFY_CHAT, Game#game.gid, Player, Game#game.seqnum, Msg];
+    [?PP_NOTIFY_CHAT, Game#game.fsm, Player, Game#game.seqnum, Msg];
 
 add_seqnum(Game, List) 
   when is_list(List) ->
     [Type|Rest] = List,
-    [Type, Game#game.gid|Rest] ++ [Game#game.seqnum].
+    [Type, Game#game.fsm|Rest] ++ [Game#game.seqnum].
 
 make_players(Game, Seats) ->
     make_players(Game, Seats, []).
@@ -883,6 +901,17 @@ make_players(Game, [SeatNum|Rest], Acc) ->
     Seat = element(SeatNum, Game#game.seats),
     Player = Seat#seat.player,
     make_players(Game, Rest, [Player|Acc]).
+
+broadcast(Game, Event) 
+  when is_record(Event, watch);
+       is_record(Event, unwatch);
+       is_record(Event, sit_out);
+       is_record(Event, come_back) ->
+    %% notify players
+    Seats = get_seats(Game, ?PS_ANY),
+    Players = make_players(Game, Seats),
+    broadcast(Game, Players, Event), 
+    broadcast(Game, Game#game.observers, Event);
 
 broadcast(Game, Event) 
   when is_record(Game, game) ->

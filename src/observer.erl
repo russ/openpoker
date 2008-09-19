@@ -100,7 +100,7 @@ handle_info({tcp_closed, _Socket}, Data) ->
     {stop, normal, Data#obs{ socket = none }};
 
 handle_info({tcp, _Socket, Bin}, Data) ->
-    case proto:read(Bin) of
+    case pp:old_read(Bin) of
 	none ->
             error_logger:info_report([{module, ?MODULE}, 
                                       {line, ?LINE},
@@ -365,7 +365,7 @@ handle({?PP_NOTIFY_CANCEL_GAME, GID, _Seq}, Data) ->
     if
         N == Data#obs.games_to_watch ->
             Data#obs.parent ! {'CANCEL', GID},
-            ok = ?tcpsend(Data#obs.socket, {?PP_UNWATCH, GID}),
+            ok = ?tcpsend(Data#obs.socket, #unwatch{ game = GID }),
             {stop, normal, Data};
         true ->
             {noreply, Data#obs{ cancel_count = N + 1}}
@@ -381,7 +381,7 @@ handle({?PP_NOTIFY_END_GAME, GID, _Seq}, Data) ->
     Data#obs.parent ! {'END', GID, Data#obs.winners},
     if 
         Data#obs.games_to_watch == 1 ->
-            ok = ?tcpsend(Data#obs.socket, {?PP_UNWATCH, GID}),
+            ok = ?tcpsend(Data#obs.socket, #unwatch{ game = GID }),
             {stop, normal, Data};
         true ->
             N = Data#obs.games_to_watch,

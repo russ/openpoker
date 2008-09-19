@@ -184,7 +184,7 @@ handle_tcp_closed(Socket, Bot) ->
     {stop, normal, Bot}.
 
 handle_tcp_data(Bin, Bot) ->
-    case proto:read(Bin) of
+    case pp:old_read(Bin) of
 	none ->
 	    {noreply, Bot};
 	Event ->
@@ -221,7 +221,6 @@ handle_notify_game_inplay(GID, PID, Bot) ->
     {noreply, Bot1}.
 
 handle_bet_req(GID, Amount, Bot) ->
-    GID = Bot#bot.game,
     %%io:format("~w: BLIND_REQ: ~w/~w, ~.2. f~n", 
     %%	      [GID, Bot#bot.player, Bot#bot.seat_num, Amount]),
     [Action|Rest] = Bot#bot.actions,
@@ -230,29 +229,29 @@ handle_bet_req(GID, Amount, Bot) ->
 	    },
     case Action of
 	'SIT OUT' ->
-	    handle_cast({?PP_SIT_OUT, Bot1#bot.game}, Bot1),
+	    handle_cast(#sit_out{ game = GID }, Bot1),
 	    {noreply, Bot1};
 	'BLIND' ->
-	    handle_cast({?PP_CALL, Bot1#bot.game, Amount}, Bot1),
+	    handle_cast({?PP_CALL, GID, Amount}, Bot1),
 	    Bot2 = Bot1#bot {
 		     balance = Bot1#bot.balance - Amount
 		    },
 	    {noreply, Bot2};
 	{'BLIND', allin} ->
-	    handle_cast({?PP_CALL, Bot1#bot.game, Bot1#bot.balance}, Bot1),
+	    handle_cast({?PP_CALL, GID, Bot1#bot.balance}, Bot1),
 	    Bot2 = Bot1#bot {
 		     balance = 0
 		    },
 	    {noreply, Bot2};
 	'FOLD' ->
-	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
+	    handle_cast({?PP_FOLD, GID}, Bot1),
 	    {noreply, Bot1};
 	'LEAVE' ->
-	    handle_cast({?PP_LEAVE, Bot1#bot.game}, Bot1),
+	    handle_cast({?PP_LEAVE, GID}, Bot1),
 	    {noreply, Bot1};
 	'QUIT' ->
-	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
-	    handle_cast({?PP_LEAVE , Bot1#bot.game}, Bot1),
+	    handle_cast({?PP_FOLD, GID}, Bot1),
+	    handle_cast({?PP_LEAVE , GID}, Bot1),
 	    {noreply, Bot1#bot{ done = true }};
 	_ ->
 	    error_logger:error_report([{message, "Unexpected blind request, folding!"},
@@ -261,12 +260,11 @@ handle_bet_req(GID, Amount, Bot) ->
 				       {bot, Bot1},
 				       {amount, Amount},
 				       {now, now()}]),
-	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
+	    handle_cast({?PP_FOLD, GID}, Bot1),
 	    {noreply, Bot1}
     end.
 
 handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot) ->
-    GID = Bot#bot.game,
     [Action|Rest] = Bot#bot.actions,
     Bot1 = Bot#bot {
 	     actions = Rest
@@ -279,68 +277,68 @@ handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot) ->
     %%	      [Bot#bot.player, Bot#bot.seat_num, Bot#bot.balance * 1.0]),
     case Action of
 	'SIT OUT' ->
-	    handle_cast({?PP_SIT_OUT, Bot1#bot.game}, Bot1),
+	    handle_cast(#sit_out{ game = GID }, Bot1),
 	    {noreply, Bot1};
 	'BLIND' ->
-	    handle_cast({?PP_CALL, Bot1#bot.game, Call}, Bot1),
+	    handle_cast({?PP_CALL, GID, Call}, Bot1),
 	    Bot2 = Bot1#bot {
 		     balance = Bot1#bot.balance - Call
 		    },
 	    {noreply, Bot2};
 	{'BLIND', allin} ->
-	    handle_cast({?PP_CALL, Bot1#bot.game, Bot1#bot.balance}, Bot1),
+	    handle_cast({?PP_CALL, GID, Bot1#bot.balance}, Bot1),
 	    Bot2 = Bot1#bot {
 		     balance = 0
 		    },
 	    {noreply, Bot2};
 	'CHECK' ->
-	    handle_cast({?PP_CALL, Bot1#bot.game, 0}, Bot1),
+	    handle_cast({?PP_CALL, GID, 0}, Bot1),
 	    {noreply, Bot1};
 	'CALL' ->
-	    handle_cast({?PP_CALL, Bot1#bot.game, Call}, Bot1),
+	    handle_cast({?PP_CALL, GID, Call}, Bot1),
 	    Bot2 = Bot1#bot {
 		     balance = Bot1#bot.balance - Call
 		    },
 	    {noreply, Bot2};
 	{'CALL', allin} ->
-	    handle_cast({?PP_CALL, Bot1#bot.game, Bot1#bot.balance}, Bot1),
+	    handle_cast({?PP_CALL, GID, Bot1#bot.balance}, Bot1),
 	    Bot2 = Bot1#bot {
 		     balance = 0
 		    },
 	    {noreply, Bot2};
 	'RAISE' ->
-	    handle_cast({?PP_RAISE, Bot1#bot.game, RaiseMin}, Bot1),
+	    handle_cast({?PP_RAISE, GID, RaiseMin}, Bot1),
 	    Bot2 = Bot1#bot {
 		     balance = Bot1#bot.balance - Call - RaiseMin
 		    },
 	    {noreply, Bot2};
 	{'RAISE', allin} ->
-	    handle_cast({?PP_RAISE, Bot1#bot.game, Bot1#bot.balance - Call}, Bot1),
+	    handle_cast({?PP_RAISE, GID, Bot1#bot.balance - Call}, Bot1),
 	    Bot2 = Bot1#bot {
 		     balance = 0
 		    },
 	    {noreply, Bot2};
 	'BET' ->
-	    handle_cast({?PP_RAISE, Bot1#bot.game, RaiseMin}, Bot1),
+	    handle_cast({?PP_RAISE, GID, RaiseMin}, Bot1),
 	    Bot2 = Bot1#bot {
 		     balance = Bot1#bot.balance - RaiseMin
 		    },
 	    {noreply, Bot2};
 	{'BET', allin} ->
-	    handle_cast({?PP_RAISE, Bot1#bot.game, Bot1#bot.balance - Call}, Bot1),
+	    handle_cast({?PP_RAISE, GID, Bot1#bot.balance - Call}, Bot1),
 	    Bot2 = Bot1#bot {
 		     balance = 0
 		    },
 	    {noreply, Bot2};
 	'FOLD' ->
-	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
+	    handle_cast({?PP_FOLD, GID}, Bot1),
 	    {noreply, Bot1};
 	'LEAVE' ->
-	    handle_cast({?PP_LEAVE , Bot1#bot.game}, Bot1),
+	    handle_cast({?PP_LEAVE , GID}, Bot1),
 	    {noreply, Bot1};
 	'QUIT' ->
-	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
-	    handle_cast({?PP_LEAVE , Bot1#bot.game}, Bot1),
+	    handle_cast({?PP_FOLD, GID}, Bot1),
+	    handle_cast({?PP_LEAVE , GID}, Bot1),
 	    {noreply, Bot1#bot{ done = true}};
 	_ ->
 	    error_logger:error_report([{message, "Unexpected bet request, folding!"},
