@@ -185,8 +185,8 @@ handle_cast(R, Game)
 %%% Need to be watching the game or playing
 %%% to be able to send chat messages.
     
-handle_cast({?PP_CHAT, Player, Message}, Game) ->
-    handle_cast_chat(Player, Message, Game);
+handle_cast(R = #chat{}, Game) ->
+    handle_cast_chat(R, Game);
 
 %%% You need to have enough money to buy in 
 %%% and the seat has to be empty.
@@ -381,14 +381,25 @@ handle_cast_rig(Cards, Game) ->
 handle_cast_notify_start_game(R, Game) ->
     Msg = lang:msg(?GAME_STARTING),
     Game1 = reset(Game),
-    Game2 = broadcast(Game1, #chat{ player = 0, message = Msg }),
-    Game3 = broadcast(Game2, R#notify_start_game{ game = Game#game.fsm }),
+    Game2 = broadcast(Game1, #chat{ 
+                        game = Game#game.fsm, 
+                        player = 0, message = Msg 
+                       }),
+    Game3 = broadcast(Game2, R#notify_start_game{ 
+                               game = Game#game.fsm 
+                              }),
     {noreply, Game3}.
     
 handle_cast_notify_cancel_game(R, Game) ->
     Msg = lang:msg(?GAME_CANCELLED),
-    Game1 = broadcast(Game, #chat{ player = 0, message = Msg }),
-    Game2 = broadcast(Game1, R#notify_cancel_game{ game = Game#game.fsm }),
+    Game1 = broadcast(Game, #chat{ 
+                        game = Game#game.fsm,
+                        player = 0, 
+                        message = Msg 
+                       }),
+    Game2 = broadcast(Game1, R#notify_cancel_game{ 
+                               game = Game#game.fsm 
+                              }),
     {noreply, Game2}.
 
 handle_cast_watch(R, Game) ->
@@ -402,14 +413,15 @@ handle_cast_unwatch(R, Game) ->
 	      observers = lists:delete(R#unwatch.player, Game#game.observers)
 	     },
     {noreply, Game1}.
-    
-handle_cast_chat(Player, Message, Game) ->
+
+handle_cast_chat(R, Game) ->
+    Player = R#chat.player,
     XRef = Game#game.xref,
     OurPlayer = gb_trees:is_defined(Player, XRef) 
 	or lists:member(Player, Game#game.observers),
     Game1 = if 
 		OurPlayer ->
-		    broadcast(Game, {?PP_NOTIFY_CHAT, Player, Message});
+		    broadcast(Game, R#chat{ game = Game#game.fsm });
 		true ->
 		    Game
 	    end,
@@ -947,6 +959,10 @@ broadcast(Game, Event)
        is_record(Event, come_back);
        is_record(Event, join);
        is_record(Event, leave);
+       is_record(Event, chat);
+       is_record(Event, notify_start_game);
+       is_record(Event, notify_end_game);
+       is_record(Event, notify_win);
        is_record(Event, game_inplay);
        is_record(Event, notify_cancel_game)
        ->

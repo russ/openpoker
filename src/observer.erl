@@ -320,16 +320,6 @@ handle({?PP_NOTIFY_WIN, GID, PID, Amount}, Data) ->
 	     },
     {noreply, Data1};
 
-handle({?PP_NOTIFY_START_GAME, GID}, Data) ->
-    if
-	Data#obs.trace ->
-	    io:format("~w: START~n", [GID]);
-	true ->
-	    ok
-    end,
-    Data#obs.parent ! {'START', GID},
-    {noreply, Data#obs{ winners = gb_trees:empty()}};
-
 handle({?PP_NOTIFY_BUTTON, GID, SeatNum}, Data) ->
     if
 	Data#obs.trace ->
@@ -357,6 +347,16 @@ handle({?PP_NOTIFY_BB, GID, SeatNum}, Data) ->
     end,
     {noreply, Data};
 
+handle(#notify_start_game{ game = GID }, Data) ->
+    if
+	Data#obs.trace ->
+	    io:format("~w: START~n", [GID]);
+	true ->
+	    ok
+    end,
+    Data#obs.parent ! {'START', GID},
+    {noreply, Data#obs{ winners = gb_trees:empty()}};
+
 handle(#notify_cancel_game{ game = GID }, Data) ->
     if
 	Data#obs.trace ->
@@ -374,7 +374,7 @@ handle(#notify_cancel_game{ game = GID }, Data) ->
             {noreply, Data#obs{ cancel_count = N + 1}}
     end;
 
-handle({?PP_NOTIFY_END_GAME, GID}, Data) ->
+handle(#notify_end_game{ game = GID }, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: END~n", [GID]);
@@ -391,7 +391,7 @@ handle({?PP_NOTIFY_END_GAME, GID}, Data) ->
             {noreply, Data#obs{ games_to_watch = N - 1}}
     end;
 
-handle({?PP_GOOD, _, _}, Data) ->
+handle(#good{}, Data) ->
     {noreply, Data};
 
 %% Sink

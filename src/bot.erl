@@ -186,12 +186,10 @@ handle_notify_join(R, Bot) ->
 	   end,
     {noreply, Bot1}.
 
-handle_notify_game_inplay(GID, PID, Bot) ->
+handle_notify_game_inplay(R, Bot) ->
     Bot1 = if
-	       PID == Bot#bot.player ->
-		   Bot#bot {
-		     game = GID
-		    };
+	       R#game_inplay.player == Bot#bot.player ->
+		   Bot#bot{ game = R#game_inplay.game };
 	       true ->
 		   Bot
 	   end,
@@ -378,8 +376,8 @@ handle(R = #leave{}, Bot)
   when R#leave.player == Bot#bot.player ->
     handle_notify_leave(R, Bot);
 
-handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, _GameInplay, _SeatNum}, Bot) ->
-    handle_notify_game_inplay(GID, PID, Bot);
+handle(R = #game_inplay{}, Bot) ->
+    handle_notify_game_inplay(R, Bot);
 
 handle(#chat{}, Bot) ->
     {noreply, Bot};
@@ -399,18 +397,21 @@ handle({?PP_PLAYER_STATE, _GID, _PID, _State}, Bot) ->
 handle({?PP_GAME_STAGE, _GID, _Stage}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_START_GAME, _GID}, Bot) ->
+handle(#notify_start_game{}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_END_GAME, GID}, Bot) 
+handle(#notify_end_game{ game = GID }, Bot) 
   when Bot#bot.games_to_play == 1 ->
     handle_notify_end_last_game(GID, Bot);
 
-handle({?PP_NOTIFY_END_GAME, _GID}, Bot) ->
+handle(#notify_end_game{}, Bot) ->
     {noreply, Bot#bot{ games_to_play = Bot#bot.games_to_play - 1 }};
 
 handle(#notify_cancel_game{ game = GID }, Bot) ->
     handle_notify_cancel_game(GID, Bot);
+
+handle(#notify_win{}, Bot) ->
+    {noreply, Bot};
 
 handle({Cmd, _GID, _PID, _Amount}, Bot)
   when Cmd == ?PP_NOTIFY_WIN;

@@ -491,7 +491,6 @@
 -define(PP_CALL, 6).
 -define(PP_RAISE, 7).
 -define(PP_FOLD, 8).
--define(PP_CHAT, 13).
 
 %%% Server -> Client
 
@@ -503,8 +502,6 @@
 -define(PP_NOTIFY_PRIVATE, 19).
 -define(PP_NOTIFY_SHARED, 20).
 -define(PP_NOTIFY_CHAT, 23).
--define(PP_NOTIFY_START_GAME, 24).
--define(PP_NOTIFY_END_GAME, 25).
 -define(PP_NOTIFY_WIN, 26).
 -define(PP_NOTIFY_BET, 27).
 -define(PP_NOTIFY_QUIT, 28).

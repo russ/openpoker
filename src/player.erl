@@ -94,8 +94,8 @@ handle_cast(R, Data)
        R#leave.player == Data#player_data.self ->
     handle_cast_notify_leave(R, Data);
 
-handle_cast({?PP_CHAT, Game, Message}, Data) ->
-    handle_cast_chat(Game, Message, Data);
+handle_cast(R = #chat{}, Data) ->
+    handle_cast_chat(R, Data);
 
 handle_cast(R = #sit_out{ notify = none }, Data) ->
     handle_cast_sit_out(R, Data);
@@ -211,8 +211,8 @@ handle_cast_leave(R, Data) ->
     cardgame:send_event(R#leave.game, R#leave{ player = self(), state = ?PS_CAN_LEAVE }),
     {noreply, Data}.
 
-handle_cast_chat(Game, Message, Data) ->
-    cardgame:cast(Game, {?PP_CHAT, self(), Message}),
+handle_cast_chat(R, Data) ->
+    cardgame:cast(R#chat.game, R),
     {noreply, Data}.
 
 handle_cast_seat_query(Game, Data) ->
