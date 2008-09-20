@@ -156,7 +156,7 @@ handle({?PP_PLAYER_INFO, PID, InPlay, Nick, Location}, Data) ->
 	    {noreply, Data}
     end;
 
-handle({?PP_NOTIFY_JOIN, GID, PID, SeatNum,_BuyIn, _Seq}, Data) ->
+handle({?PP_NOTIFY_JOIN, GID, PID, SeatNum,_BuyIn}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: JOIN: ~w at seat#~w~n",
@@ -169,7 +169,7 @@ handle({?PP_NOTIFY_JOIN, GID, PID, SeatNum,_BuyIn, _Seq}, Data) ->
 	     },
     {noreply, Data1};
 
-handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, GameInplay,SeatNum, _Seq}, Data) ->
+handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, GameInplay,SeatNum}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("GID#:  ~w PID#~w: At Seat No:~w GAME INPLAY: ~w  ~n",
@@ -179,7 +179,7 @@ handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, GameInplay,SeatNum, _Seq}, Data) ->
     end,
    {noreply, Data};
 
-handle({?PP_NOTIFY_CHAT, GID, PID, _Seq, Message}, Data) ->
+handle({?PP_NOTIFY_CHAT, GID, PID, Message}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: CHAT: ~w: ~p~n",
@@ -189,7 +189,7 @@ handle({?PP_NOTIFY_CHAT, GID, PID, _Seq, Message}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_PLAYER_STATE, GID, PID, State, _Seq}, Data) ->
+handle({?PP_PLAYER_STATE, GID, PID, State}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: STATE: ~w = ~w~n",
@@ -199,7 +199,7 @@ handle({?PP_PLAYER_STATE, GID, PID, State, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_LEAVE, GID, PID, _Seq}, Data) ->
+handle({?PP_NOTIFY_LEAVE, GID, PID}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: LEAVE: ~w~n",
@@ -209,7 +209,7 @@ handle({?PP_NOTIFY_LEAVE, GID, PID, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_PRIVATE, GID, PID, _Seq}, Data) ->
+handle({?PP_NOTIFY_PRIVATE, GID, PID}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: CARD: ~w~n",
@@ -219,7 +219,7 @@ handle({?PP_NOTIFY_PRIVATE, GID, PID, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_PRIVATE_CARDS, GID, PID, Cards, _Seq}, Data) ->
+handle({?PP_NOTIFY_PRIVATE_CARDS, GID, PID, Cards}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: ~w WON WITH CARDS: ~w~n",
@@ -230,7 +230,7 @@ handle({?PP_NOTIFY_PRIVATE_CARDS, GID, PID, Cards, _Seq}, Data) ->
     {noreply, Data};
 
 
-handle({?PP_GAME_STAGE, GID, Stage, _Seq}, Data) ->
+handle({?PP_GAME_STAGE, GID, Stage}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: STAGE: ~w~n",
@@ -240,7 +240,7 @@ handle({?PP_GAME_STAGE, GID, Stage, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_BET, GID, PID, Amount, _Seq}, Data) ->
+handle({?PP_NOTIFY_BET, GID, PID, Amount}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: BET: ~w, ~-14.2. f~n",
@@ -250,7 +250,7 @@ handle({?PP_NOTIFY_BET, GID, PID, Amount, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_CALL, GID, PID, Amount, _Seq}, Data) ->
+handle({?PP_NOTIFY_CALL, GID, PID, Amount}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: CALL: ~w, ~-14.2. f~n",
@@ -260,7 +260,7 @@ handle({?PP_NOTIFY_CALL, GID, PID, Amount, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_RAISE, GID, PID, Amount, AmtPlusCall, _Seq}, Data) ->
+handle({?PP_NOTIFY_RAISE, GID, PID, Amount, AmtPlusCall}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: RAISE: ~w, ~-14.2. f, ~-14.2. f~n",
@@ -270,7 +270,7 @@ handle({?PP_NOTIFY_RAISE, GID, PID, Amount, AmtPlusCall, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_SB, GID, PID, Amount, _Seq}, Data) ->
+handle({?PP_NOTIFY_SB, GID, PID, Amount}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: SB: ~w, ~-14.2. f~n",
@@ -280,7 +280,7 @@ handle({?PP_NOTIFY_SB, GID, PID, Amount, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_BB, GID, PID, Amount, _Seq}, Data) ->
+handle({?PP_NOTIFY_BB, GID, PID, Amount}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: BB: ~w, ~-14.2. f~n",
@@ -290,7 +290,7 @@ handle({?PP_NOTIFY_BB, GID, PID, Amount, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_SHARED, GID, Card, _Seq}, Data) ->
+handle({?PP_NOTIFY_SHARED, GID, Card}, Data) ->
     if
 	Data#obs.trace ->
             {Face, Suit} = hand:int_to_card(Card),
@@ -301,7 +301,7 @@ handle({?PP_NOTIFY_SHARED, GID, Card, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_WIN, GID, PID, Amount, _Seq}, Data) ->
+handle({?PP_NOTIFY_WIN, GID, PID, Amount}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: WIN: ~w, ~-14.2. f~n",
@@ -317,7 +317,7 @@ handle({?PP_NOTIFY_WIN, GID, PID, Amount, _Seq}, Data) ->
 	     },
     {noreply, Data1};
 
-handle({?PP_NOTIFY_START_GAME, GID, _Seq}, Data) ->
+handle({?PP_NOTIFY_START_GAME, GID}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: START~n", [GID]);
@@ -327,7 +327,7 @@ handle({?PP_NOTIFY_START_GAME, GID, _Seq}, Data) ->
     Data#obs.parent ! {'START', GID},
     {noreply, Data#obs{ winners = gb_trees:empty()}};
 
-handle({?PP_NOTIFY_BUTTON, GID, SeatNum, _Seq}, Data) ->
+handle({?PP_NOTIFY_BUTTON, GID, SeatNum}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: DEALER: seat#~w~n", [GID, SeatNum]);
@@ -336,7 +336,7 @@ handle({?PP_NOTIFY_BUTTON, GID, SeatNum, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_SB, GID, SeatNum, _Seq}, Data) ->
+handle({?PP_NOTIFY_SB, GID, SeatNum}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: SB: seat#~w~n", [GID, SeatNum]);
@@ -345,7 +345,7 @@ handle({?PP_NOTIFY_SB, GID, SeatNum, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_BB, GID, SeatNum, _Seq}, Data) ->
+handle({?PP_NOTIFY_BB, GID, SeatNum}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: BB: seat#~w~n", [GID, SeatNum]);
@@ -354,7 +354,7 @@ handle({?PP_NOTIFY_BB, GID, SeatNum, _Seq}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_CANCEL_GAME, GID, _Seq}, Data) ->
+handle({?PP_NOTIFY_CANCEL_GAME, GID}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: CANCEL~n", [GID]);
@@ -371,7 +371,7 @@ handle({?PP_NOTIFY_CANCEL_GAME, GID, _Seq}, Data) ->
             {noreply, Data#obs{ cancel_count = N + 1}}
     end;
 
-handle({?PP_NOTIFY_END_GAME, GID, _Seq}, Data) ->
+handle({?PP_NOTIFY_END_GAME, GID}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: END~n", [GID]);

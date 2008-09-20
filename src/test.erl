@@ -114,7 +114,7 @@ complex_seat_query_test() ->
                        after 100 ->
                                none
                        end,
-    ?assertEqual({?PP_NOTIFY_JOIN, GID, Player, N, 1000.0, 0}, Packet),
+    ?assertEqual({?PP_NOTIFY_JOIN, Game, Player, N, 1000.0}, Packet),
     player:cast(PID, {?PP_SEAT_QUERY, Game}),
     Packet1 = receive
 		  Any1 ->
@@ -128,7 +128,7 @@ complex_seat_query_test() ->
 	      after 200 ->
 		      none
 	      end,
-    ?assertEqual({packet, {?PP_NOTIFY_GAME_INPLAY, GID, Player, 1000.0, 1, 1}}, 
+    ?assertEqual({packet, {?PP_NOTIFY_GAME_INPLAY, Game, Player, 1000.0, 1}}, 
                  Packet1),
     ?assertEqual({packet, {?PP_SEAT_STATE, GID, 1, ?SS_TAKEN, PID}}, 
                  Packet2),
@@ -277,9 +277,9 @@ player_online_playing_test() ->
     Inplay3 = gen_server:call(Pid, {'INPLAY', GID}),
     ?assertEqual(1000.0, Inplay3),
     %% look for notify join
-    ?assertMsg({?PP_NOTIFY_JOIN, GID, Pid, 1,1000.0, 0}, 
+    ?assertMsg({?PP_NOTIFY_JOIN, Game, Pid, 1,1000.0}, 
                100, [?PP_NOTIFY_CHAT, ?PP_NOTIFY_CANCEL_GAME]),
-    ?assertMsg({?PP_NOTIFY_GAME_INPLAY, GID, Pid, 1000.0,1, 1}, 
+    ?assertMsg({?PP_NOTIFY_GAME_INPLAY, Game, Pid, 1000.0, 1}, 
                100, [?PP_NOTIFY_CHAT, ?PP_NOTIFY_CANCEL_GAME]),
     gen_server:cast(Pid, 'LOGOUT'),
     ?assertEqual(ok, stop_player(Pid)),

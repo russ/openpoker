@@ -23,11 +23,6 @@
 	  hand,
 	  %% player state
 	  state,
-	  %% sequence number. tracks the last 
-	  %% game update packet accepted by this player.
-	  %% meant to track the last packet sent 
-	  %% over the network connection.
-	  seqnum = 0,
           %% auto-play queue
           cmd_que = []
 	 }).
@@ -61,12 +56,8 @@
 	  call = 0, 
 	  %% number of raises so far
 	  raise_count = 0,
-	  %% current sequence number
-	  seqnum = 0,
 	  %% players required to start a game
 	  required_player_count = 2,
-	  %% event history
-	  event_history = [],
           note
 	 }).
 
@@ -224,9 +215,6 @@ handle_cast({'ADD BET', Player, Amount}, Game) when Amount >= 0 ->
 handle_cast({'REQUEST BET', SeatNum, Call, RaiseMin, RaiseMax}, Game) ->
     handle_cast_request_bet(SeatNum, Call, RaiseMin, RaiseMax, Game);
 
-handle_cast({'RESEND UPDATES', Player}, Game) ->
-    handle_cast_resend_updates(Player, Game);
-
 handle_cast({'NOTE', Note}, Game) ->
     handle_cast_note(Note, Game);
 
@@ -340,8 +328,6 @@ handle_cast_reset(Game) ->
 	      board = [],
 	      call = 0,
 	      raise_count = 0,
-	      seqnum = 0,
-	      event_history = [],
               pot = pot:reset(Game#game.pot)
 	     },
     Seats = reset_hands(Game1#game.seats),
@@ -490,7 +476,7 @@ handle_cast_draw(Player, Game) ->
     Hand = hand:add(Seat#seat.hand, Card),
     Seats = setelement(SeatNum, Game#game.seats, Seat#seat{ hand = Hand }),
     GID = Game#game.gid,
-    gen_server:cast(Player, {?PP_NOTIFY_DRAW, GID, Card, Game#game.seqnum}),
+    gen_server:cast(Player, {?PP_NOTIFY_DRAW, GID, Card}),
     Game1 = broadcast(Game, {?PP_NOTIFY_PRIVATE, Player}),
     Game2 = Game1#game {
               seats = Seats,
@@ -594,10 +580,6 @@ handle_cast_request_bet(SeatNum, Call, RaiseMin, RaiseMax, Game) ->
             end
     end.
     
-handle_cast_resend_updates(Player, Game) ->
-    resend_updates(Game, Player),
-    {noreply, Game}.
-
 handle_cast_note(Note, Game) ->
     error_logger:info_msg("GID: ~p, Note: ~p~n", [Game#game.gid, Note]),
     {noreply, Game#game{ note = Note }}.
@@ -884,12 +866,12 @@ add_seqnum(Game, Event)
     add_seqnum(Game, tuple_to_list(Event));
 
 add_seqnum(Game, [?PP_NOTIFY_CHAT, Player, Msg]) ->
-    [?PP_NOTIFY_CHAT, Game#game.fsm, Player, Game#game.seqnum, Msg];
+    [?PP_NOTIFY_CHAT, Game#game.fsm, Player, Msg];
 
 add_seqnum(Game, List) 
   when is_list(List) ->
     [Type|Rest] = List,
-    [Type, Game#game.fsm|Rest] ++ [Game#game.seqnum].
+    [Type, Game#game.fsm|Rest].
 
 make_players(Game, Seats) ->
     make_players(Game, Seats, []).
@@ -927,28 +909,8 @@ broadcast(Game, [Player|Rest], Event) ->
     gen_server:cast(Player, Event),
     broadcast(Game, Rest, Event);
     
-broadcast(Game, [], Event)
-  when element(1, Event) =/= ?PP_NOTIFY_CHAT,
-       element(1, Event) =/= ?PP_NOTIFY_CANCEL_GAME ->
-    Game#game {
-      seqnum = Game#game.seqnum + 1,
-      event_history = [Event|Game#game.event_history]
-     };
-
 broadcast(Game, [], _) ->
     Game.
-
-resend_updates(Game, Player)
-  when is_record(Game, game),
-       is_pid(Player) ->
-    resend_updates(Player, lists:reverse(Game#game.event_history));
-
-resend_updates(Player, [Event|Rest]) ->
-    gen_server:cast(Player, Event),
-    resend_updates(Player, Rest);
-
-resend_updates(_Player, []) ->
-    ok.
 
 %% Seat query
 

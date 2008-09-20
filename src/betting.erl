@@ -247,7 +247,7 @@ betting_handle_timeout(Player, Data) ->
 				 {seat, Seat}]),
     %%
     %%io:format("~w timed out, folding~n", [Player]),
-    betting({?PP_FOLD, Player,1}, Data).
+    betting({?PP_FOLD, Player}, Data).
 
 betting_handle_join(Player, SeatNum, BuyIn, Data) ->
     blinds:join(Data, Player, SeatNum, BuyIn, betting, ?PS_FOLD).

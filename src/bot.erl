@@ -389,13 +389,13 @@ handle({?PP_GAME_INFO, _GID, ?GT_IRC_TEXAS,
 handle({?PP_PLAYER_INFO, _PID, _InPlay, _Nick, _Location}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_JOIN, GID, PID, _SeatNum,_BuyIn, _Seq}, Bot) ->
+handle({?PP_NOTIFY_JOIN, GID, PID, _SeatNum,_BuyIn}, Bot) ->
     handle_notify_join(GID, PID, Bot);
 
-handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, _GameInplay,_SeatNum, _Seq}, Bot) ->
+handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, _GameInplay, _SeatNum}, Bot) ->
     handle_notify_game_inplay(GID, PID, Bot);
 
-handle({?PP_NOTIFY_CHAT, _GID, _PID, _Seq, _Message}, Bot) ->
+handle({?PP_NOTIFY_CHAT, _GID, _PID, _Message}, Bot) ->
     {noreply, Bot};
 
 handle(?PP_NOTIFY_QUIT, Bot) ->
@@ -407,59 +407,59 @@ handle({?PP_BET_REQ, GID, Amount}, Bot) ->
 handle({?PP_BET_REQ, GID, Call, RaiseMin, RaiseMax}, Bot) ->
     handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot);
 
-handle({?PP_PLAYER_STATE, _GID, _PID, _State, _Seq}, Bot) ->
+handle({?PP_PLAYER_STATE, _GID, _PID, _State}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_LEAVE, _GID, PID, _Seq}, Bot) ->
+handle({?PP_NOTIFY_LEAVE, _GID, PID}, Bot) ->
     handle_notify_leave(PID, Bot);
 
-handle({?PP_GAME_STAGE, _GID, _Stage, _Seq}, Bot) ->
+handle({?PP_GAME_STAGE, _GID, _Stage}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_START_GAME, _GID, _Seq}, Bot) ->
+handle({?PP_NOTIFY_START_GAME, _GID}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_END_GAME, GID, _Seq}, Bot) 
+handle({?PP_NOTIFY_END_GAME, GID}, Bot) 
   when Bot#bot.games_to_play == 1 ->
     handle_notify_end_last_game(GID, Bot);
 
-handle({?PP_NOTIFY_END_GAME, _GID, _Seq}, Bot) ->
+handle({?PP_NOTIFY_END_GAME, _GID}, Bot) ->
     {noreply, Bot#bot{ games_to_play = Bot#bot.games_to_play - 1 }};
 
-handle({?PP_NOTIFY_CANCEL_GAME, GID, _Seq}, Bot) ->
+handle({?PP_NOTIFY_CANCEL_GAME, GID}, Bot) ->
     handle_notify_cancel_game(GID, Bot);
 
-handle({Cmd, _GID, _PID, _Amount, _Seq}, Bot)
+handle({Cmd, _GID, _PID, _Amount}, Bot)
   when Cmd == ?PP_NOTIFY_WIN;
        Cmd == ?PP_NOTIFY_CALL;
        Cmd == ?PP_NOTIFY_BET ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_RAISE, _GID, _PID, _Amount, _AmtPlusCall, _Seq}, Bot) ->
+handle({?PP_NOTIFY_RAISE, _GID, _PID, _Amount, _AmtPlusCall}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_DRAW, _GID, _Card, _Seq}, Bot) ->
+handle({?PP_NOTIFY_DRAW, _GID, _Card}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_PRIVATE, _GID, _PID, _Seq}, Bot) ->
+handle({?PP_NOTIFY_PRIVATE, _GID, _PID}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_PRIVATE_CARDS, _GID, _Player, _Cards, _Seq}, Bot) ->
+handle({?PP_NOTIFY_PRIVATE_CARDS, _GID, _Player, _Cards}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_BUTTON, _GID, _SeatNum, _Seq}, Bot) ->
+handle({?PP_NOTIFY_BUTTON, _GID, _SeatNum}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_SB, _GID, _SeatNum, _Seq}, Bot) ->
+handle({?PP_NOTIFY_SB, _GID, _SeatNum}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_BB, _GID, _SeatNum, _Seq}, Bot) ->
+handle({?PP_NOTIFY_BB, _GID, _SeatNum}, Bot) ->
     {noreply, Bot};
 
 handle({?PP_GOOD, _, _}, Bot) ->
     {noreply, Bot};
 
-handle({Cmd, _GID, _Card, _Seq}, Bot) 
+handle({Cmd, _GID, _Card}, Bot) 
   when Cmd == ?PP_NOTIFY_DRAW;
        Cmd == ?PP_NOTIFY_SHARED ->
     {noreply, Bot};
