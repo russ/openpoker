@@ -54,8 +54,8 @@ handle_call('INFO', _From, Limit) ->
 	     Limit#no_limit.low,
 	     Limit#no_limit.high}, Limit};
 
-handle_call({'RAISE SIZE', GID, _PotSize, Player, Stage}, _From, Limit) ->
-    {reply, raise_size(Limit, Player, Stage, GID ), Limit};
+handle_call({'RAISE SIZE', GID, _PotSize, Inplay, Stage}, _From, Limit) ->
+    {reply, raise_size(Limit, Inplay, Stage, GID ), Limit};
 
 handle_call('BLINDS', _From, Limit) ->
     {reply, {Limit#no_limit.low, Limit#no_limit.high}, Limit};
@@ -82,14 +82,12 @@ handle_info(Info, Limit) ->
 code_change(_OldVsn, Limit, _Extra) ->
     {ok, Limit}.
 
-raise_size(Limit, Player, Stage, GID) when ?GS_PREFLOP =:= Stage; 
-                                           ?GS_FLOP =:= Stage ->
-    GameInplay = gen_server:call(Player, {'INPLAY', GID}),
-    {Limit#no_limit.low, GameInplay};
+raise_size(Limit, Inplay, Stage, _GID) when ?GS_PREFLOP =:= Stage; 
+                                            ?GS_FLOP =:= Stage ->
+    {Limit#no_limit.low, Inplay};
 
-raise_size(Limit, Player, _Stage, GID) ->
-    GameInplay = gen_server:call(Player, {'INPLAY', GID}),
-    {Limit#no_limit.high, GameInplay}.
+raise_size(Limit, Inplay, _Stage, _GID) ->
+    {Limit#no_limit.high, Inplay}.
 
 test() ->
     ok.

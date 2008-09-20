@@ -71,7 +71,7 @@ login(Info, Player, account_disabled, _) ->
 
 login(Info, Player, player_online, Args) ->
     %% player is idle
-    gen_server:cast(Player#tab_player.process, 'LOGOUT'),
+    gen_server:cast(Player#tab_player.process, #logout{}),
     login(Info, Player, player_offline, Args);
 
 login(Info, Player, client_down, [_, _, Socket]) ->
@@ -81,19 +81,7 @@ login(Info, Player, client_down, [_, _, Socket]) ->
     {Info, Player1, {ok, Player#tab_player.process}};
 
 login(Info, Player, player_busy, Args) ->
-    Temp = login(Info, Player, client_down, Args),
-    Msg = {'RESEND UPDATES', Player#tab_player.process},
-    %% resend accumulated game updates
-%%     lists:foreach(fun(Game) -> 
-%%                           case db:find_game(Game) of
-%%                               none ->
-%%                                   ok;
-%%                               Pid ->
-%%                                   cardgame:cast(Pid, Msg) 
-%%                           end
-%%                   end,
-%%                   gen_server:call(Player#player.process, 'GAMES')),
-    Temp;
+    login(Info, Player, client_down, Args);
 
 login(Info, Player, player_offline, [Nick, _, Socket]) ->
     %% start player process

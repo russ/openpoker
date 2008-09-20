@@ -172,7 +172,7 @@
           player,
           amount,
           expected, % internal
-          done = false % internal
+          notify = none % internal
          }).
 
 -define(CMD_RAISE, 6).
@@ -185,7 +185,7 @@
           call, % internal
           min, % internal
           max, % internal
-          done = false % internal
+          notify = none % internal
          }).
 
 -define(CMD_FOLD, 7).
@@ -193,7 +193,7 @@
 -record(fold, {
           game,
           player,
-          done = false % internal
+          notify = none % internal
          }).
 
 -define(CMD_JOIN, 8).
@@ -205,7 +205,7 @@
           amount,
           state = ?PS_PLAY, % internal
           pid, % internal
-          done = false % internal
+          notify = none % internal
          }).
 
 -define(CMD_LEAVE, 9).
@@ -214,7 +214,7 @@
           game,
           player,
           state, % internal
-          done = false % internal
+          notify = none % internal
          }).
 
 -define(CMD_SIT_OUT, 10).
@@ -222,7 +222,7 @@
 -record(sit_out, {
           game,
           player,
-          done = false % internal
+          notify = none % internal
          }).
 
 -define(CMD_COME_BACK, 11).
@@ -230,7 +230,7 @@
 -record(come_back, {
           game,
           player,
-          done = false % internal
+          notify = none % internal
          }).
 
 -define(CMD_CHAT, 12).
@@ -239,7 +239,7 @@
           game,
           player,
           message,
-          done = false % internal
+          notify = none % internal
          }).
 
 -define(CMD_GAME_QUERY, 13).
@@ -453,7 +453,7 @@
 -record(wait_bb, {
           game, 
           player,
-          done % internal
+          notify % internal
          }).
 
 -define(CMD_PING, 253).
@@ -488,13 +488,9 @@
 
 %%% Client -> Server
 
--define(PP_LOGIN, 1).
--define(PP_LOGOUT, 2).
 -define(PP_CALL, 6).
 -define(PP_RAISE, 7).
 -define(PP_FOLD, 8).
--define(PP_JOIN, 9).
--define(PP_LEAVE, 10).
 -define(PP_CHAT, 13).
 
 %%% Server -> Client
@@ -506,8 +502,6 @@
 -define(PP_NOTIFY_DRAW, 18).
 -define(PP_NOTIFY_PRIVATE, 19).
 -define(PP_NOTIFY_SHARED, 20).
--define(PP_NOTIFY_JOIN, 21).
--define(PP_NOTIFY_LEAVE, 22).
 -define(PP_NOTIFY_CHAT, 23).
 -define(PP_NOTIFY_START_GAME, 24).
 -define(PP_NOTIFY_END_GAME, 25).
@@ -523,7 +517,6 @@
 -define(PP_PID, 35).
 -define(PP_HANDOFF, 36).
 -define(PP_GAME_QUERY, 37).
--define(PP_NOTIFY_CANCEL_GAME, 38).
 -define(PP_SEAT_QUERY, 39).
 -define(PP_PLAYER_INFO_REQ, 40).
 -define(PP_NEW_GAME_REQ, 41).
@@ -535,5 +528,3 @@
 -define(PP_NOTIFY_GAME_INPLAY, 47).
 
 -define(PP_MAKE_TEST_GAME, 252).
--define(PP_PONG, 253).
--define(PP_PING, 254).

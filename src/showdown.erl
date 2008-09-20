@@ -32,11 +32,13 @@ stop(Ref) ->
 showdown({'START', Context}, Data) ->
     showdown_handle_start(Context, Data);
 
-showdown({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    showdown_handle_join(Player, SeatNum, BuyIn, Data);
+showdown(R, Data)
+  when is_record(Data, join) ->
+    showdown_handle_join(R, Data);
 
-showdown({?PP_LEAVE, Player}, Data) ->
-    showdown_handle_leave(Player, Data);
+showdown(R, Data)
+  when is_record(Data, leave) ->
+    showdown_handle_leave(R, Data);
 
 showdown(Event, Data) ->
     showdown_handle_other(Event, Data).
@@ -82,7 +84,6 @@ code_change(_OldVsn, State, Data, _Extra) ->
 
 showdown_handle_start(Context, Data) ->
     Game = Data#showdown.game,
-    GID = gen_server:call(Game, 'ID'),
     Seats = gen_server:call(Game, {'SEATS', ?PS_SHOWDOWN}),
     N = length(Seats),
     if 
@@ -90,9 +91,13 @@ showdown_handle_start(Context, Data) ->
 	    %% last man standing wins
 	    Total = gen_server:call(Game, 'POT TOTAL'),
 	    Player = gen_server:call(Game, {'PLAYER AT', hd(Seats)}),
-            gen_server:cast(Player, {'INPLAY+', Total,GID}),
+            gen_server:cast(Game, {'INPLAY+', Player, Total}),
             PID = gen_server:call(Player, 'ID'),
-	    Event = {?PP_NOTIFY_WIN, Player, Total},
+	    Event = #notify_win{ 
+              game = Game, 
+              player = Player, 
+              amount = Total
+             },
             PID = gen_server:call(Player, 'ID'),
 	    gen_server:cast(Game, {'BROADCAST', Event}),
 	    Winners = [{{Player, none, none, none}, Total}];
@@ -100,31 +105,26 @@ showdown_handle_start(Context, Data) ->
 	    Ranks = gen_server:call(Game,'RANK HANDS'),
 	    Pots = gen_server:call(Game,'POTS'),
 	    Winners = gb_trees:to_list(winners(Ranks, Pots)),
-            F1 = fun(SeatNum)->
-                         P = gen_server:call(Game, {'PLAYER AT', SeatNum}),
-                         C = gen_server:call(Game, {'PRIVATE CARDS', P}),
-                         gen_server:cast(Game, {'BROADCAST', 
-                                                {?PP_NOTIFY_PRIVATE_CARDS, P, C}})
-                 end,
-        lists:map(F1, Seats),
-            
 	    lists:foreach(fun({{Player, _, _, _}, Amount}) ->
-                                  gen_server:cast(Player, {'INPLAY+', 
-                                                           Amount, GID}),
-                                  Event = {?PP_NOTIFY_WIN, Player, Amount},
+                                  gen_server:cast(Game, {'INPLAY+', 
+                                                         Player, Amount}),
+                                  Event = #notify_win{ 
+                                    game = Game, 
+                                    player = Player, 
+                                    amount = Amount
+                                   },
                                   gen_server:cast(Game, {'BROADCAST', Event})
 			  end, Winners)
     end,
-    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_END_GAME}}),
+    gen_server:cast(Game, {'BROADCAST', #notify_end_game{ game = Game }}),
     _Ctx = setelement(4, Context, Winners),
     {stop, {normal, restart, Context}, Data}.
 
-showdown_handle_join(Player, SeatNum, BuyIn, Data) ->
-    blinds:join(Data, Player, SeatNum, BuyIn, showdown, ?PS_FOLD).
+showdown_handle_join(R, Data) ->
+    gen_server:cast(Data#showdown.game, R#join{ state = ?PS_FOLD }).
 
-showdown_handle_leave(Player, Data) ->
-    gen_server:cast(Data#showdown.game, {?PP_LEAVE, Player, ?PS_ANY}),
-    {next_state, showdown, Data}.
+showdown_handle_leave(R, Data) ->
+    gen_server:cast(Data#showdown.game, R#leave{ state = ?PS_ANY }).
 
 showdown_handle_other(Event, Data) ->
     handle_event(Event, showdown, Data).

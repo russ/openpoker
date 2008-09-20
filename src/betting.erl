@@ -59,11 +59,11 @@ betting({?PP_FOLD, Player}, Data) ->
 betting({timeout, _Timer, Player}, Data) ->
     betting_handle_timeout(Player, Data);
 
-betting({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    betting_handle_join(Player, SeatNum, BuyIn, Data);
+betting(R = #join{}, Data) ->
+    betting_handle_join(R, Data);
 
-betting({?PP_LEAVE, Player}, Data) ->
-    betting_handle_leave(Player, Data);
+betting(R = #leave{}, Data) ->
+    betting_handle_leave(R, Data);
 
 betting(Event, Data) ->
     betting_handle_rest(Event, Data).
@@ -145,7 +145,6 @@ betting_handle_start(Context, Data) ->
 
 betting_handle_call(Player, Amount, Data) ->
     Game = Data#betting.game,
-    GID = gen_server:call(Game,'ID'),
     {Expected, Call, _Min, _Max} = Data#betting.expected,
     if 
 	Expected /= Player ->
@@ -153,8 +152,7 @@ betting_handle_call(Player, Amount, Data) ->
 	true ->
 	    %% it's us
 	    cancel_timer(Data),
-	    %% InPlay = gen_server:call(Player, 'INPLAY'),
-            GameInplay = gen_server:call(Player, {'INPLAY', GID}),
+            GameInplay = gen_server:call(Game, {'INPLAY', Player}),
 	    if 
 		Amount > GameInplay  ->
 		    betting({?PP_FOLD, Player}, Data);
@@ -179,7 +177,6 @@ betting_handle_call(Player, Amount, Data) ->
 
 betting_handle_raise(Player, Amount, Data) ->
     Game = Data#betting.game,
-    GID = gen_server:call(Game, 'ID'),
     RaiseCount = Data#betting.raise_count,
     {Expected, Call, Min, Max} = Data#betting.expected,
     if
@@ -188,8 +185,7 @@ betting_handle_raise(Player, Amount, Data) ->
 	true ->
 	    %% it's us
 	    cancel_timer(Data),
-	    %% InPlay = gen_server:call(Player, 'INPLAY'),
-            GameInplay = gen_server:call(Player, {'INPLAY', GID}),
+            GameInplay = gen_server:call(Game, {'INPLAY', Player}),
 	    if 
 		(Amount > GameInplay) or 
 		(Amount > Max) or
@@ -249,11 +245,11 @@ betting_handle_timeout(Player, Data) ->
     %%io:format("~w timed out, folding~n", [Player]),
     betting({?PP_FOLD, Player}, Data).
 
-betting_handle_join(Player, SeatNum, BuyIn, Data) ->
-    blinds:join(Data, Player, SeatNum, BuyIn, betting, ?PS_FOLD).
+betting_handle_join(R, Data) ->
+    blinds:join(R, Data, betting, ?PS_FOLD).
 
-betting_handle_leave(Player, Data) ->
-    gen_server:cast(Data#betting.game, {?PP_LEAVE, Player}),
+betting_handle_leave(R, Data) ->
+    gen_server:cast(Data#betting.game, R),
     {next_state, betting, Data}.
 
 betting_handle_rest(Event, Data) ->

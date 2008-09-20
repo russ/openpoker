@@ -188,46 +188,49 @@ handle_info(Info, Server) ->
 code_change(_OldVsn, Server, _Extra) ->
     {ok, Server}.
 
+process_login(Client, Socket, Nick, Pass) ->
+    case login:login(Nick, Pass, self()) of
+        {error, Error} ->
+            ok = ?tcpsend(Socket, #bad{ cmd = login, error = Error}),
+            Client;
+        {ok, Player} ->
+            %% disconnect visitor
+            if
+                Client#client.player /= none ->
+                    gen_server:cast(Client#client.player, 'DISCONNECT');
+                true ->
+                    ok
+            end,
+            ID = gen_server:call(Player, 'ID'),
+            ok = ?tcpsend(Socket, #you_are{ player = ID }),
+            Client#client{ player = Player }
+    end.
+
+process_logout(Client, Socket) ->
+    gen_server:cast(Client#client.player, #logout{}),
+    ok = ?tcpsend(Socket, #good{ cmd = ?CMD_LOGOUT }),
+    %% replace player process with a visitor
+    {ok, Visitor} = visitor:start(self()),
+    Client#client{ player = Visitor }.
+
+process_ping(Client, Socket) ->
+    ok = ?tcpsend(Socket, #pong{}),
+    Client.
+
 parse_packet(Socket, Client) ->
     receive
 	{tcp, Socket, Bin} ->
             gen_server:cast(Client#client.server, {'BUMP', size(Bin)}),
 	    case pp:old_read(Bin) of
-		{?PP_LOGIN, Nick, Pass} ->
-		    case login:login(Nick, Pass, self()) of
-			{error, Error} ->
-			    ok = ?tcpsend(Socket, {?PP_BAD, 
-						   ?PP_LOGIN,
-						   Error}), 
-			    parse_packet(Socket, Client);
-			{ok, Player} ->
-			    %% disconnect visitor
-			    if
-				Client#client.player /= none ->
-				    gen_server:cast(Client#client.player, 
-						    'DISCONNECT');
-				true ->
-				    ok
-			    end,
-			    ID = gen_server:call(Player, 'ID'),
-			    ok = ?tcpsend(Socket, {?PP_PID, ID}),
-			    Client1 = Client#client {
-				       player = Player
-				      },
-			    parse_packet(Socket, Client1)
-		    end;
-		?PP_LOGOUT ->
-		    gen_server:cast(Client#client.player, 'LOGOUT'),
-		    ok = ?tcpsend(Socket, {?PP_GOOD, 
-					   ?PP_LOGOUT, 
-					   0}),
-		    %% replace player process with a visitor
-		    {ok, Visitor} = visitor:start(),
-		    Client1 = Client#client {
-				player = Visitor
-			       },
-		    gen_server:cast(Visitor, {'SOCKET', self()}),
-		    parse_packet(Socket, Client1);
+                #login{ nick = Nick, pass = Pass} ->
+                    Client1 = process_login(Client, Socket, Nick, Pass),
+                    parse_packet(Socket, Client1);
+                #logout{} ->
+                    Client1 = process_logout(Client, Socket),
+                    parse_packet(Socket, Client1);
+                #ping{} ->
+                    Client1 = process_ping(Client, Socket),
+                    parse_packet(Socket, Client1);
 		{?PP_GAME_QUERY, 
 		 GameType, LimitType,
 		 ExpOp, Expected, 
@@ -253,21 +256,14 @@ parse_packet(Socket, Client) ->
 			    ok
 		    end,
 		    parse_packet(Socket, Client);
-		?PP_PING ->
-		    ok = ?tcpsend(Socket, ?PP_PONG),
-		    parse_packet(Socket, Client);
 		none ->
 		    io:format("Unrecognized packet: ~w~n", [Bin]);
 		Event ->
 		    Client1 = if 
 				  Client#client.player == none ->
 				      %% start a proxy
-				      {ok, Visitor} = visitor:start(),
-				      gen_server:cast(Visitor, 
-						      {'SOCKET', self()}),
-				      Client#client {
-					player = Visitor
-				       };
+				      {ok, Visitor} = visitor:start(self()),
+				      Client#client{ player = Visitor };
 				  true ->
 				      Client
 			      end,

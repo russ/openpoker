@@ -156,16 +156,19 @@ handle({?PP_PLAYER_INFO, PID, InPlay, Nick, Location}, Data) ->
 	    {noreply, Data}
     end;
 
-handle({?PP_NOTIFY_JOIN, GID, PID, SeatNum,_BuyIn}, Data) ->
+handle(R = #join{}, Data) ->
+    Game = R#join.game,
+    Player = R#join.player,
+    SeatNum = R#join.seat_num,
     if
 	Data#obs.trace ->
 	    io:format("~w: JOIN: ~w at seat#~w~n",
-		      [GID, PID, SeatNum]);
+		      [Game, Player, SeatNum]);
 	true ->
 	    ok
     end,
     Data1 = Data#obs {
-	      seats = gb_trees:insert(PID, SeatNum, Data#obs.seats)
+	      seats = gb_trees:insert(Player, SeatNum, Data#obs.seats)
 	     },
     {noreply, Data1};
 
@@ -199,11 +202,11 @@ handle({?PP_PLAYER_STATE, GID, PID, State}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_LEAVE, GID, PID}, Data) ->
+handle(R = #leave{}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: LEAVE: ~w~n",
-		      [GID, PID]);
+		      [R#leave.game, R#leave.player]);
 	true ->
 	    ok
     end,
@@ -354,7 +357,7 @@ handle({?PP_NOTIFY_BB, GID, SeatNum}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_CANCEL_GAME, GID}, Data) ->
+handle(#notify_cancel_game{ game = GID }, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("~w: CANCEL~n", [GID]);

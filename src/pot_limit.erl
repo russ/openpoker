@@ -49,7 +49,7 @@ handle_cast(Event, Limit) ->
 handle_call('INFO', _From, Limit) ->
     handle_call_info(Limit);
 
-handle_call({'RAISE SIZE', _GID, PotSize, _Player, Stage}, _From, Limit) ->
+handle_call({'RAISE SIZE', _GID, PotSize, _Inplay, Stage}, _From, Limit) ->
     handle_call_raise_size(PotSize, Stage, Limit);
 
 handle_call('BLINDS', _From, Limit) ->

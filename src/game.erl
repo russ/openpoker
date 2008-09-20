@@ -13,10 +13,15 @@
 -include("test.hrl").
 -include("pp.hrl").
 -include("schema.hrl").
+-include("lang.hrl").
 
 -record(seat, {
 	  %% player process
 	  player, 
+          %% player id
+          pid,
+          %% inplay balance
+          inplay,
 	  %% total bet
 	  bet,
 	  %% cards
@@ -151,6 +156,14 @@ handle_cast({'BROADCAST', Event}, Game) ->
 handle_cast({'RIG', Deck}, Game) ->
     handle_cast_rig(Deck, Game);
 
+handle_cast(R, Game)
+  when is_record(R, notify_start_game) ->
+    handle_cast_notify_start_game(R, Game);
+
+handle_cast(R, Game)
+  when is_record(R, notify_cancel_game) ->
+    handle_cast_notify_cancel_game(R, Game);
+
 %%% Watch the game without joining
 
 handle_cast(R, Game) 
@@ -175,20 +188,16 @@ handle_cast(R, Game)
 handle_cast({?PP_CHAT, Player, Message}, Game) ->
     handle_cast_chat(Player, Message, Game);
 
-handle_cast({?PP_JOIN, Player, SeatNum, BuyIn}, Game) ->
-    handle_cast({?PP_JOIN, Player, SeatNum, BuyIn, ?PS_PLAY}, Game);
-
 %%% You need to have enough money to buy in 
 %%% and the seat has to be empty.
 
-handle_cast({?PP_JOIN, Player, SeatNum, BuyIn, State}, Game) ->
-    handle_cast_join(Player, SeatNum, BuyIn, State, Game);
+handle_cast(R, Game) 
+  when is_record(R, join) ->
+    handle_cast_join(R, Game);
 
-handle_cast({?PP_LEAVE, Player}, Game) ->
-    handle_cast({?PP_LEAVE, Player, ?PS_CAN_LEAVE}, Game);
-
-handle_cast({?PP_LEAVE, Player, Mask}, Game) ->
-    handle_cast_leave_mask(Player, Mask, Game);
+handle_cast(R, Game) 
+  when is_record(R, leave) ->
+    handle_cast_leave(R, Game);
 
 handle_cast({'DRAW', Player}, Game) ->
     handle_cast_draw(Player, Game);
@@ -211,6 +220,9 @@ handle_cast('NEW STAGE', Game) ->
 
 handle_cast({'ADD BET', Player, Amount}, Game) when Amount >= 0 ->
     handle_cast_add_bet(Player, Amount, Game);
+
+handle_cast({'INPLAY+', Player, Amount}, Game) ->
+    handle_cast_inplay_plus(Player, Amount, Game);
 
 handle_cast({'REQUEST BET', SeatNum, Call, RaiseMin, RaiseMax}, Game) ->
     handle_cast_request_bet(SeatNum, Call, RaiseMin, RaiseMax, Game);
@@ -260,6 +272,9 @@ handle_call({'STATE', Player}, _From, Game) ->
 
 handle_call({'WHAT SEAT', Player}, _From, Game) ->
     handle_call_what_seat(Player, Game);
+
+handle_call({'INPLAY', Player}, _From, Game) ->
+    handle_call_inplay(Player, Game);
 
 handle_call({'SEAT TAKEN', SeatNum}, _From, Game) ->
     handle_call_seat_taken(SeatNum, Game);
@@ -363,6 +378,19 @@ handle_cast_rig(Cards, Game) ->
     Game1 = Game#game{ deck = deck:rig(Deck, Cards) },
     {noreply, Game1}.
     
+handle_cast_notify_start_game(R, Game) ->
+    Msg = lang:msg(?GAME_STARTING),
+    Game1 = reset(Game),
+    Game2 = broadcast(Game1, #chat{ player = 0, message = Msg }),
+    Game3 = broadcast(Game2, R#notify_start_game{ game = Game#game.fsm }),
+    {noreply, Game3}.
+    
+handle_cast_notify_cancel_game(R, Game) ->
+    Msg = lang:msg(?GAME_CANCELLED),
+    Game1 = broadcast(Game, #chat{ player = 0, message = Msg }),
+    Game2 = broadcast(Game1, R#notify_cancel_game{ game = Game#game.fsm }),
+    {noreply, Game2}.
+
 handle_cast_watch(R, Game) ->
     Game1 = Game#game { 
 	      observers = [R#watch.player|Game#game.observers]
@@ -395,12 +423,12 @@ handle_cast_notify_bb(R, Game) ->
     Game1 = broadcast(Game, R#notify_bb{ game = Game#game.fsm }),
     {noreply, Game1}.
 
-handle_cast_join(Player, SeatNum, BuyIn, State, Game) ->
+handle_cast_join(R, Game) ->
     Seats = Game#game.seats,
     XRef = Game#game.xref,
-    Seat = element(SeatNum, Seats),
+    Seat = element(R#join.seat_num, Seats),
+    Player = R#join.player,
     OurPlayer = gb_trees:is_defined(Player, XRef),
-    GID = Game#game.gid,
     if
 	%% seat is taken
 	Seat#seat.state /= ?PS_EMPTY ->
@@ -411,15 +439,11 @@ handle_cast_join(Player, SeatNum, BuyIn, State, Game) ->
 	true ->
 	    %% try to move the buy-in amount 
 	    %% from balance to inplay
-	    ID = gen_server:call(Player, 'ID'),
-            case do_buy_in(GID, ID, BuyIn) of
+            case do_buy_in(Game#game.gid, R#join.pid, R#join.amount) of
 		ok ->
-                    %% add the game specific inplay for player
-                    gen_server:cast(Player, {'INPLAY=', BuyIn, GID}),
 		    %% take seat and broadcast the fact
-		    Game1 = join_player(Game, Player, SeatNum, State),
-		    Game2 = broadcast(Game1, {?PP_NOTIFY_JOIN, 
-                                              Player, SeatNum, BuyIn}),
+		    Game1 = join_player(R, Game),
+		    Game2 = broadcast(Game1, R#join{ notify = true }),
                     %% broadcast other player's current playins to the game
                     broadcast_inplay(Game2),
 		    {noreply, Game2};
@@ -430,19 +454,22 @@ handle_cast_join(Player, SeatNum, BuyIn, State, Game) ->
 	    end
     end.
 
-handle_cast_leave_mask(Player, Mask, Game) ->
+handle_cast_leave(R, Game) ->
     XRef = Game#game.xref,
     Seats = Game#game.seats,
+    Player = R#leave.player,
     OurPlayer = gb_trees:is_defined(Player, XRef),
     if
 	OurPlayer ->
 	    SeatNum = gb_trees:get(Player, XRef),
 	    Seat = element(SeatNum, Seats),
             if 
-                %% cannot leave if playing
-                Seat#seat.state band Mask > 0 ->
+                %% can leave, unless playing
+                Seat#seat.state band R#leave.state > 0 ->
+                    %% notify players
+                    Game1 = broadcast(Game, R#leave{ notify = true }),
                     XRef1 = gb_trees:delete(Player, XRef),
-                    Game1 = Game#game {
+                    Game2 = Game1#game {
                               xref = XRef1,
                               seats = setelement(SeatNum,
                                                  Seats,
@@ -451,14 +478,17 @@ handle_cast_leave_mask(Player, Mask, Game) ->
                                                    state = ?PS_EMPTY
                                                   })
                              },
-                    %% notify ourselves
-                    gen_server:cast(Player, {'NOTIFY LEAVE', Game#game.gid}),
-                    %% notify player
-                    Game2 = broadcast(Game1, {?PP_NOTIFY_LEAVE, Player}),
+                    %% update inplay balance
+                    Inplay = Seat#seat.inplay,
+                    GID = Game#game.gid,
+                    PID = Seat#seat.pid,
+                    mnesia:dirty_update_counter(tab_balance, PID, 
+                                                trunc(Inplay * 10000)),
+                    ok = mnesia:dirty_delete(tab_inplay, {GID, PID}),
                     {noreply, Game2};
-                %% cannot leave, use auto-play
+                %% cannot leave now, use auto-play
                 true ->
-                    Seat1 = Seat#seat{ cmd_que = [[?PP_FOLD, ?PP_LEAVE]] },
+                    Seat1 = Seat#seat{ cmd_que = [[?CMD_FOLD, ?CMD_LEAVE]] },
                     Game1 = Game#game {
                               seats = setelement(SeatNum, Seats, Seat1)
                              },
@@ -467,6 +497,22 @@ handle_cast_leave_mask(Player, Mask, Game) ->
 	%% not playing here
 	true ->
 	    {noreply, Game}
+    end.
+
+handle_cast_inplay_plus(Player, Amount, Game) ->
+    case gb_trees:lookup(Player, Game#game.xref) of
+        {value, SeatNum} ->
+            Seat = element(SeatNum, Game#game.seats),
+            Game1 = Game#game {
+                      seats = setelement(SeatNum,
+                                         Game#game.seats,
+                                         Seat#seat{
+                                           inplay = Seat#seat.inplay + Amount
+                                          })
+                     },
+            {noreply, Game1};
+        none ->
+            {noreply, Game}
     end.
 
 handle_cast_draw(Player, Game) ->
@@ -520,9 +566,8 @@ handle_cast_new_stage(Game) ->
 
 handle_cast_add_bet(Player, Amount, Game) ->
     SeatNum = gb_trees:get(Player, Game#game.xref),
-    GID = Game#game.gid,
     Seat = element(SeatNum, Game#game.seats),
-    GameInplay = gen_server:call(Player,{'INPLAY',GID}),
+    GameInplay = Seat#seat.inplay,
     if
 	Amount > GameInplay->
 	    {noreply, Game};
@@ -540,15 +585,14 @@ handle_cast_add_bet(Player, Amount, Game) ->
 		    Game1 = Game
 	    end,
             Pot = pot:add(Game1#game.pot, Player, Amount, AllIn),
-            gen_server:cast(Player, {'INPLAY-', Amount,GID}),
-	    NewBet = Seat#seat.bet + Amount,
 	    Game2 = Game1#game {
                       pot = Pot,
 		      seats = setelement(SeatNum,
 					 Game1#game.seats,
 					 Seat#seat {
-					   bet = NewBet,
-					   state = State
+					   bet = Seat#seat.bet + Amount,
+					   state = State,
+                                           inplay = GameInplay - Amount
 					  })
 		     },
 	    {noreply, Game2}
@@ -628,9 +672,12 @@ handle_call_blinds(Game) ->
 
 handle_call_raise_size(Player, Stage, Game) ->
     GID = Game#game.gid,
+    SeatNum = gb_trees:get(Player, Game#game.xref),
+    Seat = element(SeatNum, Game#game.seats),
+    Inplay = Seat#seat.inplay,
     PotSize = pot:total(Game#game.pot),
     Reply = gen_server:call(Game#game.limit,
-                            {'RAISE SIZE', GID, PotSize, Player, Stage}),
+                            {'RAISE SIZE', GID, PotSize, Inplay, Stage}),
     {reply, Reply, Game}.
 
 handle_call_state(Player, Game) ->
@@ -649,6 +696,15 @@ handle_call_what_seat(Player, Game) ->
 	{value, SeatNum} ->
 	    {reply, SeatNum, Game}
     end.
+
+handle_call_inplay(Player, Game) ->
+    case gb_trees:lookup(Player, Game#game.xref) of
+	none ->
+	    {reply, 0.0, Game};
+	{value, SeatNum} ->
+            Seat = element(SeatNum, Game#game.seats),
+	    {reply, Seat#seat.inplay, Game}
+    end.    
 
 handle_call_seat_taken(SeatNum, Game) ->
     Seat = element(SeatNum, Game#game.seats),
@@ -888,7 +944,12 @@ broadcast(Game, Event)
   when is_record(Event, watch);
        is_record(Event, unwatch);
        is_record(Event, sit_out);
-       is_record(Event, come_back) ->
+       is_record(Event, come_back);
+       is_record(Event, join);
+       is_record(Event, leave);
+       is_record(Event, game_inplay);
+       is_record(Event, notify_cancel_game)
+       ->
     %% notify players
     Seats = get_seats(Game, ?PS_ANY),
     Players = make_players(Game, Seats),
@@ -935,9 +996,11 @@ seat_query(Game, SeatNum, Acc) ->
     Acc1 = [{SeatNum, State, Player}|Acc],
     seat_query(Game, SeatNum - 1, Acc1).
 
-join_player(Game, Player, SeatNum, State) ->
+join_player(R, Game) ->
     Seats = Game#game.seats,
+    SeatNum = R#join.seat_num,
     Seat = element(SeatNum, Seats),
+    Player = R#join.player,
     XRef = Game#game.xref,
     XRef1 = gb_trees:insert(Player, SeatNum, XRef),
     %% assign hand owner
@@ -950,7 +1013,9 @@ join_player(Game, Player, SeatNum, State) ->
 			 Seats,
 			 Seat#seat {
 			   player = Player,
-			   state = State,
+                           pid = R#join.pid,
+                           inplay = R#join.amount,
+			   state = R#join.state,
                            hand = Hand,
                            cmd_que = []
 			  }),
@@ -1060,14 +1125,16 @@ broadcast_inplay(_Game, _Seats, 0) ->
 broadcast_inplay(Game, Seats, SeatNum) ->
     Seat = element(SeatNum, Seats),
     Player = Seat#seat.player,
-    GID = Game#game.gid,
     case Player of
         none->
             ok;
         _ ->
-            GameInplay = gen_server:call(Player, {'INPLAY', GID}),
-            broadcast(Game, {?PP_NOTIFY_GAME_INPLAY,
-                             Player, GameInplay, SeatNum})
+            broadcast(Game, _ = #game_inplay {
+                              game = Game#game.fsm,
+                              player = Player, 
+                              seat_num = SeatNum,
+                              amount = Seat#seat.inplay
+                             })
     end,
     broadcast_inplay(Game, Seats, SeatNum - 1).
 
@@ -1079,11 +1146,12 @@ do_buy_in(GID, PID, Amt)
     case mnesia:dirty_read(tab_balance, PID) of
         [] ->
             {error, no_balance_found};
-        [B] when BuyIn > B#tab_balance.amount ->
+        [B] when BuyIn > B#balance.amount ->
             {error, not_enough_money};
         [_] ->
-            player:update_inplay(GID, PID, Amt),
-            player:update_balance(PID, - Amt),
+            %% may need to perform these two in a transaction!
+            mnesia:dirty_update_counter(tab_inplay, {GID, PID}, BuyIn),
+            mnesia:dirty_update_counter(tab_balance, PID, - BuyIn),
             ok;
         Any ->
             Any
@@ -1104,10 +1172,12 @@ force_player_leave(Game, Seats, N) ->
                     Game;
                 _ ->
                     XRef = Game#game.xref,
-                    %% notify player
-                    gen_server:cast(Player, {'NOTIFY LEAVE', Game#game.gid}),
                     %% notify others
-                    Game1 = broadcast(Game, {?PP_NOTIFY_LEAVE, Player}),
+                    Game1 = broadcast(Game, #leave{
+                                        game = Game#game.fsm,
+                                        player = Player,
+                                        notify = true
+                                       }),
                     XRef1 = gb_trees:delete(Player, XRef),
                     Game1#game {
                       xref = XRef1,
@@ -1120,6 +1190,21 @@ force_player_leave(Game, Seats, N) ->
                      }
             end,
     force_player_leave(Game2, Seats, N - 1).
+  
+reset(Game) ->
+    broadcast_inplay(Game),
+    Deck = deck:reset(Game#game.deck),
+    Game1 = Game#game {
+              deck = Deck,
+	      board = [],
+	      call = 0,
+	      raise_count = 0,
+              pot = pot:reset(Game#game.pot)
+	     },
+    Seats = reset_hands(Game1#game.seats),
+    Game2 = reset_bets(Game1#game{ seats = Seats }),
+    ResetMask = ?PS_ANY band (bnot ?PS_WAIT_BB),
+    reset_state(Game2, ResetMask, ?PS_PLAY).
   
 test() ->
     ok.

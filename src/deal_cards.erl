@@ -36,11 +36,13 @@ stop(Ref) ->
 deal_cards({'START', Context}, Data) ->
     deal_cards_start(Context, Data);
 
-deal_cards({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    deal_cards_join(Player, SeatNum, BuyIn, Data);
+deal_cards(R, Data) 
+  when is_record(R, join) ->
+    deal_cards_join(R, Data);
 
-deal_cards({?PP_LEAVE, Player}, Data) ->
-    deal_cards_leave(Player, Data);
+deal_cards(R, Data) 
+  when is_record(R, leave) ->
+    deal_cards_leave(R, Data);
 
 deal_cards({timeout, _Timer, _Player}, Data) ->
     deal_cards_timeout(Data);
@@ -98,11 +100,12 @@ deal_cards_start(Context, Data) ->
     end,
     {stop, {normal, Context}, Data}.
 
-deal_cards_join(Player, SeatNum, BuyIn, Data) ->
-    blinds:join(Data, Player, SeatNum, BuyIn, deal_cards, ?PS_FOLD).
+deal_cards_join(R, Data) ->
+    gen_server:cast(Data#deal.game, R#join{ state = ?PS_FOLD }),
+    {next_state, deal_cards, Data}.
 
-deal_cards_leave(Player, Data) ->
-    gen_server:cast(Data#deal.game, {?PP_LEAVE, Player}),
+deal_cards_leave(R, Data) ->
+    gen_server:cast(Data#deal.game, R#leave{ state = ?PS_CAN_LEAVE }),
     {next_state, deal_cards, Data}.
 
 deal_cards_timeout(Data) ->

@@ -19,14 +19,13 @@
 	  pid,
 	  socket = none,
           %% game to inplay cross-reference for this player
-	  inplay_xref = gb_trees:empty(),
-          zombie = 0 % % on autoplay until game ends
+	  games = gb_trees:empty(),
+          zombie = 0, % % on autoplay until game ends
+          self
 	 }).
 
 new(ID) ->
-    #player_data {
-     pid = ID
-    }.
+    #player_data{ pid = ID, self = self() }.
 
 start(Nick) 
   when is_binary(Nick) ->
@@ -57,29 +56,11 @@ terminate(_Reason, Data) ->
     catch handle_cast_other(?PP_NOTIFY_QUIT, Data),
     ok = mnesia:dirty_delete(tab_player, Data#player_data.pid).
 
-handle_cast('LOGOUT', Data) ->
-    handle_cast_logout(Data);
-
 handle_cast('DISCONNECT', Data) ->
     handle_cast_disconnect(Data);
 
 handle_cast({'SOCKET', Socket}, Data) ->
     handle_cast_socket(Socket, Data);
-
-handle_cast({'INPLAY=', Amount, Game}, Data) 
-  when Amount >= 0 ->
-    handle_cast_set_game_inplay(Amount, Game, Data);
-
-handle_cast({'INPLAY+', Amount, Game}, Data) 
-  when  Amount >= 0 ->
-    handle_cast_game_inplay_plus(Amount, Game, Data);
-
-handle_cast({'INPLAY-', Amount, Game}, Data) 
-  when Amount >= 0 ->
-    handle_cast_game_play_plus(Amount, Game, Data);
-    
-handle_cast({'NOTIFY LEAVE', GID}, Data) ->
-    handle_cast_notify_leave(GID, Data);
 
 handle_cast(R, Data) 
   when is_record(R, watch) ->
@@ -94,19 +75,32 @@ handle_cast({Event, Game, Amount}, Data)
        Event == ?PP_RAISE ->
     handle_cast_call_raise(Event, Game, Amount, Data);
 
-handle_cast({?PP_JOIN, Game, SeatNum, BuyIn}, Data) ->
-    handle_cast_join(Game, SeatNum, BuyIn, Data);
+handle_cast(R = #logout{}, Data) ->
+    handle_cast_logout(R, Data);
 
-handle_cast({?PP_LEAVE, Game}, Data) ->
-    handle_cast_leave(Game, Data);
+handle_cast(R = #join{ notify = none }, Data) ->
+    handle_cast_join(R, Data);
+
+handle_cast(R, Data)
+  when is_record(R, join), R#join.player == Data#player_data.self ->
+    handle_cast_notify_join(R, Data);
+
+handle_cast(R = #leave{ notify = none }, Data) ->
+    handle_cast_leave(R, Data);
+
+handle_cast(R, Data)
+  when is_record(R, leave), 
+       R#leave.notify == true,
+       R#leave.player == Data#player_data.self ->
+    handle_cast_notify_leave(R, Data);
 
 handle_cast({?PP_CHAT, Game, Message}, Data) ->
     handle_cast_chat(Game, Message, Data);
 
-handle_cast(R = #sit_out{ done = none }, Data) ->
+handle_cast(R = #sit_out{ notify = none }, Data) ->
     handle_cast_sit_out(R, Data);
 
-handle_cast(R = #come_back{ done = none }, Data) ->
+handle_cast(R = #come_back{ notify = none }, Data) ->
     handle_cast_come_back(R, Data);
 
 handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
@@ -132,9 +126,6 @@ handle_cast(Event, Data) ->
 
 handle_call('ID', _From, Data) ->
     handle_call_id(Data);
-
-handle_call({'INPLAY', Game}, _From, Data) ->
-    handle_call_game_inplay(Game, Data);
 
 handle_call('INPLAY', _From, Data) ->
     handle_call_inplay(Data);
@@ -182,8 +173,8 @@ handle_cast_come_back(R, Data) ->
     cardgame:send_event(R#come_back.game, R#come_back{ player = self() }),
     {noreply, Data}.
 
-handle_cast_logout(Data) ->
-    case gb_trees:is_empty(Data#player_data.inplay_xref) of
+handle_cast_logout(_R, Data) ->
+    case gb_trees:is_empty(Data#player_data.games) of
         true ->
             %% not playing anymore, can log out
             Self = self(),
@@ -191,7 +182,7 @@ handle_cast_logout(Data) ->
             {noreply, Data};
         _ ->
             %% delay until we leave our last game
-            leave_games(Data, gb_trees:keys(Data#player_data.inplay_xref)),
+            leave_games(Data, gb_trees:keys(Data#player_data.games)),
             {noreply, Data#player_data{ zombie = 1 }}
     end.
 
@@ -204,66 +195,20 @@ handle_cast_socket(Socket, Data) when is_pid(Socket) ->
 	      socket = Socket
 	     },
     {noreply, Data1}.
-    
-handle_cast_set_game_inplay(Amount, Game, Data) ->
-    Xref = Data#player_data.inplay_xref,
-    Xref1 = gb_trees:enter(Game, Amount, Xref),
-    Data1 = Data#player_data{ inplay_xref = Xref1 },
-    {noreply, Data1}.
-                 
-handle_cast_game_inplay_plus(Amount, Game, Data) ->
-    Xref = Data#player_data.inplay_xref,
-    PrevAmount = gb_trees:get(Game, Xref),
-    NewAmount = PrevAmount + Amount,
-    Xref1 = gb_trees:enter(Game,NewAmount, Xref),
-    Data1 = Data#player_data{ inplay_xref = Xref1 },
-    {noreply, Data1}.
-
-handle_cast_game_play_plus(Amount, Game, Data) ->
-    Xref = Data#player_data.inplay_xref,
-    PrevAmount = gb_trees:get(Game, Xref),
-    NewAmount = PrevAmount - Amount,
-    Xref1 = gb_trees:enter(Game, NewAmount, Xref),
-    Data1 = Data#player_data{ inplay_xref = Xref1 },
-    {noreply, Data1}.                                                                     
-handle_cast_notify_leave(GID, Data) ->
-    ID = Data#player_data.pid,
-    Xref = Data#player_data.inplay_xref,
-    Inplay = case gb_trees:is_defined(GID, Xref) of
-                 true->
-                     gb_trees:get(GID, Xref);
-                 false->
-                     0.0
-             end,
-    mnesia:dirty_update_counter(tab_balance, ID, trunc(Inplay * 10000)),
-    ok = mnesia:dirty_delete(tab_inplay, {GID, ID}),
-    LastGame = gb_trees:size(Xref) == 1,
-    Zombie = Data#player_data.zombie == 1,
-    Self = self(),
-    if
-        LastGame and Zombie ->
-            %% player requested logout previously
-            spawn(fun() -> player:stop(Self) end);
-        true ->
-            ok
-    end,
-    Xref1 = gb_trees:delete(GID, Xref),
-    {noreply, Data#player_data{ inplay_xref = Xref1 }}.
 
 handle_cast_call_raise(Event, Game, Amount, Data) ->
     cardgame:send_event(Game, {Event, self(), Amount}),
     {noreply, Data}.
 
-handle_cast_join(Game, SeatNum, BuyIn, Data) ->
-    cardgame:send_event(Game, {?PP_JOIN, self(), SeatNum, BuyIn}),
+handle_cast_join(R, Data) ->
+    cardgame:send_event(R#join.game, R#join{ 
+                                       player = self(),
+                                       pid = Data#player_data.pid
+                                      }),
     {noreply, Data}.
 
-handle_cast_leave(Game, Data) ->
-    cardgame:send_event(Game, {?PP_LEAVE, self()}),
-    {noreply, Data}.
-
-handle_cast_fold_etc(Event, Game, Data) ->
-    cardgame:send_event(Game, {Event, self()}),
+handle_cast_leave(R, Data) ->
+    cardgame:send_event(R#leave.game, R#leave{ player = self(), state = ?PS_CAN_LEAVE }),
     {noreply, Data}.
 
 handle_cast_chat(Game, Message, Data) ->
@@ -327,6 +272,41 @@ handle_cast_balance_req(Data) ->
     end,
     {noreply, Data}.
 
+handle_cast_notify_join(R, Data) ->
+    Self = self(),
+    Data1 = if 
+                Self == R#join.player ->
+                    Games = Data#player_data.games,
+                    Games1 = gb_trees:enter(R#join.game, R#join.seat_num, 
+                                            Games),
+                    Data#player_data{ games = Games1 };
+                true ->
+                    Data
+            end,
+    %% send it over to the other side
+    handle_cast_other(R, Data1).
+
+handle_cast_notify_leave(R, Data) ->
+    Self = self(),
+    Data1 = if 
+                Self == R#leave.player ->
+                    Games = Data#player_data.games,
+                    LastGame = gb_trees:size(Games) == 1,
+                    Zombie = Data#player_data.zombie == 1,
+                    Games1 = gb_trees:delete(R#leave.game, Games),
+                    if
+                        LastGame and Zombie ->
+                            %% player requested logout previously
+                            spawn(fun() -> player:stop(Self) end);
+                        true ->
+                            ok
+                    end,
+                    Data#player_data{ games = Games1 };
+                true ->
+                    Data
+            end,
+    {noreply, Data1}.
+
 handle_cast_stop(Data) ->
     {stop, normal, Data}.
 
@@ -345,17 +325,6 @@ handle_cast_other(Event, Data) ->
 handle_call_id(Data) ->
     {reply, Data#player_data.pid, Data}.
 
-handle_call_game_inplay(Game, Data) ->
-    Xref = Data#player_data.inplay_xref,
-    Exists = gb_trees:is_defined(Game, Xref),
-    Inplay = case Exists of
-                 true ->
-                     gb_trees:get(Game, Xref);
-                 false ->
-                     0.0
-             end,
-    {reply, Inplay, Data}.
-
 handle_call_inplay(Data) ->
     {reply, inplay(Data), Data}.
 
@@ -363,7 +332,7 @@ handle_call_socket(Data) ->
     {reply, Data#player_data.socket, Data}.
 
 handle_call_games(Data) ->
-    {reply, gb_trees:keys(Data#player_data.inplay_xref), Data}.
+    {reply, gb_trees:keys(Data#player_data.games), Data}.
 
 handle_call_other(Event, From, Data) ->
     error_logger:info_report([{module, ?MODULE}, 
@@ -435,43 +404,22 @@ create_runtime(ID, Pid)
      },
     ok = mnesia:dirty_write(Player).
 
-inplay(Data) when is_record(Data, player_data) ->
-    inplay(Data#player_data.inplay_xref);
+inplay(Data) 
+  when is_record(Data, player_data) ->
+    inplay(gb_trees:keys(Data#player_data.games), 0).
 
-inplay(Xref) when is_tuple(Xref) ->
-    inplay(gb_trees:to_list(Xref), 0.0).
+inplay([], Acc) ->
+    Acc;
 
-inplay([], Total) when is_float(Total) ->
-    Total;
-
-inplay([{_, Amt}|Rest], Total) ->
-    inplay(Rest, Total + Amt).
+inplay([Game|Rest], Total) ->
+    Inplay = cardgame:call(Game, {'INPLAY', self()}),
+    inplay(Rest, Total + Inplay).
 
 leave_games(_, []) ->
     ok;
 
-leave_games(Player, [GID|Rest]) ->
-    case mnesia:dirty_read(tab_game_xref, GID) of
-        [] ->
-            error_logger:info_report([{module, ?MODULE}, 
-                                      {line, ?LINE},
-                                      {self, self()}, 
-                                      {player, Player},
-                                      {gid, GID},
-                                      {message, no_games_to_leave}
-                                     ]);
-        [Game] ->
-            cardgame:send_event(Game#tab_game_xref.process, {?PP_LEAVE, self()});
-        Games = [_|_] ->
-            error_logger:info_report([{module, ?MODULE}, 
-                                      {line, ?LINE},
-                                      {self, self()}, 
-                                      {player, Player},
-                                      {gid, GID},
-                                      {games, Games},
-                                      {message, many_games_to_leave}
-                                     ])
-    end,
+leave_games(Player, [Game|Rest]) ->
+    cardgame:send_event(Game, #leave{ game = Game, player = self() }),
     leave_games(Player, Rest).
 
 delete_balance(PID) ->

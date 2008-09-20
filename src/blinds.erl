@@ -9,7 +9,7 @@
 -export([handle_event/3, handle_info/3, 
 	 handle_sync_event/4, code_change/4]).
 
--export([small_blind/2, big_blind/2, join/6]).
+-export([small_blind/2, big_blind/2, join/4]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("common.hrl").
@@ -65,11 +65,13 @@ small_blind({?PP_FOLD, Player}, Data) ->
 small_blind({timeout, _Timer, Player}, Data) ->
     small_blind_handle_timeout(Player, Data);
 
-small_blind({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    small_blind_handle_join(Player, SeatNum, BuyIn, Data);
+small_blind(R, Data)
+  when is_record(R, join) ->
+    small_blind_handle_join(R, Data);
 
-small_blind({?PP_LEAVE, Player}, Data) ->
-    small_blind_handle_leave(Player, Data);
+small_blind(R, Data) 
+  when is_record(R, leave) ->
+    small_blind_handle_leave(R, Data);
 
 small_blind(R, Data) 
   when is_record(R, sit_out) ->
@@ -91,11 +93,13 @@ big_blind({?PP_FOLD, Player}, Data) ->
 big_blind({timeout, _Timer, Player}, Data) ->
     big_blind_handle_timeout(Player, Data);
 
-big_blind({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    big_blind_handle_join(Player, SeatNum, BuyIn, Data);
+big_blind(R, Data)
+  when is_record(R, join) ->
+    big_blind_handle_join(R, Data);
 
-big_blind({?PP_LEAVE, Player}, Data) ->
-    big_blind_handle_leave(Player, Data);
+big_blind(R, Data) 
+  when is_record(R, leave) ->
+    big_blind_handle_leave(R, Data);
 
 big_blind(R, Data) 
   when is_record(R, sit_out) ->
@@ -298,17 +302,17 @@ small_blind_handle_timeout(Player, Data) ->
        {now, now()}]),
     timeout(Data, Player, small_blind).
 
-small_blind_handle_join(Player, SeatNum, BuyIn, Data) ->
-    join(Data, Player, SeatNum, BuyIn, small_blind).
+small_blind_handle_join(R, Data) ->
+    join(R, Data, small_blind).
 
-small_blind_handle_leave(Player, Data) ->
-    leave(Data, Player, small_blind).
+small_blind_handle_leave(R, Data) ->
+    leave(R, Data, small_blind).
 
 small_blind_handle_sit_out(R, Data) ->
-    sit_out(Data, R, small_blind).
+    sit_out(R, Data, small_blind).
 
 small_blind_handle_come_back(R, Data) ->
-    come_back(Data, R, small_blind).
+    come_back(R, Data, small_blind).
 
 small_blind_other(Event, Data) ->
     handle_event(Event, small_blind, Data).
@@ -399,17 +403,17 @@ big_blind_handle_timeout(Player, Data) ->
        {now, now()}]),
     timeout(Data, Player, big_blind).
 
-big_blind_handle_join(Player, SeatNum, BuyIn, Data) ->
-    join(Data, Player, SeatNum, BuyIn, big_blind).
+big_blind_handle_join(R, Data) ->
+    join(R, Data, big_blind).
 
-big_blind_handle_leave(Player, Data) ->
-    leave(Data, Player, big_blind).
+big_blind_handle_leave(R, Data) ->
+    leave(R, Data, big_blind).
 
 big_blind_handle_sit_out(R, Data) ->
-    sit_out(Data, R, big_blind).
+    sit_out(R, Data, big_blind).
 
 big_blind_handle_come_back(R, Data) ->
-    come_back(Data, R, big_blind).
+    come_back(R, Data, big_blind).
 
 big_blind_handle_other(Event, Data) ->
     handle_event(Event, big_blind, Data).
@@ -445,34 +449,35 @@ timeout(Data, Player, State) ->
     end.
 
 
-join(Data, Player, SeatNum, BuyIn, State) ->
-    join(Data, Player, SeatNum, BuyIn, State, ?PS_MAKEUP_BB).
+join(R, Data, State) ->
+    join(R, Data, State, ?PS_MAKEUP_BB).
 
-join(Data, Player, SeatNum, BuyIn, State, PlayerState) ->
-    Game = element(2, Data),
-    gen_server:cast(Game, {?PP_JOIN, Player, SeatNum, BuyIn, PlayerState}),
+join(Data, R, State, PlayerState) ->
+    gen_server:cast(Data#blinds.game, R#join{ state = PlayerState }),
     {next_state, State, Data}.
 
-leave(Data, Player, State) ->
+leave(Data, R, State) ->
     Game = Data#blinds.game,
+    Player = R#leave.player,
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
-    if
-	(State == big_blind) and 
-	(Seat == Data#blinds.small_blind_seat) ->
-            %% fold and leave next time 
-            %% a bet is requested from us
-	    gen_server:cast(Game, {?PP_LEAVE, Player});
-	true ->
-            %% leave now
-	    gen_server:cast(Game, {?PP_LEAVE, Player, ?PS_ANY})
-    end,
+    R1 = if
+             (State == big_blind) and 
+             (Seat == Data#blinds.small_blind_seat) ->
+                 %% fold and leave next time 
+                 %% a bet is requested from us
+                 R#leave{ state = ?PS_CAN_LEAVE };
+             true ->
+                 %% leave now
+                 R#leave{ state = ?PS_ANY }
+         end,
+    gen_server:cast(Game, R1),
     {next_state, State, Data}.
 
-sit_out(Data, R, State) ->
+sit_out(R, Data, State) ->
     gen_server:cast(Data#blinds.game, R),
     {next_state, State, Data}.
 
-come_back(Data, R, State) ->
+come_back(R, Data, State) ->
     gen_server:cast(Data#blinds.game, R),
     {next_state, State, Data}.
 

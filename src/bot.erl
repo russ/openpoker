@@ -66,12 +66,6 @@ handle_cast({'SET ACTIONS', Actions}, Bot) ->
 handle_cast({'GAMES TO PLAY', N}, Bot) ->
     handle_games_to_play(N, Bot);
 
-handle_cast(X = {'NOTIFY LEAVE', _}, Bot) ->
-    handle_notify_leave_x(X, Bot);
-
-handle_cast('LOGOUT', Bot) ->
-    handle_logout(Bot);
-
 handle_cast(stop, Bot) ->
     handle_stop(Bot);
 
@@ -86,9 +80,6 @@ handle_call('ACTIONS', _From, Bot) ->
 
 handle_call('SOCKET', _From, Bot) ->
     handle_socket(Bot);
-
-handle_call('ID', _From, Bot) ->
-    handle_id(Bot);
 
 handle_call(Event, From, Bot) ->
     handle_other(Event, From, Bot).
@@ -128,13 +119,6 @@ handle_set_actions(Actions, Bot) ->
 handle_games_to_play(N, Bot) ->
     {noreply, Bot#bot{ games_to_play = N}}.
 
-handle_notify_leave_x(X, Bot) ->
-    gen_server:cast(Bot#bot.player, X),
-    {noreply, Bot}.
-
-handle_logout(Bot) ->
-    handle_cast(?PP_LOGOUT, Bot).
-
 handle_stop(Bot) ->
     {stop, normal, Bot}.
 
@@ -158,9 +142,6 @@ handle_actions(Bot) ->
 
 handle_socket(Bot) ->
     {reply, Bot#bot.socket, Bot}.
-
-handle_id(Bot) ->
-    {reply, Bot#bot.player, Bot}.
 
 handle_other(Event, From, Bot) ->
     error_logger:info_report([{module, ?MODULE}, 
@@ -193,17 +174,13 @@ handle_tcp_data(Bin, Bot) ->
     end.
 
 handle_pid(PID, Bot) ->
-    Bot1 = Bot#bot {
-	     player = PID
-	    },
+    Bot1 = Bot#bot{ player = PID },
     {noreply, Bot1}.
 
-handle_notify_join(GID, PID, Bot) ->
+handle_notify_join(R, Bot) ->
     Bot1 = if
-	       PID == Bot#bot.player ->
-		   Bot#bot {
-		     game = GID
-		    };
+	       R#join.player == Bot#bot.player ->
+		   Bot#bot{ game = R#join.game };
 	       true ->
 		   Bot
 	   end,
@@ -247,11 +224,11 @@ handle_bet_req(GID, Amount, Bot) ->
 	    handle_cast({?PP_FOLD, GID}, Bot1),
 	    {noreply, Bot1};
 	'LEAVE' ->
-	    handle_cast({?PP_LEAVE, GID}, Bot1),
+	    handle_cast(#leave{ game = GID }, Bot1),
 	    {noreply, Bot1};
 	'QUIT' ->
 	    handle_cast({?PP_FOLD, GID}, Bot1),
-	    handle_cast({?PP_LEAVE , GID}, Bot1),
+	    handle_cast(#leave{ game = GID }, Bot1),
 	    {noreply, Bot1#bot{ done = true }};
 	_ ->
 	    error_logger:error_report([{message, "Unexpected blind request, folding!"},
@@ -334,11 +311,11 @@ handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot) ->
 	    handle_cast({?PP_FOLD, GID}, Bot1),
 	    {noreply, Bot1};
 	'LEAVE' ->
-	    handle_cast({?PP_LEAVE , GID}, Bot1),
+	    handle_cast(#leave{ game = GID }, Bot1),
 	    {noreply, Bot1};
 	'QUIT' ->
 	    handle_cast({?PP_FOLD, GID}, Bot1),
-	    handle_cast({?PP_LEAVE , GID}, Bot1),
+	    handle_cast(#leave{ game = GID }, Bot1),
 	    {noreply, Bot1#bot{ done = true}};
 	_ ->
 	    error_logger:error_report([{message, "Unexpected bet request, folding!"},
@@ -353,33 +330,38 @@ handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot) ->
 	    {noreply, Bot1}
     end.
 
-handle_notify_leave(PID, Bot) ->
+handle_notify_leave(R, Bot) ->
     if
-	PID == Bot#bot.player ->
-	    ok = ?tcpsend(Bot#bot.socket, ?PP_LOGOUT),
+	R#leave.player == Bot#bot.player ->
+	    ok = ?tcpsend(Bot#bot.socket, #logout{}),
 	    {stop, normal, Bot};
 	true ->
 	    {noreply, Bot}
     end.
 
 handle_notify_end_last_game(GID, Bot) ->
-    ok = ?tcpsend(Bot#bot.socket, {?PP_LEAVE, GID}),
-    ok = ?tcpsend(Bot#bot.socket, ?PP_LOGOUT),
+    ok = ?tcpsend(Bot#bot.socket, #leave{ game = GID }),
+    ok = ?tcpsend(Bot#bot.socket, #logout{}),
     Bot1 = Bot#bot{ done = true },
     {stop, normal, Bot1}.
 
 handle_notify_cancel_game(GID, Bot) ->
-    ok = ?tcpsend(Bot#bot.socket, {?PP_JOIN, GID, 
-				   Bot#bot.seat_num, 
-				   Bot#bot.balance}),
+    ok = ?tcpsend(Bot#bot.socket, _ = #join{ 
+                                    game = GID,
+                                    player = Bot#bot.player,
+                                    pid = none,
+                                    seat_num = Bot#bot.seat_num,
+                                    amount = Bot#bot.balance,
+                                    state = ?PS_PLAY
+                                   }),
     {noreply, Bot}.
 
 %%% 
 %%% Utility
 %%%
 	    
-handle({?PP_PID, PID}, Bot) ->
-    handle_pid(PID, Bot);
+handle(R = #you_are{}, Bot) ->
+    handle_pid(R#you_are.player, Bot);
 
 handle({?PP_GAME_INFO, _GID, ?GT_IRC_TEXAS, 
 	_Expected, _Joined, _Waiting,
@@ -389,13 +371,17 @@ handle({?PP_GAME_INFO, _GID, ?GT_IRC_TEXAS,
 handle({?PP_PLAYER_INFO, _PID, _InPlay, _Nick, _Location}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_JOIN, GID, PID, _SeatNum,_BuyIn}, Bot) ->
-    handle_notify_join(GID, PID, Bot);
+handle(R = #join{}, Bot) ->
+    handle_notify_join(R, Bot);
+
+handle(R = #leave{}, Bot) 
+  when R#leave.player == Bot#bot.player ->
+    handle_notify_leave(R, Bot);
 
 handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, _GameInplay, _SeatNum}, Bot) ->
     handle_notify_game_inplay(GID, PID, Bot);
 
-handle({?PP_NOTIFY_CHAT, _GID, _PID, _Message}, Bot) ->
+handle(#chat{}, Bot) ->
     {noreply, Bot};
 
 handle(?PP_NOTIFY_QUIT, Bot) ->
@@ -410,9 +396,6 @@ handle({?PP_BET_REQ, GID, Call, RaiseMin, RaiseMax}, Bot) ->
 handle({?PP_PLAYER_STATE, _GID, _PID, _State}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_LEAVE, _GID, PID}, Bot) ->
-    handle_notify_leave(PID, Bot);
-
 handle({?PP_GAME_STAGE, _GID, _Stage}, Bot) ->
     {noreply, Bot};
 
@@ -426,7 +409,7 @@ handle({?PP_NOTIFY_END_GAME, GID}, Bot)
 handle({?PP_NOTIFY_END_GAME, _GID}, Bot) ->
     {noreply, Bot#bot{ games_to_play = Bot#bot.games_to_play - 1 }};
 
-handle({?PP_NOTIFY_CANCEL_GAME, GID}, Bot) ->
+handle(#notify_cancel_game{ game = GID }, Bot) ->
     handle_notify_cancel_game(GID, Bot);
 
 handle({Cmd, _GID, _PID, _Amount}, Bot)

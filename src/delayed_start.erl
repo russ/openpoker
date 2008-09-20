@@ -40,11 +40,13 @@ delayed_start({'START', Context}, Data) ->
 delayed_start('CHECK', Data) ->
     delayed_start_check(Data);
 
-delayed_start({?PP_JOIN, Player, SeatNum, BuyIn}, Data) ->
-    delayed_start_join(Player, SeatNum, BuyIn, Data);
+delayed_start(R, Data) 
+  when is_record(R, join) ->
+    delayed_start_join(R, Data);
 
-delayed_start({?PP_LEAVE, Player}, Data) ->
-    delayed_start_leave(Player, Data);
+delayed_start(R, Data)
+  when is_record(R, leave) ->
+    delayed_start_leave(R, Data);
 
 delayed_start(R, Data) 
   when is_record(R, sit_out) ->
@@ -109,34 +111,39 @@ delayed_start_start(Context, Data) ->
 
 delayed_start_check(Data) ->
     Game = Data#delayed.game,
-    Ready = gen_server:call(Game, {'SEATS', ?PS_READY}),
+    Ready = case catch gen_server:call(Game, {'SEATS', ?PS_READY}) of
+                {'EXIT', X} ->
+                    error_logger:info_report([{module, ?MODULE},
+                                              {line, ?LINE},
+                                              {self, self()},
+                                              {target, Game},
+                                              {error, X},
+                                              {process_info, process_info(Game)}
+                                             ]),
+                    1 / 0;
+                Any ->
+                    Any
+            end,
     ReqCount = gen_server:call(Game, 'REQUIRED'),
     Start = (length(Ready) >= ReqCount),
     Empty = gen_server:call(Game, 'IS EMPTY'),
     if
 	Start ->
-	    gen_server:cast(Game, 'RESET'),
-	    Msg = lang:msg(?GAME_STARTING),
-	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CHAT, 0, Msg}}),
-	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_START_GAME}}), 
+            gen_server:cast(Game, #notify_start_game{}),
 	    {stop, {normal, Data#delayed.context}, Data};
 	Empty ->
 	    {stop, {normal, restart}, Data};
 	true ->
-	    Msg = lang:msg(?GAME_CANCELLED),
-	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CHAT, 0, Msg}}),
-	    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CANCEL_GAME}}), 
+            gen_server:cast(Game, #notify_cancel_game{}),
 	    {stop, {normal, restart}, Data}
     end.
 	    
-delayed_start_join(Player, SeatNum, BuyIn, Data) ->
-    Game = Data#delayed.game,
-    gen_server:cast(Game, {?PP_JOIN, Player, SeatNum, BuyIn, ?PS_PLAY}),
+delayed_start_join(R, Data) ->
+    gen_server:cast(Data#delayed.game, R#join{ state = ?PS_PLAY }),
     {next_state, delayed_start, Data}.
 
-delayed_start_leave(Player, Data) ->
-    Game = Data#delayed.game,
-    gen_server:cast(Game, {?PP_LEAVE, Player, ?PS_ANY}),
+delayed_start_leave(R, Data) ->
+    gen_server:cast(Data#delayed.game, R#leave{ state = ?PS_ANY }),
     {next_state, delayed_start, Data}.
 
 delayed_start_sit_out(R, Data) ->

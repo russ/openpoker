@@ -5,7 +5,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
--export([start/0, stop/1, test/0]).
+-export([start/1, stop/1, test/0]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -16,16 +16,15 @@
 	  socket = none
 	 }).
 
-new() ->
-    #vis {
-    }.
+new(Socket) ->
+    #vis{ socket = Socket }.
 
-start() ->
-    gen_server:start(visitor, [], []).
+start(Socket) ->
+    gen_server:start(visitor, [Socket], []).
 
-init([]) ->
+init([Socket]) ->
     process_flag(trap_exit, true),
-    {ok, new()}.
+    {ok, new(Socket)}.
 
 stop(Visitor) 
   when is_pid(Visitor) ->
@@ -34,17 +33,12 @@ stop(Visitor)
 terminate(_Reason, _Data) ->
     ok.
 
-handle_cast('LOGOUT', Data) ->
-    {noreply, Data};
-
 handle_cast('DISCONNECT', Data) ->
     {stop, normal, Data};
 
 handle_cast({'SOCKET', Socket}, Data) 
   when is_pid(Socket) ->
-    Data1 = Data#vis {
-	      socket = Socket
-	     },
+    Data1 = Data#vis{ socket = Socket },
     {noreply, Data1};
 
 handle_cast(R, Data) 
@@ -72,12 +66,6 @@ handle_cast(R, Data)
 handle_cast({Event, _Game, _Amount}, Data)
   when Event == ?PP_CALL;
        Event == ?PP_RAISE ->
-    {noreply, Data};
-
-handle_cast({?PP_JOIN, _Game, _SeatNum, _BuyIn}, Data) ->
-    {noreply, Data};
-
-handle_cast({?PP_LEAVE, _Game}, Data) ->
     {noreply, Data};
 
 handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
