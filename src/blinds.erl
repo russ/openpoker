@@ -598,7 +598,9 @@ headsup_test() ->
       big_blind_seat = element(2, B),
       call = 10
      },
-    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
+    {'CARDGAME EXIT', Game1, Ctx1} = test:wait_for_msg(1000, []),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(Ctx, Ctx1),
     cardgame:stop(Game),
     test:cleanup_players(Players),
     ok.
@@ -618,7 +620,9 @@ three_players_button_bust_test() ->
       big_blind_seat = element(2, B),
       call = 10
      },
-    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
+    {'CARDGAME EXIT', Game1, Ctx1} = test:wait_for_msg(1000, []),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(Ctx, Ctx1),
     cardgame:stop(Game),
     test:cleanup_players(Players),
     ok.
@@ -636,7 +640,9 @@ three_players_sb_bust_test() ->
       big_blind_seat = element(2, A),
       call = 10
      },
-    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
+    {'CARDGAME EXIT', Game1, Ctx1} = test:wait_for_msg(1000, []),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(Ctx, Ctx1),
     cardgame:stop(Game),
     test:cleanup_players(Players),
     ok.
@@ -654,7 +660,9 @@ three_players_bb_bust_test() ->
       big_blind_seat = element(2, A),
       call = 10
      },
-    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
+    {'CARDGAME EXIT', Game1, Ctx1} = test:wait_for_msg(1000, []),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(Ctx, Ctx1),
     cardgame:stop(Game),
     test:cleanup_players(Players),
     ok.
@@ -672,7 +680,9 @@ five_players_sb_bust_test() ->
       big_blind_seat = element(2, D),
       call = 10
      },
-    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
+    {'CARDGAME EXIT', Game1, Ctx1} = test:wait_for_msg(1000, []),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(Ctx, Ctx1),
     cardgame:stop(Game),
     test:cleanup_players(Players),
     ok.
@@ -688,7 +698,9 @@ five_players_bust_test() ->
       big_blind_seat = element(2, E),
       call = 10
      },
-    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
+    {'CARDGAME EXIT', Game1, Ctx1} = test:wait_for_msg(1000, []),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(Ctx, Ctx1),
     cardgame:stop(Game),
     test:cleanup_players(Players),
     ok.
@@ -706,7 +718,9 @@ five_players_bb_bust_test() ->
       big_blind_seat = element(2, D),
       call = 10
      },
-    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
+    {'CARDGAME EXIT', Game1, Ctx1} = test:wait_for_msg(1000, []),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(Ctx, Ctx1),
     cardgame:stop(Game),
     test:cleanup_players(Players),
     ok.
@@ -722,7 +736,9 @@ five_players_bust1_test() ->
       big_blind_seat = element(2, E),
       call = 10
      },
-    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
+    {'CARDGAME EXIT', Game1, Ctx1} = test:wait_for_msg(1000, []),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(Ctx, Ctx1),
     cardgame:stop(Game),
     test:cleanup_players(Players),
     ok.
@@ -741,7 +757,9 @@ five_players_blinds_bust_test() ->
       big_blind_seat = element(2, D),
       call = 10
      },
-    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
+    {'CARDGAME EXIT', Game1, Ctx1} = test:wait_for_msg(1000, []),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(Ctx, Ctx1),
     cardgame:stop(Game),
     test:cleanup_players(Players),
     ok.
@@ -758,7 +776,9 @@ five_players_blinds_bust1_test() ->
       big_blind_seat = element(2, E),
       call = 10
      },
-    ?assertMsg({'CARDGAME EXIT', Game, Ctx}, 1000, []),
+    {'CARDGAME EXIT', Game1, Ctx1} = test:wait_for_msg(1000, []),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(Ctx, Ctx1),
     cardgame:stop(Game),
     test:cleanup_players(Players),
     ok.
