@@ -223,7 +223,6 @@ handle_cast_chat(R, Data) ->
     {noreply, Data}.
 
 handle_cast_seat_query(Game, Data) ->
-    GID = cardgame:call(Game, 'ID'),
     L = cardgame:call(Game, 'SEAT QUERY'),
     F = fun({SeatNum, State, Player}) -> 
 		PID = if 
@@ -234,7 +233,7 @@ handle_cast_seat_query(Game, Data) ->
 			  true ->
 			      0
 		      end,
-		handle_cast({?PP_SEAT_STATE, GID, SeatNum, State, PID}, Data) 
+		handle_cast({?PP_SEAT_STATE, Game, SeatNum, State, PID}, Data) 
 	end,
     lists:foreach(F, L),
     {noreply, Data}.
@@ -258,8 +257,7 @@ handle_cast_new_game_req(GameType, Expected, Limit, Data) ->
 	CC#tab_cluster_config.enable_dynamic_games ->
 	    case cardgame:start(GameType, Expected, Limit) of
 		{ok, Pid} ->
-		    GID = cardgame:call(Pid, 'ID'),
-		    handle_cast({?PP_GOOD, ?PP_NEW_GAME_REQ, GID}, Data);
+		    handle_cast({?PP_GOOD, ?PP_NEW_GAME_REQ, Pid}, Data);
 		_ ->
 		    handle_cast({?PP_BAD, ?PP_NEW_GAME_REQ, ?ERR_UNKNOWN}, Data)
 	    end;

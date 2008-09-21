@@ -557,12 +557,17 @@ make_game_5_bust() ->
     make_game_5_bust(1, 2, 3).
 
 make_game_5_bust(Button_N, SB_N, BB_N) ->
-    A = test:make_player(test:nick()),
-    B = test:make_player(test:nick()),
-    C = test:make_player(test:nick()),
-    D = test:make_player(test:nick()),
-    E = test:make_player(test:nick()),
-    Players = [{A, 2}, {B, 4}, {C, 6}, {D, 8}, {E, 9}],
+    {A, AP} = test:make_player(test:nick()),
+    {B, BP} = test:make_player(test:nick()),
+    {C, CP} = test:make_player(test:nick()),
+    {D, DP} = test:make_player(test:nick()),
+    {E, EP} = test:make_player(test:nick()),
+    AF = fun() -> test:stop_player(A, AP) end,
+    BF = fun() -> test:stop_player(B, BP) end,
+    CF = fun() -> test:stop_player(C, CP) end,
+    DF = fun() -> test:stop_player(D, DP) end,
+    EF = fun() -> test:stop_player(E, EP) end,
+    Players = [{A, 2, AF}, {B, 4, BF}, {C, 6, CF}, {D, 8, DF}, {E, 9, EF}],
     Ctx = #texas {
       small_blind_seat = element(2, lists:nth(SB_N, Players)),
       big_blind_seat = element(2, lists:nth(BB_N, Players)),
