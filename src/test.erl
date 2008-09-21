@@ -399,10 +399,10 @@ simple_game_simulation_test() ->
 		       {nick(), 2, ['BLIND']}]),
     timer:sleep(1000),
     %% make sure game is started
-    ?assertMsg({'START', GID}, ?START_DELAY * 2, []),
+    ?assertMsg({'START', Game}, ?START_DELAY * 2, []),
     %% wait for game to end
     Winners = gb_trees:insert(2, 15.0, gb_trees:empty()),
-    ?assertMsg({'END', GID, Winners}, ?PLAYER_TIMEOUT, []),
+    ?assertMsg({'END', Game, Winners}, ?PLAYER_TIMEOUT, []),
     timer:sleep(1000),
     %% check balances
     [B1] = mnesia:dirty_read(tab_balance, ID1),
@@ -429,15 +429,13 @@ leave_after_sb_posted_test() ->
 				{?LT_FIXED_LIMIT, 10, 20},
                                 100, 1000),
     cardgame:cast(Game, {'NOTE', leave_after_sb_posted}),
-    GID = cardgame:call(Game, 'ID'),
     %% create dummy players
     Data = setup_game(Host, Port, Game,
-		      [{<<"leave-after-sb-bot1">>, 1, ['BLIND']},
-		       {<<"leave-after-sb-bot2">>, 2, ['LEAVE']}]),
-    io:format("Data: ~p~n", [Data]),
+		      [{nick(), 1, ['BLIND']},
+		       {nick(), 2, ['LEAVE']}]),
     %% make sure game is started
-    ?assertMsg({'START', GID}, ?START_DELAY * 2, []),
-    ?assertMsg({'CANCEL', GID}, ?START_DELAY * 2, []),
+    ?assertMsg({'START', Game}, ?START_DELAY * 2, []),
+    ?assertMsg({'CANCEL', Game}, ?START_DELAY * 2, []),
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),
@@ -457,7 +455,7 @@ dynamic_game_start_test() ->
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, #login{ nick = Nick, pass = Nick}),
-    ?assertEqual(success, ?waittcp({?PP_PID, ID}, 2000)),
+    ?assertEqual(success, ?waittcp(#you_are{ player = ID }, 2000)),
     Packet = {?PP_NEW_GAME_REQ, ?GT_IRC_TEXAS, 1,
 	      {?LT_FIXED_LIMIT, 10, 20}},
     %% disable dynamic games
@@ -505,7 +503,7 @@ query_own_balance_test() ->
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, #login{ nick = Nick, pass = Nick }),
-    ?assertEqual(success, ?waittcp({?PP_PID, ID}, 2000)),
+    ?assertEqual(success, ?waittcp(#you_are{ player = ID }, 2000)),
     %% balance check 
     ?tcpsend(Socket, ?PP_BALANCE_REQ),
     ?assertEqual(success, ?waittcp({?PP_BALANCE_INFO, 10000000, 0}, 2000)),
@@ -567,21 +565,20 @@ two_games_in_a_row_test() ->
 				{?LT_FIXED_LIMIT, 10, 20},
                                 100, 1000),
     cardgame:cast(Game, {'NOTE', two_games_in_a_row}),
-    GID = cardgame:call(Game, 'ID'),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 2, % games to play
                       [{nick("test200"), 1, ['BLIND', 'FOLD', 'BLIND', 'FOLD']},
                        {nick("test200"), 2, ['BLIND', 'BLIND', 'FOLD']}]),
     %% make sure game is started
-    ?assertMsg({'START', GID}, ?START_DELAY * 2, 
+    ?assertMsg({'START', Game}, ?START_DELAY * 2, 
                [?PP_NOTIFY_CHAT, ?CMD_NOTIFY_CANCEL_GAME]),
     %% wait for game to end
-    ?assertMsg({'END', GID, _}, ?PLAYER_TIMEOUT, 
+    ?assertMsg({'END', Game, _}, ?PLAYER_TIMEOUT, 
               [?PP_NOTIFY_CHAT, ?CMD_NOTIFY_CANCEL_GAME]),
     %% and start another round
-    ?assertMsg({'START', GID}, ?START_DELAY * 2, 
+    ?assertMsg({'START', Game}, ?START_DELAY * 2, 
               [?PP_NOTIFY_CHAT, ?CMD_NOTIFY_CANCEL_GAME]),
-    ?assertMsg({'END', GID, _}, ?PLAYER_TIMEOUT, 
+    ?assertMsg({'END', Game, _}, ?PLAYER_TIMEOUT, 
               [?PP_NOTIFY_CHAT, ?CMD_NOTIFY_CANCEL_GAME]),
     flush(),
     %% clean up
@@ -604,7 +601,6 @@ two_games_with_leave_test() ->
 				{?LT_FIXED_LIMIT, 10, 20},
                                 100, 1000),
     cardgame:cast(Game, {'NOTE', two_games_with_leave}),
-    GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'REQUIRED', 3}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 1, % games to play
@@ -613,9 +609,9 @@ two_games_with_leave_test() ->
                        {<<"bot3">>, 3, ['RAISE', 'CALL', 'CALL', 'CHECK', 'CHECK']}
                       ]),
     %% make sure game is started
-    ?assertMsg({'START', GID}, ?START_DELAY * 2, []),
+    ?assertMsg({'START', Game}, ?START_DELAY * 2, []),
     %% wait for game to end
-    ?assertMsg({'END', GID, _}, ?PLAYER_TIMEOUT, []),
+    ?assertMsg({'END', Game, _}, ?PLAYER_TIMEOUT, []),
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),
