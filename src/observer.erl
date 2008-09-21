@@ -181,7 +181,12 @@ handle(R = #game_inplay{}, Data) ->
 	true ->
 	    ok
     end,
-   {noreply, Data};
+    Data1 = Data#obs {
+	      seats = gb_trees:enter(R#game_inplay.player, 
+                                     R#game_inplay.seat_num, 
+                                     Data#obs.seats)
+	     },
+    {noreply, Data1};
 
 handle({?PP_NOTIFY_CHAT, GID, PID, Message}, Data) ->
     if
@@ -192,6 +197,17 @@ handle({?PP_NOTIFY_CHAT, GID, PID, Message}, Data) ->
 	    ok
     end,
     {noreply, Data};
+
+handle(R = #fold{ notify = true }, Data) ->
+    if
+	Data#obs.trace ->
+	    io:format("~w: FOLD: ~w~n",
+		      [R#fold.game, R#fold.player]);
+	true ->
+	    ok
+    end,
+    {noreply, Data};
+
 
 handle({?PP_PLAYER_STATE, GID, PID, State}, Data) ->
     if
@@ -305,18 +321,20 @@ handle({?PP_NOTIFY_SHARED, GID, Card}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_WIN, GID, PID, Amount}, Data) ->
+handle(R = #notify_win{}, Data) ->
+    Game = R#notify_win.game,
+    Player = R#notify_win.player,
+    Amt = R#notify_win.amount / 1.0,
     if
 	Data#obs.trace ->
-	    io:format("~w: WIN: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount / 1.0]);
+	    io:format("~w: WIN: ~w, ~-14.2. f~n", [Game, Player, Amt]);
 	true ->
 	    ok
     end,
-    SeatNum = gb_trees:get(PID, Data#obs.seats),
+    SeatNum = gb_trees:get(Player, Data#obs.seats),
     Data1 = Data#obs {
 	      winners = gb_trees:insert(SeatNum, 
-					Amount, 
+					Amt, 
 					Data#obs.winners)
 	     },
     {noreply, Data1};
