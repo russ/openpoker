@@ -816,14 +816,13 @@ make_test_game(Players, Context, Modules) ->
 make_test_game(SeatCount, Players, Context, Modules) ->
     TableName = testGame ,
     Timeout = ?PLAYER_TIMEOUT,
-    MinPlayers = 2,
+    MinPlayers = length(Players),
     {ok, Game} = cardgame:test_start(?GT_IRC_TEXAS, 
 				     SeatCount, 
 				     {?LT_FIXED_LIMIT, 10, 20}, 
 				     Context, 
 				     Modules, TableName, Timeout, MinPlayers),
     cardgame:cast(Game, {'TIMEOUT', 1000}),
-    cardgame:cast(Game, {'REQUIRED', length(Players)}),
     join_game(Game, Players),
     Game.
 

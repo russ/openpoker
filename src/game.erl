@@ -66,7 +66,7 @@
           note
 	 }).
 
-new(OID, FSM, GameType, SeatCount, LimitType) ->
+new(OID, FSM, GameType, SeatCount, LimitType, MinPlayers) ->
     {TypeOfGame,_,_} = LimitType, 
     {ok, Limit} = case LimitType of
 		      {?LT_FIXED_LIMIT, Low, High} ->
@@ -84,7 +84,8 @@ new(OID, FSM, GameType, SeatCount, LimitType) ->
       pot = pot:new(),
       seats = create_seats(SeatCount),
       limit = Limit,
-      limit_type = TypeOfGame
+      limit_type = TypeOfGame,
+      required_player_count = MinPlayers
      }.
 
 start(FSM, GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers) ->
@@ -97,7 +98,7 @@ init([FSM, GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers])
        is_tuple(LimitType) ->
     process_flag(trap_exit, true),
     OID = counter:bump(game),
-    Data = new(OID, FSM, GameType, SeatCount, LimitType),
+    Data = new(OID, FSM, GameType, SeatCount, LimitType, MinPlayers),
     %% store game info
     Game = #tab_game_xref {
       gid = OID,
