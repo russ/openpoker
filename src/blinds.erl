@@ -454,11 +454,11 @@ timeout(Data, Player, State) ->
 join(R, Data, State) ->
     join(R, Data, State, ?PS_MAKEUP_BB).
 
-join(Data, R, State, PlayerState) ->
+join(R, Data, State, PlayerState) ->
     gen_server:cast(Data#blinds.game, R#join{ state = PlayerState }),
     {next_state, State, Data}.
 
-leave(Data, R, State) ->
+leave(R, Data, State) ->
     Game = Data#blinds.game,
     Player = R#leave.player,
     Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
