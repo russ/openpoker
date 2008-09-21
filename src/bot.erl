@@ -372,9 +372,12 @@ handle({?PP_PLAYER_INFO, _PID, _InPlay, _Nick, _Location}, Bot) ->
 handle(R = #join{}, Bot) ->
     handle_notify_join(R, Bot);
 
-handle(R = #leave{}, Bot) 
+handle(R = #leave{ notify = true }, Bot) 
   when R#leave.player == Bot#bot.player ->
     handle_notify_leave(R, Bot);
+
+handle(#leave{}, Bot) ->
+    {noreply, Bot};
 
 handle(R = #game_inplay{}, Bot) ->
     handle_notify_game_inplay(R, Bot);
@@ -457,6 +460,7 @@ handle(Event, Bot) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},
 			      {self, self()}, 
+                              {player, Bot#bot.player},
 			      {event, Event}]),
     {noreply, Bot}.
 
