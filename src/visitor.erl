@@ -41,14 +41,12 @@ handle_cast({'SOCKET', Socket}, Data)
     Data1 = Data#vis{ socket = Socket },
     {noreply, Data1};
 
-handle_cast(R, Data) 
-  when is_record(R, watch) ->
-    cardgame:cast(R#watch.game, #watch{ game = self() }),
+handle_cast(R = #watch{}, Data) ->
+    cardgame:cast(R#watch.game, R#watch{ player = self() }),
     {noreply, Data};
 
-handle_cast(R, Data) 
-  when is_record(R, unwatch) ->
-    cardgame:cast(R#unwatch.game, #unwatch{ game = self() }),
+handle_cast(R = #unwatch{}, Data) ->
+    cardgame:cast(R#unwatch.game, R#unwatch{ player = self() }),
     {noreply, Data};
 
 handle_cast(R, Data)
