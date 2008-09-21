@@ -191,7 +191,7 @@ init([Parent, GameType, SeatCount, LimitType, Context, Modules, TableName,Timeou
       context = Context,
       original_context = Context
      },
-    case Module:init([Game|Args]) of
+    case Module:init([self(), Game|Args]) of
 	{ok, State, Data} ->
 	    Ctx1 = Ctx#cardgame {
 	      state = State,
@@ -530,7 +530,7 @@ start_next_module(Ctx, []) ->
 
 start_next_module(Ctx, Modules) ->
     {Module, Args} = hd(Modules),
-    case Module:init([Ctx#cardgame.game|Args]) of
+    case Module:init([self(), Ctx#cardgame.game|Args]) of
 	{ok, State, Data} ->
 	    NewCtx = Ctx#cardgame {
 		       stack = Modules,

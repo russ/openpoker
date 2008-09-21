@@ -385,9 +385,7 @@ handle_cast_notify_start_game(R, Game) ->
                         game = Game#game.fsm, 
                         player = 0, message = Msg 
                        }),
-    Game3 = broadcast(Game2, R#notify_start_game{ 
-                               game = Game#game.fsm 
-                              }),
+    Game3 = broadcast(Game2, R),
     {noreply, Game3}.
     
 handle_cast_notify_cancel_game(R, Game) ->
@@ -397,9 +395,7 @@ handle_cast_notify_cancel_game(R, Game) ->
                         player = 0, 
                         message = Msg 
                        }),
-    Game2 = broadcast(Game1, R#notify_cancel_game{ 
-                               game = Game#game.fsm 
-                              }),
+    Game2 = broadcast(Game1, R),
     {noreply, Game2}.
 
 handle_cast_watch(R, Game) ->

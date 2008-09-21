@@ -18,6 +18,7 @@
 -include("schema.hrl").
 
 -record(betting, {
+          fsm,
 	  game,
 	  context,
 	  have_blinds,
@@ -29,11 +30,12 @@
 	  timer
 	 }).
 
-init([Game, MaxRaises, Stage]) ->
-    init([Game, MaxRaises, Stage, false]);
+init([FSM, Game, MaxRaises, Stage]) ->
+    init([FSM, Game, MaxRaises, Stage, false]);
 
-init([Game, MaxRaises, Stage, HaveBlinds]) ->
+init([FSM, Game, MaxRaises, Stage, HaveBlinds]) ->
     Data = #betting {
+      fsm = FSM,
       game = Game,
       have_blinds = HaveBlinds,
       max_raises = MaxRaises,

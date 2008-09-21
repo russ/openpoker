@@ -17,13 +17,12 @@
 -include("pp.hrl").
 
 -record(showdown, {
+          fsm,
 	  game
 	 }).
 
-init([Game]) ->
-    Data = #showdown {
-      game = Game
-     },
+init([FSM, Game]) ->
+    Data = #showdown{ fsm = FSM, game = Game },
     {ok, showdown, Data}.
 
 stop(Ref) ->
@@ -84,6 +83,7 @@ code_change(_OldVsn, State, Data, _Extra) ->
 
 showdown_handle_start(Context, Data) ->
     Game = Data#showdown.game,
+    FSM = Data#showdown.fsm,
     Seats = gen_server:call(Game, {'SEATS', ?PS_SHOWDOWN}),
     N = length(Seats),
     if 
@@ -94,7 +94,7 @@ showdown_handle_start(Context, Data) ->
             gen_server:cast(Game, {'INPLAY+', Player, Total}),
             PID = gen_server:call(Player, 'ID'),
 	    Event = #notify_win{ 
-              game = Game, 
+              game = FSM, 
               player = Player, 
               amount = Total
              },
@@ -109,14 +109,14 @@ showdown_handle_start(Context, Data) ->
                                   gen_server:cast(Game, {'INPLAY+', 
                                                          Player, Amount}),
                                   Event = #notify_win{ 
-                                    game = Game, 
+                                    game = FSM, 
                                     player = Player, 
                                     amount = Amount
                                    },
                                   gen_server:cast(Game, {'BROADCAST', Event})
 			  end, Winners)
     end,
-    gen_server:cast(Game, {'BROADCAST', #notify_end_game{ game = Game }}),
+    gen_server:cast(Game, {'BROADCAST', #notify_end_game{ game = FSM }}),
     _Ctx = setelement(4, Context, Winners),
     {stop, {normal, restart, Context}, Data}.
 

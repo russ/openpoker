@@ -19,6 +19,7 @@
 -include("schema.hrl").
 
 -record(blinds, {
+          fsm,
 	  game,
 	  context,
 	  small_blind_seat,
@@ -33,12 +34,13 @@
 	  type
 	 }).
 
-init([Game]) ->
-    init([Game, normal]);
+init([FSM, Game]) ->
+    init([FSM, Game, normal]);
 
-init([Game, Type]) ->
+init([FSM, Game, Type]) ->
     {Small, Big} = gen_server:call(Game, 'BLINDS'),
     Data = #blinds {
+      fsm = FSM,
       game = Game,
       small_blind_amount = Small,
       big_blind_amount = Big,

@@ -17,13 +17,15 @@
 -include("test.hrl").
 
 -record(deal, {
+          fsm,
 	  game,
 	  n,
 	  type
 	 }).
 
-init([Game, N, Type]) ->
+init([FSM, Game, N, Type]) ->
     Data = #deal {
+      fsm = FSM,
       game = Game,
       n = N,
       type = Type

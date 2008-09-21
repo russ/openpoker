@@ -18,14 +18,16 @@
 -include("schema.hrl").
 
 -record(delayed, {
+          fsm,
 	  game,
 	  context,
 	  delay,
           timer
 	 }).
 
-init([Game, Delay]) ->
+init([FSM, Game, Delay]) ->
     Data = #delayed {
+      fsm = FSM,
       game = Game,
       delay = Delay
      },
@@ -111,6 +113,7 @@ delayed_start_start(Context, Data) ->
 
 delayed_start_check(Data) ->
     Game = Data#delayed.game,
+    FSM = Data#delayed.fsm,
     Ready = case catch gen_server:call(Game, {'SEATS', ?PS_READY}) of
                 {'EXIT', X} ->
                     error_logger:info_report([{module, ?MODULE},
@@ -129,12 +132,14 @@ delayed_start_check(Data) ->
     Empty = gen_server:call(Game, 'IS EMPTY'),
     if
 	Start ->
-            gen_server:cast(Game, #notify_start_game{}),
+            R = #notify_start_game{ game = FSM },
+            gen_server:cast(Game, R),
 	    {stop, {normal, Data#delayed.context}, Data};
 	Empty ->
 	    {stop, {normal, restart}, Data};
 	true ->
-            gen_server:cast(Game, #notify_cancel_game{}),
+            R = #notify_cancel_game{ game = FSM },
+            gen_server:cast(Game, R),
 	    {stop, {normal, restart}, Data}
     end.
 	    
