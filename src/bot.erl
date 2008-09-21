@@ -219,13 +219,13 @@ handle_bet_req(GID, Amount, Bot) ->
 		    },
 	    {noreply, Bot2};
 	'FOLD' ->
-	    handle_cast({?PP_FOLD, GID}, Bot1),
+	    handle_cast(#fold{ game = GID }, Bot1),
 	    {noreply, Bot1};
 	'LEAVE' ->
 	    handle_cast(#leave{ game = GID }, Bot1),
 	    {noreply, Bot1};
 	'QUIT' ->
-	    handle_cast({?PP_FOLD, GID}, Bot1),
+	    handle_cast(#fold{ game = GID }, Bot1),
 	    handle_cast(#leave{ game = GID }, Bot1),
 	    {noreply, Bot1#bot{ done = true }};
 	_ ->
@@ -235,7 +235,7 @@ handle_bet_req(GID, Amount, Bot) ->
 				       {bot, Bot1},
 				       {amount, Amount},
 				       {now, now()}]),
-	    handle_cast({?PP_FOLD, GID}, Bot1),
+	    handle_cast(#fold{ game = GID}, Bot1),
 	    {noreply, Bot1}
     end.
 
@@ -306,13 +306,13 @@ handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot) ->
 		    },
 	    {noreply, Bot2};
 	'FOLD' ->
-	    handle_cast({?PP_FOLD, GID}, Bot1),
+	    handle_cast(#fold{ game = GID }, Bot1),
 	    {noreply, Bot1};
 	'LEAVE' ->
 	    handle_cast(#leave{ game = GID }, Bot1),
 	    {noreply, Bot1};
 	'QUIT' ->
-	    handle_cast({?PP_FOLD, GID}, Bot1),
+	    handle_cast(#fold{ game = GID }, Bot1),
 	    handle_cast(#leave{ game = GID }, Bot1),
 	    {noreply, Bot1#bot{ done = true}};
 	_ ->
@@ -324,7 +324,7 @@ handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot) ->
 				       {raise_min, RaiseMin},
 				       {raise_max, RaiseMax},
 				       {now, now()}]),
-	    handle_cast({?PP_FOLD, Bot1#bot.game}, Bot1),
+	    handle_cast(#fold{ game = Bot1#bot.game }, Bot1),
 	    {noreply, Bot1}
     end.
 
@@ -411,6 +411,9 @@ handle(#notify_cancel_game{ game = GID }, Bot) ->
     handle_notify_cancel_game(GID, Bot);
 
 handle(#notify_win{}, Bot) ->
+    {noreply, Bot};
+
+handle(#fold{ notify = true }, Bot) ->
     {noreply, Bot};
 
 handle({Cmd, _GID, _PID, _Amount}, Bot)

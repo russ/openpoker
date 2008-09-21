@@ -55,8 +55,8 @@ betting({?PP_CALL, Player, Amount}, Data) ->
 betting({?PP_RAISE, Player, Amount}, Data) ->
     betting_handle_raise(Player, Amount, Data);
 
-betting({?PP_FOLD, Player}, Data) ->
-    betting_handle_fold(Player, Data);
+betting(R = #fold{}, Data) ->
+    betting_handle_fold(R, Data);
 
 betting({timeout, _Timer, Player}, Data) ->
     betting_handle_timeout(Player, Data);
@@ -157,9 +157,9 @@ betting_handle_call(Player, Amount, Data) ->
             GameInplay = gen_server:call(Game, {'INPLAY', Player}),
 	    if 
 		Amount > GameInplay  ->
-		    betting({?PP_FOLD, Player}, Data);
+		    betting(#fold{ player = Player }, Data);
 		Amount > Call ->
-		    betting({?PP_FOLD, Player}, Data);
+		    betting(#fold{ player = Player }, Data);
 		Amount == GameInplay  ->
 		    %% all-in
                     gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
@@ -193,7 +193,7 @@ betting_handle_raise(Player, Amount, Data) ->
 		(Amount > Max) or
 		(Max == 0) or % should have sent CALL
 		((Amount < Min) and ((Amount + Call) /= GameInplay)) ->
-		    betting({?PP_FOLD, Player}, Data);
+		    betting(#fold{ player = Player }, Data);
 		true ->
 		    %% proper raise
 		    RaiseCount1 = if 
@@ -222,15 +222,15 @@ betting_handle_raise(Player, Amount, Data) ->
 	    end
     end.
 
-betting_handle_fold(Player, Data) ->
+betting_handle_fold(R, Data) ->
     {Expected, _Call, _Min, _Max} = Data#betting.expected,
     if
-	Expected /= Player ->
+	Expected /= R#fold.player ->
 	    {next_state, betting, Data};
 	true ->
 	    cancel_timer(Data),
-	    gen_server:cast(Data#betting.game, {'SET STATE', Player, ?PS_FOLD}),
-	    next_turn(Data, Player)
+	    gen_server:cast(Data#betting.game, R),
+	    next_turn(Data, R#fold.player)
     end.
 
 betting_handle_timeout(Player, Data) ->
@@ -245,7 +245,7 @@ betting_handle_timeout(Player, Data) ->
 				 {seat, Seat}]),
     %%
     %%io:format("~w timed out, folding~n", [Player]),
-    betting({?PP_FOLD, Player}, Data).
+    betting(#fold{ player = Player }, Data).
 
 betting_handle_join(R, Data) ->
     blinds:join(R, Data, betting, ?PS_FOLD).

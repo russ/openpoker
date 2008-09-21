@@ -97,6 +97,9 @@ handle_cast(R, Data)
 handle_cast(R = #chat{}, Data) ->
     handle_cast_chat(R, Data);
 
+handle_cast(R = #fold{ notify = none }, Data) ->
+    handle_cast_fold(R, Data);
+
 handle_cast(R = #sit_out{ notify = none }, Data) ->
     handle_cast_sit_out(R, Data);
 
@@ -163,6 +166,10 @@ handle_cast_watch(R, Data) ->
 
 handle_cast_unwatch(R, Data) ->
     cardgame:cast(R#watch.game, R#watch{ player = self() }),
+    {noreply, Data}.
+
+handle_cast_fold(R, Data) ->
+    cardgame:send_event(R#fold.game, R#fold{ player = self() }),
     {noreply, Data}.
 
 handle_cast_sit_out(R, Data) ->

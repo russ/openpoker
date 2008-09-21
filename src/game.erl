@@ -199,6 +199,10 @@ handle_cast(R, Game)
   when is_record(R, leave) ->
     handle_cast_leave(R, Game);
 
+handle_cast(R, Game) 
+  when is_record(R, fold) ->
+    handle_cast_fold(R, Game);
+
 handle_cast({'DRAW', Player}, Game) ->
     handle_cast_draw(Player, Game);
 
@@ -507,6 +511,12 @@ handle_cast_leave(R, Game) ->
 	    {noreply, Game}
     end.
 
+handle_cast_fold(R, Game) ->
+    Game1 = set_state(Game, R#fold.player, ?PS_FOLD),
+    %% notify fold
+    Game2 = broadcast(Game1, R#fold{ game = Game#game.fsm, notify = true }),
+    {noreply, Game2}.
+    
 handle_cast_inplay_plus(Player, Amount, Game) ->
     case gb_trees:lookup(Player, Game#game.xref) of
         {value, SeatNum} ->
@@ -776,6 +786,17 @@ handle_call_other(Event, From, Game) ->
 %%% Utility
 %%% 
 
+set_state(Game, Player, State) ->
+    SeatNum = gb_trees:get(Player, Game#game.xref),
+    Seat = element(SeatNum, Game#game.seats),
+    Game#game {
+      seats = setelement(SeatNum,
+                         Game#game.seats,
+                         Seat#seat {
+                           state = State
+                          })
+     }.
+
 rank_hands(Game, Seats) ->
     F = fun(SeatNum) ->
 		Seat = element(SeatNum, Game#game.seats),
@@ -953,6 +974,7 @@ broadcast(Game, Event)
        is_record(Event, unwatch);
        is_record(Event, sit_out);
        is_record(Event, come_back);
+       is_record(Event, fold);
        is_record(Event, join);
        is_record(Event, leave);
        is_record(Event, chat);

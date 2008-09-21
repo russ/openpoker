@@ -490,7 +490,6 @@
 
 -define(PP_CALL, 6).
 -define(PP_RAISE, 7).
--define(PP_FOLD, 8).
 
 %%% Server -> Client
 

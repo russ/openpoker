@@ -61,8 +61,8 @@ small_blind({'START', Context}, Data) ->
 small_blind({?PP_CALL, Player, Amount}, Data) ->
     small_blind_handle_call(Player, Amount, Data);
 
-small_blind({?PP_FOLD, Player}, Data) ->
-    small_blind_handle_fold(Player, Data);
+small_blind(R = #fold{}, Data) ->
+    small_blind_handle_fold(R, Data);
 
 small_blind({timeout, _Timer, Player}, Data) ->
     small_blind_handle_timeout(Player, Data);
@@ -89,8 +89,8 @@ small_blind(Event, Data) ->
 big_blind({?PP_CALL, Player, Amount}, Data) ->
     big_blind_handle_call(Player, Amount, Data);
 
-big_blind({?PP_FOLD, Player}, Data) ->
-    big_blind_handle_fold(Player, Data);
+big_blind(R = #fold{}, Data) ->
+    big_blind_handle_fold(R, Data);
 
 big_blind({timeout, _Timer, Player}, Data) ->
     big_blind_handle_timeout(Player, Data);
@@ -279,13 +279,13 @@ small_blind_handle_call(Player, Amount, Data) ->
 	    end
     end.
 
-small_blind_handle_fold(Player, Data) ->
+small_blind_handle_fold(R, Data) ->
     {ExpPlayer, _Seat, _ExpAmount} = Data#blinds.expected,
     if
-	ExpPlayer /= Player ->
+	ExpPlayer /= R#fold.player ->
 	    {next_state, small_blind, Data};
 	true ->
-	    timeout(Data, Player, small_blind)
+	    timeout(Data, R#fold.player, small_blind)
     end.
 
 small_blind_handle_timeout(Player, Data) ->
@@ -380,13 +380,13 @@ big_blind_handle_call(Player, Amount, Data) ->
 	    end
     end.
 
-big_blind_handle_fold(Player, Data) ->
+big_blind_handle_fold(R, Data) ->
     {ExpPlayer, _Seat, _ExpAmount} = Data#blinds.expected,
     if
-	ExpPlayer /= Player ->
+	ExpPlayer /= R#fold.player ->
 	    {next_state, big_blind, Data};
 	true ->
-	    timeout(Data, Player, big_blind)
+	    timeout(Data, R#fold.player, big_blind)
     end.
 
 big_blind_handle_timeout(Player, Data) ->
