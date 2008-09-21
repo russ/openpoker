@@ -237,16 +237,12 @@ small_blind_handle_start(Context, Data) ->
 	    %% the first player after the button 
 	    %% is the big blind and the other player
 	    %% is the small blind and button
-	    Data2 = Data1#blinds {
-		      button_seat = Button1
-		     },
+	    Data2 = Data1#blinds{ button_seat = Button1 },
 	    Amount = Data2#blinds.small_blind_amount,
 	    Data3 = ask_for_blind(Data2, lists:last(SBPlayers), Amount), 
 	    {next_state, small_blind, Data3};
 	true ->
-	    Data2 = Data1#blinds {
-		      button_seat = Button1
-		     },
+	    Data2 = Data1#blinds{ button_seat = Button1 },
 	    Amount = Data2#blinds.small_blind_amount,
 	    Data3 = ask_for_blind(Data2, hd(SBPlayers), Amount),
 	    {next_state, small_blind, Data3}
@@ -296,9 +292,11 @@ small_blind_handle_timeout(Player, Data) ->
     error_logger:warning_report(
       [{message, "Player timeout!"},
        {module, ?MODULE}, 
+       {line, ?LINE},
        {state, small_blind},
        {player, Player},
        {game, GID},
+       {game, Game},
        {note, gen_server:call(Game, 'NOTE')},
        {seat, Seat},
        {now, now()}]),
@@ -397,9 +395,11 @@ big_blind_handle_timeout(Player, Data) ->
     error_logger:warning_report(
       [{message, "Player timeout!"},
        {module, ?MODULE}, 
+       {line, ?LINE},
        {state, big_blind},
        {player, Player},
-       {game, GID},
+       {gid, GID},
+       {game, Game},
        {note, gen_server:call(Game, 'NOTE')},
        {seat, Seat},
        {now, now()}]),
@@ -502,40 +502,37 @@ advance_button(Data) ->
 	    BB = Data#blinds.big_blind_seat,
 	    BBPlayer = gen_server:call(Game, {'PLAYER AT', BB}),
 	    State = gen_server:call(Game, {'STATE', BBPlayer}),
-	    Bust = ?PS_FOLD == State
+	    Bust = ?PS_FOLD == State,
+            io:format("advance_button: Players: ~p~n", [Players])
     end,
     {Button, Bust}.
 
 ask_for_blind(Data, Seat, Amount) ->
     Game = Data#blinds.game,
     Player = gen_server:call(Game, {'PLAYER AT', Seat}),
+    io:format("ask_for_blind: Seat: ~p, Player: ~p~n", [Seat, Player]),
     gen_server:cast(Game, {'REQUEST BET', Seat, Amount, 0, 0}),
     Data1 = restart_timer(Data, Player),
-    Data1#blinds {
-      expected = {Player, Seat, Amount}
-     }.
+    Data1#blinds{ expected = {Player, Seat, Amount }}.
 
 cancel_timer(Data) ->
     catch cardgame:cancel_timer(Data#blinds.timer).
 
 restart_timer(Data, Msg) ->
     Timeout = gen_server:call(Data#blinds.game, 'TIMEOUT'),
-    Data#blinds {
-      timer = cardgame:start_timer(trunc(Timeout/2), Msg)
-     }.
+    Data#blinds{ timer = cardgame:start_timer(trunc(Timeout/2), Msg) }.
 
 %%%
 %%% Test suite
 %%% 
 
 modules() -> 
-    %%[{delayed_start, [0]}, 
-    %% {blinds, []}].
-    [{blinds, []}].
+    [{delayed_start, [100]}, 
+     {blinds, []}].
 
 make_game_heads_up() ->
     Players = test:make_players(2),
-    Ctx = #texas {
+    Ctx = #texas{
       small_blind_seat = none,
       big_blind_seat = none,
       button_seat = none
