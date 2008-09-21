@@ -105,7 +105,7 @@
 -define(tcpsend(Socket, Data),
 	fun() ->
 		XXX = pp:old_write(Data),
-		case gen_tcp:send(Socket, XXX) of
+		case catch gen_tcp:send(Socket, XXX) of
 		    ok ->
 			ok;
 		    {error, closed} ->
