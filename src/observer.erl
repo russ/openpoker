@@ -172,11 +172,12 @@ handle(R = #join{}, Data) ->
 	     },
     {noreply, Data1};
 
-handle({?PP_NOTIFY_GAME_INPLAY, GID, PID, GameInplay,SeatNum}, Data) ->
+handle(R = #game_inplay{}, Data) ->
     if
 	Data#obs.trace ->
 	    io:format("GID#:  ~w PID#~w: At Seat No:~w GAME INPLAY: ~w  ~n",
-		      [GID, PID,SeatNum, GameInplay]);
+		      [R#game_inplay.game, R#game_inplay.player,
+                       R#game_inplay.seat_num, R#game_inplay.amount]);
 	true ->
 	    ok
     end,
