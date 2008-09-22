@@ -485,7 +485,9 @@ handle_cast_leave(R, Game) ->
                     {noreply, Game2};
                 %% cannot leave now, use auto-play
                 true ->
-                    Seat1 = Seat#seat{ cmd_que = [[?CMD_FOLD, ?CMD_LEAVE]] },
+                    Fold = #fold{ game = Game#game.fsm, player = Player },
+                    Leave = #leave{ game = Game#game.fsm, player = Player },
+                    Seat1 = Seat#seat{ cmd_que = [[Fold, Leave]] },
                     Game1 = Game#game {
                               seats = setelement(SeatNum, Seats, Seat1)
                              },
@@ -1117,28 +1119,16 @@ process_autoplay(_Game, Seat, []) ->
     Seat;
 
 process_autoplay(Game, Seat, [H|T]) ->
-    autoplay(Game#game.fsm, Seat#seat.player, H),
+    autoplay(Game#game.fsm, H),
     Seat#seat{ cmd_que = T }.
 
-autoplay(_FSM, _Player, []) ->
+autoplay(_FSM, []) ->
     ok;
 
-autoplay(FSM, Player, [H|T]) ->
-    Msg = build_message(Player, H),
+autoplay(FSM, [H|T]) ->
     %% forward action as if coming from us
-    spawn(fun() -> cardgame:send_event(FSM, Msg) end),
-    autoplay(FSM, Player, T).
-
-build_message(Player, Action) 
-  when is_number(Action) ->
-    build_message(Player, [Action]);
-
-build_message(Player, Action) 
-  when is_tuple(Action) ->
-    build_message(Player, tuple_to_list(Action));
-
-build_message(Player, [Cmd|Rest]) ->
-    list_to_tuple([Cmd, Player|Rest]).
+    spawn(fun() -> cardgame:send_event(FSM, H) end),
+    autoplay(FSM, T).
 
 broadcast_inplay(Game)->
     Seats = Game#game.seats,

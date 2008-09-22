@@ -31,12 +31,10 @@ stop(Ref) ->
 showdown({'START', Context}, Data) ->
     showdown_handle_start(Context, Data);
 
-showdown(R, Data)
-  when is_record(Data, join) ->
+showdown(R = #join{}, Data) ->
     showdown_handle_join(R, Data);
 
-showdown(R, Data)
-  when is_record(Data, leave) ->
+showdown(R = #leave{}, Data) ->
     showdown_handle_leave(R, Data);
 
 showdown(Event, Data) ->
@@ -121,10 +119,12 @@ showdown_handle_start(Context, Data) ->
     {stop, {normal, restart, Context}, Data}.
 
 showdown_handle_join(R, Data) ->
-    gen_server:cast(Data#showdown.game, R#join{ state = ?PS_FOLD }).
+    gen_server:cast(Data#showdown.game, R#join{ state = ?PS_FOLD }),
+    {next_state, showdown, Data}.
 
 showdown_handle_leave(R, Data) ->
-    gen_server:cast(Data#showdown.game, R#leave{ state = ?PS_ANY }).
+    gen_server:cast(Data#showdown.game, R#leave{ state = ?PS_ANY }),
+    {next_state, showdown, Data}.
 
 showdown_handle_other(Event, Data) ->
     handle_event(Event, showdown, Data).
