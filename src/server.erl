@@ -201,8 +201,7 @@ process_login(Client, Socket, Nick, Pass) ->
                 true ->
                     ok
             end,
-            ID = gen_server:call(Player, 'ID'),
-            ok = ?tcpsend(Socket, #you_are{ player = ID }),
+            ok = ?tcpsend(Socket, #you_are{ player = Player }),
             Client#client{ player = Player }
     end.
 

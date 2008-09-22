@@ -333,7 +333,9 @@ network_login_logout_test() ->
     ?assertMatch(#pong{}, X1),
     ?tcpsend(Socket, #login{ nick = Nick, pass = Nick }),
     X2 = wait_for_msg(2000, []),
-    ?assertMatch(#you_are{ player = ID }, X2),
+    [TP] = mnesia:dirty_read(tab_player, ID),
+    Player = TP#tab_player.process,
+    ?assertMatch(#you_are{ player = Player }, X2),
     %% disconnect without logging out
     gen_tcp:close(Socket),
     timer:sleep(100),
@@ -341,7 +343,7 @@ network_login_logout_test() ->
     {ok, Socket1} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket1, #login{ nick = Nick, pass = Nick }),
     X3 = wait_for_msg(2000, []),
-    ?assertMatch(#you_are{ player = ID }, X3),
+    ?assertMatch(#you_are{ player = Player }, X3),
     ?tcpsend(Socket1, #logout{}),
     X4 = wait_for_msg(2000, []),
     ?assertMatch(#good{ cmd = ?CMD_LOGOUT }, X4),
@@ -439,7 +441,10 @@ dynamic_game_start_test() ->
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, #login{ nick = Nick, pass = Nick}),
-    ?assertMatch(#you_are{ player = ID }, wait_for_msg(2000, [])),
+    X = wait_for_msg(2000, []),
+    [TP] = mnesia:dirty_read(tab_player, ID),
+    Player = TP#tab_player.process,
+    ?assertMatch(#you_are{ player = Player }, X),
     Cmd = #start_game{ 
       type = ?GT_IRC_TEXAS,
       seat_count = 1,
@@ -491,7 +496,10 @@ query_own_balance_test() ->
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, #login{ nick = Nick, pass = Nick }),
-    ?assertMatch(#you_are{ player = ID }, wait_for_msg(2000, [])),
+    X = wait_for_msg(2000, []),
+    [TP] = mnesia:dirty_read(tab_player, ID),
+    Player = TP#tab_player.process,
+    ?assertMatch(#you_are{ player = Player }, X),
     %% balance check 
     ?tcpsend(Socket, ?PP_BALANCE_REQ),
     ?assertMatch({?PP_BALANCE_INFO, 10000000, 0}, wait_for_msg(2000, [])),
@@ -534,7 +542,10 @@ test190(Host, Port, [Info|Rest])
     ID = Info#tab_player_info.pid,
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, #login{ nick = Nick, pass = Nick }),
-    ?assertMatch(#you_are{ player = ID }, wait_for_msg(2000, [])),
+    X = wait_for_msg(2000, []),
+    [TP] = mnesia:dirty_read(tab_player, ID),
+    Player = TP#tab_player.process,
+    ?assertMatch(#you_are{ player = Player }, X),
     ?tcpsend(Socket, #logout{}),
     ?assertMatch(#good{ cmd = logout, extra = 0}, wait_for_msg(2000, [])),
     gen_tcp:close(Socket),
@@ -699,7 +710,10 @@ check_pot(Game, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, N) ->
 
 leave_filter(#game_stage{ stage = ?GS_RIVER }, Bot) ->
     io:format("Elvis #~w is leaving the building!~n", [Bot#bot.player]),
-    ok = ?tcpsend(Bot#bot.socket, #leave{ game = Bot#bot.game }),
+    ok = ?tcpsend(Bot#bot.socket, #leave{ 
+                            player = Bot#bot.player,
+                            game = Bot#bot.game 
+                           }),
     ok = ?tcpsend(Bot#bot.socket, #logout{}),
     {done, Bot#bot{ done = true }};
 

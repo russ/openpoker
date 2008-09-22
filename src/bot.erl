@@ -173,18 +173,8 @@ handle_tcp_data(Bin, Bot) ->
 	    handle(Event, Bot1)
     end.
 
-handle_pid(PID, Bot) ->
-    Bot1 = Bot#bot{ player = PID },
-    {noreply, Bot1}.
-
-handle_notify_join(R, Bot) ->
-    Bot1 = if
-	       R#join.player == Bot#bot.player ->
-		   Bot#bot{ game = R#join.game };
-	       true ->
-		   Bot
-	   end,
-    {noreply, Bot1}.
+handle_you_are(R, Bot) ->
+    {noreply, Bot#bot{ player = R#you_are.player }}.
 
 handle_notify_game_inplay(R, Bot) ->
     Bot1 = if
@@ -308,14 +298,12 @@ handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot) ->
 	    {noreply, Bot1}
     end.
 
-handle_notify_leave(R, Bot) ->
-    if
-	R#leave.player == Bot#bot.player ->
-	    ok = ?tcpsend(Bot#bot.socket, #logout{}),
-	    {stop, normal, Bot};
-	true ->
-	    {noreply, Bot}
-    end.
+handle_notify_join(R, Bot) ->
+    {noreply, Bot#bot{ game = R#join.game }}.
+
+handle_notify_leave(_R, Bot) ->
+    ok = ?tcpsend(Bot#bot.socket, #logout{}),
+    {stop, normal, Bot}.
 
 handle_notify_end_last_game(GID, Bot) ->
     ok = ?tcpsend(Bot#bot.socket, #leave{ game = GID }),
@@ -339,7 +327,7 @@ handle_notify_cancel_game(GID, Bot) ->
 %%%
 	    
 handle(R = #you_are{}, Bot) ->
-    handle_pid(R#you_are.player, Bot);
+    handle_you_are(R, Bot);
 
 handle({?PP_GAME_INFO, _GID, ?GT_IRC_TEXAS, 
 	_Expected, _Joined, _Waiting,
@@ -349,7 +337,8 @@ handle({?PP_GAME_INFO, _GID, ?GT_IRC_TEXAS,
 handle({?PP_PLAYER_INFO, _PID, _InPlay, _Nick, _Location}, Bot) ->
     {noreply, Bot};
 
-handle(R = #join{}, Bot) ->
+handle(R = #join{ notify = true }, Bot)
+  when R#join.player == Bot#bot.player ->
     handle_notify_join(R, Bot);
 
 handle(R = #leave{ notify = true }, Bot) 
@@ -357,6 +346,9 @@ handle(R = #leave{ notify = true }, Bot)
     handle_notify_leave(R, Bot);
 
 handle(#leave{}, Bot) ->
+    {noreply, Bot};
+
+handle(#join{}, Bot) ->
     {noreply, Bot};
 
 handle(R = #game_inplay{}, Bot) ->
