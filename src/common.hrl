@@ -2,8 +2,6 @@
 
 %%% 
 
--define(PLAYER_TIMEOUT, 15000).
--define(START_DELAY, 14000).
 -define(MAX_RAISES, 3).
 -define(MAX_PLAYERS, 500000).
 

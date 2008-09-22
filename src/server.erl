@@ -217,6 +217,15 @@ process_ping(Client, Socket) ->
     ok = ?tcpsend(Socket, #pong{}),
     Client.
 
+process_test_start_game(Client, Socket, R) ->
+    case gen_server:call(Client#client.server, 'TEST MODE') of
+        true ->
+            ok = ?tcpsend(Socket, start_test_game(R));
+        _ ->
+            ok
+    end,
+    Client.
+
 parse_packet(Socket, Client) ->
     receive
 	{tcp, Socket, Bin} ->
@@ -230,6 +239,9 @@ parse_packet(Socket, Client) ->
                     parse_packet(Socket, Client1);
                 #ping{} ->
                     Client1 = process_ping(Client, Socket),
+                    parse_packet(Socket, Client1);
+                R = #start_game{ rigged_deck = [_|_] } ->
+                    Client1 = process_test_start_game(Client, Socket, R),
                     parse_packet(Socket, Client1);
 		{?PP_GAME_QUERY, 
 		 GameType, LimitType,
@@ -246,15 +258,6 @@ parse_packet(Socket, Client) ->
 		    %%Elapsed = timer:now_diff(ET, ST) / 1000,
 		    %%io:format("~wms to send games to ~w~n", 
 		    %%	      [Elapsed, Socket]),
-		    parse_packet(Socket, Client);
-		{?PP_MAKE_TEST_GAME, Data} ->
-		    case gen_server:call(Client#client.server,
-					 'TEST MODE') of
-			true ->
-			    ok = ?tcpsend(Socket, start_test_game(Data));
-			_ ->
-			    ok
-		    end,
 		    parse_packet(Socket, Client);
 		none ->
 		    io:format("Unrecognized packet: ~w~n", [Bin]);
@@ -286,6 +289,13 @@ parse_packet(Socket, Client) ->
 %%% Utility
 %%%
 
+send_games(_, []) ->
+    ok;
+
+send_games(Socket, [H|T]) ->
+    ?tcpsend(Socket, H),
+    send_games(Socket, T).
+
 find_games(Socket, 
 	   GameType, LimitType,
 	   ExpOp, Expected, 
@@ -295,9 +305,7 @@ find_games(Socket,
 			    ExpOp, Expected, 
 			    JoinOp, Joined,
 			    WaitOp, Waiting),
-    lists:foreach(fun(Packet) ->
-			  ?tcpsend(Socket, Packet)
-		  end, L).
+    send_games(Socket, L).
 
 start_games() ->
     {atomic, Games} = db:find(tab_game_config),
@@ -314,11 +322,13 @@ start_games(_Game, 0) ->
     ok;
 
 start_games(Game, N) ->
-    {ok, _} = cardgame:start(Game#tab_game_config.type, 
-                             Game#tab_game_config.seat_count, 
-                             Game#tab_game_config.limit,
-                             Game#tab_game_config.start_delay,
-                             Game#tab_game_config.player_timeout),
+    cardgame:start(_ = #start_game{ 
+                     type = Game#tab_game_config.type, 
+                     limit = Game#tab_game_config.limit, 
+                     start_delay = Game#tab_game_config.start_delay,
+                     player_timeout = Game#tab_game_config.player_timeout,
+                     seat_count = Game#tab_game_config.seat_count
+                    }),
     start_games(Game, N - 1).
 
 kill_games() ->
@@ -332,17 +342,15 @@ kill_games([H|T]) ->
     cardgame:stop(H#tab_game_xref.process),
     kill_games(T).
 
-start_test_game(Data) ->
-    {GameType, Expected, Limit, Delay, Timeout, Cards} = Data,
-    {ok, Pid} = cardgame:start(GameType,
-			       Expected,
-			       Limit,
-			       Delay,
-			       Timeout),
-    cardgame:cast(Pid, {'RIG', tuple_to_list(Cards)}),
-    cardgame:cast(Pid, {'REQUIRED', Expected}),
-    GID = cardgame:call(Pid, 'ID'),
-    {?PP_GOOD, ?PP_MAKE_TEST_GAME, GID}.
+start_test_game(R) ->
+    [CC] = mnesia:dirty_read(tab_cluster_config, 0),
+    if
+	CC#tab_cluster_config.test_game_pass == R#start_game.pass ->
+            {ok, Pid} = cardgame:start(R),
+            #good{ cmd = ?CMD_START_GAME, extra = Pid };
+        true ->
+            #bad{ cmd = ?CMD_START_GAME }
+    end.
 	    
 %%
 %% Test suite

@@ -67,7 +67,8 @@
 	  logdir = "/tmp",
 	  max_login_errors = 5,
 	  %% players can start games
-	  enable_dynamic_games = false
+	  enable_dynamic_games = false,
+          test_game_pass
 	 }).
 
 -record(tab_tourney_config, {

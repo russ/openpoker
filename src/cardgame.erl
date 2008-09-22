@@ -9,7 +9,7 @@
 
 %% export the gen_fsm interface
 
--export([start/3, start/5, start/6, test_start/8,
+-export([start/1, test_start/3,
 	 send_event/2, sync_send_event/2, sync_send_event/3,
 	 send_all_state_event/2, sync_send_all_state_event/2,
 	 sync_send_all_state_event/3, reply/2, send_event_after/2,
@@ -54,26 +54,17 @@ behaviour_info(Other) ->
           note
 	 }).
 
-start(GameType, SeatCount, LimitType) ->
-    start(GameType, SeatCount, LimitType, ?START_DELAY, ?PLAYER_TIMEOUT, 'Test', 2).
-
-start(GameType, SeatCount, LimitType, Delay, Timeout) ->
-    start(GameType, SeatCount, LimitType, Delay, Timeout, 'Test', 2) .
-
-start(GameType, SeatCount, LimitType, Timeout, TableName, MinPlayers) ->
-    start(GameType, SeatCount, LimitType, ?START_DELAY, Timeout, TableName, MinPlayers).
-
-start(GameType, SeatCount, LimitType, Delay, Timeout, TableName, MinPlayers) ->
+start(R = #start_game{}) ->
     %% create game stack. context is used to propagate 
     %% game information from module to module, e.g. button
     %% and blinds position for texas hold'em
-    case GameType of
+    case R#start_game.type of
 	?GT_IRC_TEXAS ->
 	    %% irc texas differs slightly in application of button 
 	    %% rules as well as the number of raises allowed
 	    Modules = [
 		       %% start delay
-		       {delayed_start, [Delay]}, 
+		       {delayed_start, [R#start_game.start_delay]}, 
 		       %% irc blind rules
 		       {blinds, [irc]},
 		       %% deal 2 cards to each player
@@ -99,7 +90,7 @@ start(GameType, SeatCount, LimitType, Delay, Timeout, TableName, MinPlayers) ->
 	?GT_TEXAS_HOLDEM ->
 	    Modules = [
 		       %% start delay
-		       {delayed_start, [Delay]}, 
+		       {delayed_start, [R#start_game.start_delay]}, 
 		       %% blind rules
 		       {blinds, []},
 		       %% deal 2 cards to each player
@@ -124,18 +115,10 @@ start(GameType, SeatCount, LimitType, Delay, Timeout, TableName, MinPlayers) ->
 	    Context = #texas{}
     end,
     %% start the cardgame finite state machine
-    case gen_fsm:start(?MODULE, [self(), GameType, SeatCount, LimitType, 
-				 Context, Modules, TableName,Timeout,MinPlayers], []) of
-	{ok, Pid} = X ->
-	    cardgame:cast(Pid, {'TIMEOUT', Timeout}),
-	    X;
-	Any ->
-	    Any
-    end.
+    gen_fsm:start(?MODULE, [self(), R, Context, Modules], []).
 
-test_start(GameType, SeatCount, Limit, Context, Modules, TableName,Timeout,MinPlayers) ->
-    gen_fsm:start(?MODULE, [self(), GameType, SeatCount, Limit, 
-			    Context, Modules, TableName,Timeout,MinPlayers], []).
+test_start(R = #start_game{}, Context, Modules) ->
+    gen_fsm:start(?MODULE, [self(), R, Context, Modules], []).
 %%
 %% The gen_fsm API functions
 %%
@@ -174,15 +157,14 @@ cancel_timer(Ref) ->
 %% The gen_fsm call backs
 %%
 
-init([Parent, GameType, SeatCount, LimitType, Context, Modules, TableName,Timeout,MinPlayers]) 
+init([Parent, R, Context, Modules]) 
   when is_pid(Parent), 
-       is_number(SeatCount), 
-       is_tuple(LimitType),
+       is_record(R, start_game), 
        is_tuple(Context),
        is_list(Modules) ->
     process_flag(trap_exit, true),
     {Module, Args} = hd(Modules),
-    {ok, Game} = game:start(self(), GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers),
+    {ok, Game} = game:start(self(), R),
     Ctx = #cardgame {
       parent = Parent,
       game = Game,

@@ -5,7 +5,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
--export([start/7, stop/1, test/0]).
+-export([start/2, stop/1, test/0]).
 -export([find/8, setup/6, seat_query/1]).
 -include_lib("stdlib/include/qlc.hrl").
 
@@ -66,49 +66,50 @@
           note
 	 }).
 
-new(OID, FSM, GameType, SeatCount, LimitType, MinPlayers) ->
-    {TypeOfGame,_,_} = LimitType, 
+new(OID, FSM, R) ->
+    LimitType = (R#start_game.limit)#limit.type, 
+    Low = (R#start_game.limit)#limit.low, 
+    High = (R#start_game.limit)#limit.high, 
     {ok, Limit} = case LimitType of
-		      {?LT_FIXED_LIMIT, Low, High} ->
+		      ?LT_FIXED_LIMIT ->
 			  fixed_limit:start_link(Low, High);
-                      {?LT_NO_LIMIT, Low, High} ->
+                      ?LT_NO_LIMIT ->
 			  no_limit:start_link(Low, High);
-                      {?LT_POT_LIMIT, Low, High} ->
+                      ?LT_POT_LIMIT ->
 			  pot_limit:start_link(Low, High)
 		  end,
     _ = #game {
       gid = OID,
       fsm = FSM,
-      type = GameType,
+      type = R#start_game.type, 
       deck = deck:new(),
       pot = pot:new(),
-      seats = create_seats(SeatCount),
+      seats = create_seats(R#start_game.seat_count),
       limit = Limit,
-      limit_type = TypeOfGame,
-      required_player_count = MinPlayers
+      limit_type = LimitType,
+      required_player_count = R#start_game.min_players,
+      timeout = R#start_game.player_timeout
      }.
 
-start(FSM, GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers) ->
-    gen_server:start(game, [FSM, GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers], []).
+start(FSM, R = #start_game{}) ->
+    gen_server:start(game, [FSM, R], []).
 
-init([FSM, GameType, SeatCount, LimitType, TableName,Timeout,MinPlayers])
+init([FSM, R])
   when is_pid(FSM),
-       is_number(GameType), 
-       is_number(SeatCount),
-       is_tuple(LimitType) ->
+       is_record(R, start_game) ->
     process_flag(trap_exit, true),
     OID = counter:bump(game),
-    Data = new(OID, FSM, GameType, SeatCount, LimitType, MinPlayers),
+    Data = new(OID, FSM, R),
     %% store game info
     Game = #tab_game_xref {
       gid = OID,
       process = FSM,
-      type = GameType, 
-      limit = LimitType,
-      table_name = TableName,
-      seat_count = SeatCount,
-      timeout = Timeout,
-      min_players = MinPlayers
+      type = R#start_game.type, 
+      limit = R#start_game.limit,
+      table_name = R#start_game.table_name,
+      seat_count = R#start_game.seat_count,
+      timeout = R#start_game.player_timeout,
+      min_players = R#start_game.min_players
      },
     case mnesia:dirty_write(Game) of
 	ok ->
@@ -141,11 +142,6 @@ handle_cast('RESET', Game) ->
 
 handle_cast({'TIMEOUT', Timeout}, Game) ->
     handle_cast_timeout(Timeout, Game);
-
-%%% Number of players required to start the game
-    
-handle_cast({'REQUIRED', N}, Game) ->
-    handle_cast_required(N, Game);
 
 %%% Broadcast event to players and observers
 
@@ -359,18 +355,6 @@ handle_cast_reset(Game) ->
 handle_cast_timeout(Timeout, Game) ->
     Game1 = Game#game { 
 	      timeout = Timeout
-	     },
-    {noreply, Game1}.
-
-handle_cast_required(N, Game) ->
-    N1 = if
-	     N < 2 ->
-		 2;
-	     true ->
-		 N
-	 end,
-    Game1 = Game#game {
-	      required_player_count = N1
 	     },
     {noreply, Game1}.
 
@@ -1098,7 +1082,7 @@ find_1(GameType, LimitType) ->
 		G#tab_game_xref.limit}
 	       || G <- mnesia:table(tab_game_xref),
 		  G#tab_game_xref.type == GameType,
-		  element(1, G#tab_game_xref.limit) == LimitType]),
+		  (G#tab_game_xref.limit)#limit.type == LimitType]),
     L = qlc:e(Q),
     lists:map(fun({GID, Pid, Type, Limit}) ->
 		      Expected = cardgame:call(Pid, 'SEAT COUNT'),

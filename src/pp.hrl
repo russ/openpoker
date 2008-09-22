@@ -1,5 +1,8 @@
 %%% Copyright (C) 2005-2008 Wager Labs, SA
 
+-define(PLAYER_TIMEOUT, 15000).
+-define(START_DELAY, 14000).
+
 %%% Error codes
 
 -define(ERR_UNKNOWN, 0).
@@ -129,7 +132,7 @@
 
 -record(bad, {
           cmd, 
-          error
+          error = ?ERR_UNKNOWN
          }).
 
 -define(CMD_GOOD, 0).
@@ -269,37 +272,34 @@
 -record(balance_query, {
          }).
 
--define(CMD_DYNAMIC_START_GAME, 17).
+-define(CMD_START_GAME, 17).
 
--record(dynamic_start_game, {
-          game_type,
-          expected,
-          limit
-         }).
-
--define(CMD_TEST_START_GAME, 18).
-
--record(test_start_game, {
-          game_type,
-          expected,
+-record(start_game, {
+          table_name = <<"test game">>,
+          type,
           limit,
-          start_delay,
-          player_timeout,
-          deck_cards
+          seat_count,
+          min_players = 2,
+          start_delay = ?START_DELAY,
+          player_timeout = ?PLAYER_TIMEOUT,
+          rigged_deck = [],
+          pass
          }).
 
--define(CMD_GAME_INFO, 19).
+-define(CMD_GAME_INFO, 18).
 
 -record(game_info, {
           game,
+          table_name,
           game_type,
           limit,
-          expected,
+          max_seats,
+          min_players,
           joined,
           waiting
          }).
 
--define(CMD_PLAYER_INFO, 20).
+-define(CMD_PLAYER_INFO, 19).
 
 -record(player_info, {
           player,
@@ -308,7 +308,7 @@
           location
          }).
 
--define(CMD_BET_REQ, 21).
+-define(CMD_BET_REQ, 20).
 
 -record(bet_req, {
           game,
@@ -318,7 +318,7 @@
           raise_max
          }).
 
--define(CMD_NOTIFY_DRAW, 22).
+-define(CMD_NOTIFY_DRAW, 21).
 
 -record(notify_draw, {
           game, 
@@ -326,32 +326,32 @@
           card
          }).
 
--define(CMD_NOTIFY_SHARED, 23).
+-define(CMD_NOTIFY_SHARED, 22).
 
 -record(notify_shared, {
           game,
           card
          }).
 
--define(CMD_NOTIFY_START_GAME, 24).
+-define(CMD_NOTIFY_START_GAME, 23).
 
 -record(notify_start_game, {
           game
          }).
 
--define(CMD_NOTIFY_END_GAME, 25).
+-define(CMD_NOTIFY_END_GAME, 24).
 
 -record(notify_end_game, {
           game
          }).
 
--define(CMD_NOTIFY_CANCEL_GAME, 26).
+-define(CMD_NOTIFY_CANCEL_GAME, 25).
 
 -record(notify_cancel_game, {
           game
          }).
 
--define(CMD_NOTIFY_WIN, 27).
+-define(CMD_NOTIFY_WIN, 26).
 
 -record(notify_win, {
           game,
@@ -359,7 +359,7 @@
           amount
          }).
 
--define(CMD_NOTIFY_MY_HAND, 28).
+-define(CMD_NOTIFY_MY_HAND, 27).
 
 -record(notify_my_hand, {
           game,
@@ -367,7 +367,7 @@
           hand
          }).
 
--define(CMD_NOTIFY_MUCK, 29).
+-define(CMD_NOTIFY_MUCK, 28).
 
 -record(notify_muck, {
           game,
@@ -375,20 +375,20 @@
           hand
          }).
 
--define(CMD_NOTIFY_QUIT, 30).
+-define(CMD_NOTIFY_QUIT, 29).
 
 -record(notify_quit, {
           player
          }).
 
--define(CMD_GAME_STAGE, 31).
+-define(CMD_GAME_STAGE, 30).
 
 -record(game_stage, {
           game,
           stage
          }).
 
--define(CMD_SEAT_STATE, 32).
+-define(CMD_SEAT_STATE, 31).
 
 -record(seat_state, {
           game, 
@@ -398,27 +398,27 @@
           inplay
          }).
 
--define(CMD_YOU_ARE, 33).
+-define(CMD_YOU_ARE, 32).
 
 -record(you_are, {
           player
          }).
 
--define(CMD_GOTO, 34).
+-define(CMD_GOTO, 33).
 
 -record(goto, {
           host, 
           port
          }).
 
--define(CMD_BALANCE, 35).
+-define(CMD_BALANCE, 34).
 
 -record(balance, {
           amount,
           inplay
          }).
 
--define(CMD_GAME_INPLAY, 36).
+-define(CMD_GAME_INPLAY, 35).
 
 -record(game_inplay, {
           game, 
@@ -427,28 +427,28 @@
           amount
          }).
 
--define(CMD_NOTIFY_BUTTON, 37).
+-define(CMD_NOTIFY_BUTTON, 36).
 
 -record(notify_button, {
           game,
           button
          }).
 
--define(CMD_NOTIFY_SB, 38).
+-define(CMD_NOTIFY_SB, 37).
 
 -record(notify_sb, {
           game,
           sb
          }).
 
--define(CMD_NOTIFY_BB, 39).
+-define(CMD_NOTIFY_BB, 38).
 
 -record(notify_bb, {
           game,
           bb
          }).
 
--define(CMD_WAIT_BB, 40).
+-define(CMD_WAIT_BB, 39).
 
 -record(wait_bb, {
           game, 
@@ -518,4 +518,3 @@
 -define(PP_NOTIFY_PRIVATE_CARDS, 46).
 -define(PP_NOTIFY_GAME_INPLAY, 47).
 
--define(PP_MAKE_TEST_GAME, 252).

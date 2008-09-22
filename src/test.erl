@@ -63,13 +63,7 @@ create_player_test() ->
 
 create_game_test() ->
     flush(),
-    GameType = ?GT_IRC_TEXAS,
-    LimitType = {?LT_FIXED_LIMIT, 10, 20},
-    {ok, Game} = cardgame:start(GameType,
-				2, 
-				LimitType,
-                                100,
-                                1000),
+    {ok, Game} = start_basic_game(),
     GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'NOTE', create_game}),
     ?assert(is_number(GID)),
@@ -380,9 +374,7 @@ simple_game_simulation_test() ->
     {ok, Server} = server:start(Host, Port, true),
     timer:sleep(100),
     %% find an empty game
-    {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 2, 
-				{?LT_FIXED_LIMIT, 10, 20},
-                                100, 1000),
+    {ok, Game} = start_basic_game(),
     cardgame:cast(Game, {'NOTE', simple_game_simulation}),
     GID = cardgame:call(Game, 'ID'),
     %% create dummy players
@@ -419,9 +411,7 @@ leave_after_sb_posted_test() ->
     Port = port(),
     {ok, Server} = server:start(Host, Port, true),
     timer:sleep(1000),
-    {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 2, 
-				{?LT_FIXED_LIMIT, 10, 20},
-                                100, 1000),
+    {ok, Game} = start_basic_game(),
     cardgame:cast(Game, {'NOTE', leave_after_sb_posted}),
     %% create dummy players
     Data = setup_game(Host, Port, Game,
@@ -450,25 +440,28 @@ dynamic_game_start_test() ->
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, #login{ nick = Nick, pass = Nick}),
     ?assertMatch(#you_are{ player = ID }, wait_for_msg(2000, [])),
-    Packet = {?PP_NEW_GAME_REQ, ?GT_IRC_TEXAS, 1,
-	      {?LT_FIXED_LIMIT, 10, 20}},
+    Cmd = #start_game{ 
+      type = ?GT_IRC_TEXAS,
+      seat_count = 1,
+      limit = #limit{ type = ?LT_FIXED_LIMIT, low = 10, high = 20 }
+     },
     %% disable dynamic games
     [CC] = mnesia:dirty_read(tab_cluster_config, 0),
     ok = mnesia:dirty_write(CC#tab_cluster_config{ 
                               enable_dynamic_games = false 
                              }),
-    ?tcpsend(Socket, Packet),
-    ?assertMatch({?PP_BAD, ?PP_NEW_GAME_REQ, ?ERR_START_DISABLED}, 
+    ?tcpsend(Socket, Cmd),
+    ?assertMatch(#bad{ cmd = ?CMD_START_GAME, error = ?ERR_START_DISABLED }, 
                  wait_for_msg(2000, [])),
     %% enable dynamic games
     ok = mnesia:dirty_write(CC#tab_cluster_config{ 
                               enable_dynamic_games = true
                              }),
-    ?tcpsend(Socket, Packet),
+    ?tcpsend(Socket, Cmd),
     Game = receive
 	      {tcp, _, Bin1} ->
 		  case pp:old_read(Bin1) of 
-		      {?PP_GOOD, ?PP_NEW_GAME_REQ, Temp} ->
+		      #good{ cmd = ?CMD_START_GAME, extra = Temp } ->
 			  Temp
                   end;
 	      Temp1 ->
@@ -556,9 +549,7 @@ two_games_in_a_row_test() ->
     Port = port(),
     {ok, Server} = server:start(Host, Port, true),
     timer:sleep(100),
-    {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 2, 
-				{?LT_FIXED_LIMIT, 10, 20},
-                                100, 1000),
+    {ok, Game} = start_basic_game(),
     cardgame:cast(Game, {'NOTE', two_games_in_a_row}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 2, % games to play
@@ -596,11 +587,8 @@ two_games_with_leave_test() ->
     {ok, Server} = server:start(Host, Port, true),
     timer:sleep(100),
     %% find an empty game
-    {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 3, 
-				{?LT_FIXED_LIMIT, 10, 20},
-                                100, 1000),
+    {ok, Game} = start_basic_game(3),
     cardgame:cast(Game, {'NOTE', two_games_with_leave}),
-    cardgame:cast(Game, {'REQUIRED', 3}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 1, % games to play
                       [{<<"bot1">>, 1, ['BLIND', 'RAISE', 'CALL', 'CHECK', 'CHECK']},
@@ -644,9 +632,7 @@ split_pot_test() ->
     {ok, Server} = server:start(Host, Port, true),
     timer:sleep(100),
     %% find an empty game
-    {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 2, 
-				{?LT_FIXED_LIMIT, 10, 20},
-                                100, 1000),
+    {ok, Game} = start_basic_game(),
     cardgame:cast(Game, {'NOTE', split_pot}),
     %% create dummy players
     Actions1 = ['BLIND', 'CHECK', 'RAISE', 'CHECK', 'CHECK'],
@@ -727,11 +713,8 @@ leave_out_of_turn_test() ->
     {ok, Server} = server:start(Host, Port, true),
     timer:sleep(100),
     %% find an empty game
-    {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 3, 
-				{?LT_FIXED_LIMIT, 10, 20},
-                                100, 1000),
+    {ok, Game} = start_basic_game(3),
     cardgame:cast(Game, {'NOTE', leave_out_of_turn}),
-    cardgame:cast(Game, {'REQUIRED', 3}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 1, % games to play
                       [{<<"test220-bot1">>, 1, ['BLIND', %1
@@ -768,12 +751,9 @@ dummy_game() ->
     Host = "localhost",
     Port = 2000,
     %% find an empty game
-    {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 4, 
-				{?LT_FIXED_LIMIT, 10, 20},
-                                100, 1000),
+    {ok, Game} = start_basic_game(4),
     GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'NOTE', dummy_game}),
-    cardgame:cast(Game, {'REQUIRED', 4}),
     %% create dummy players
     setup_game(Host, Port, Game,
 	       [{<<"test14-bot1">>, 1, ['SIT OUT']},
@@ -814,15 +794,15 @@ make_test_game(Players, Context, Modules) ->
     make_test_game(length(Players), Players, Context, Modules).
 
 make_test_game(SeatCount, Players, Context, Modules) ->
-    TableName = testGame ,
-    Timeout = ?PLAYER_TIMEOUT,
-    MinPlayers = length(Players),
-    {ok, Game} = cardgame:test_start(?GT_IRC_TEXAS, 
-				     SeatCount, 
-				     {?LT_FIXED_LIMIT, 10, 20}, 
-				     Context, 
-				     Modules, TableName, Timeout, MinPlayers),
-    cardgame:cast(Game, {'TIMEOUT', 1000}),
+    Cmd = #start_game{
+      table_name = <<"test game">>,
+      type = ?GT_IRC_TEXAS,
+      limit = #limit{ type = ?LT_FIXED_LIMIT, low = 10, high = 20 },
+      seat_count = SeatCount,
+      min_players = length(Players),
+      player_timeout = 1000
+     },
+    {ok, Game} = cardgame:test_start(Cmd, Context, Modules),
     join_game(Game, Players),
     Game.
 
@@ -830,11 +810,7 @@ make_game(Players) ->
     make_game(length(Players), Players).
 
 make_game(SeatCount, Players) ->
-    {ok, Game} = cardgame:start(?GT_IRC_TEXAS, 
-				SeatCount, 
-				{?LT_FIXED_LIMIT, 10, 20},
-                                100,
-                                1000),
+    {ok, Game} = start_basic_game(SeatCount),
     join_game(Game, Players),
     Game.
     
@@ -876,10 +852,11 @@ find_game(Host, Port, GameType) ->
 		  case pp:old_read(Bin) of 
 		      {?PP_GAME_INFO, ID, GameType,
 		       _Expected, _Joined, _Waiting,
-		       {?LT_FIXED_LIMIT, _Low, _High}} ->
+		       #limit{ type = ?LT_FIXED_LIMIT }} ->
 			  ID
 		  end;
-	      _ ->
+	      Any ->
+                  io:format("find_game: ~p~n", [Any]),
 		  ?assertEqual(0, 1)
 	  after 3000 ->
 		  ?assertEqual(0, 1)
@@ -1011,6 +988,22 @@ wait_for_msg(Timeout, Skip) ->
                     M
             end
     end.
+
+start_basic_game() ->
+    start_basic_game(2).
+
+start_basic_game(N) ->
+    cardgame:start(_ = #start_game{ 
+                     type = ?GT_IRC_TEXAS,
+                     limit = #limit{ 
+                       type = ?LT_FIXED_LIMIT, 
+                       low = 10, 
+                       high = 20
+                      },
+                     start_delay = 100,
+                     player_timeout = 1000,
+                     seat_count = N
+                    }).
 
 %%% 
 

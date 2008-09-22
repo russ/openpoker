@@ -58,7 +58,7 @@ handle_cast(R, Data)
        is_record(R, sit_out);
        is_record(R, come_back);
        is_record(R, chat);
-       is_record(R, dynamic_start_game) ->
+       is_record(R, start_game) ->
     {noreply, Data};
 
 handle_cast({Event, _Game, _Amount}, Data)

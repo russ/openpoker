@@ -41,7 +41,16 @@ location() ->
 game_type() ->
     byte().
 
-expected_players() ->
+table_name() ->
+    string().
+
+rigged_deck() ->
+    cards().
+
+seat_count() ->
+    int().
+
+max_seats() ->
     int().
 
 joined_players() ->
@@ -295,29 +304,27 @@ balance_query() ->
     record(balance_query, {
             }).
 
-dynamic_start_game() ->
-    record(dynamic_start_game, {
+start_game() ->
+    record(start_game, {
+             table_name(),
              game_type(),
-             expected_players(),
-             limit()
-            }).
-
-test_start_game() ->
-    record(test_start_game, {
-             game_type(),
-             expected_players(),
              limit(),
+             max_seats(),
+             seat_count(),
              start_delay(),
              player_timeout(),
-             cards()
+             rigged_deck(),
+             pass()
             }).
 
 game_info() ->
     record(game_info, {
              game(),
+             table_name(),
              game_type(),
              limit(),
-             expected_players(),
+             max_seats(),
+             seat_count(),
              joined_players(),
              waiting_players()
             }).
@@ -521,11 +528,8 @@ write(R) when is_record(R, player_query) ->
 write(R) when is_record(R, balance_query) ->
     [?CMD_BALANCE_QUERY|pickle(balance_query(), R)];
 
-write(R) when is_record(R, dynamic_start_game) ->
-    [?CMD_DYNAMIC_START_GAME|pickle(dynamic_start_game(), R)];
-
-write(R) when is_record(R, test_start_game) ->
-    [?CMD_TEST_START_GAME|pickle(test_start_game(), R)];
+write(R) when is_record(R, start_game) ->
+    [?CMD_START_GAME|pickle(start_game(), R)];
 
 write(R) when is_record(R, game_info) ->
     [?CMD_GAME_INFO|pickle(game_info(), R)];
@@ -656,11 +660,8 @@ read(<<?CMD_PLAYER_QUERY, Bin/binary>>) ->
 read(<<?CMD_BALANCE_QUERY, Bin/binary>>) ->
     unpickle(balance_query(), Bin);
 
-read(<<?CMD_DYNAMIC_START_GAME, Bin/binary>>) ->
-    unpickle(dynamic_start_game(), Bin);
-
-read(<<?CMD_TEST_START_GAME, Bin/binary>>) ->
-    unpickle(test_start_game(), Bin);
+read(<<?CMD_START_GAME, Bin/binary>>) ->
+    unpickle(start_game(), Bin);
 
 read(<<?CMD_GAME_INFO, Bin/binary>>) ->
     unpickle(game_info(), Bin);

@@ -678,14 +678,16 @@ do_start_game(Host, Port, Parent, Packet) ->
 start_game(Host, Port, Game, Delay)
   when is_record(Game, irc_game) ->
     Parent = self(),
-    Cards = rig_deck(Game),
-    Packet = {?GT_IRC_TEXAS,
-	      Game#irc_game.player_count,
-	      {?LT_FIXED_LIMIT, 10, 20},
-	      Delay, % game start delay
-	      ?PLAYER_TIMEOUT, 
-	      Cards},
-    spawn(fun()  -> do_start_game(Host, Port, Parent, Packet) end),
+    Cmd = #start_game{
+      table_name = <<"test game">>,
+      type = ?GT_IRC_TEXAS,
+      limit = #limit{ type = ?LT_FIXED_LIMIT, high = 20, low = 10 },
+      seat_count = Game#irc_game.player_count,
+      min_players = Game#irc_game.player_count,
+      start_delay = Delay,
+      rigged_deck = rig_deck(Game)
+     },
+    spawn(fun()  -> do_start_game(Host, Port, Parent, Cmd) end),
     receive
 	{start_game, Result} ->
 	    {ok, Result};
@@ -699,13 +701,12 @@ start_game(Host, Port, Game, Delay)
 	    {error, start_game_timeout}
     end.
 
-start_game(Sock, Packet) ->
-    T = {?PP_MAKE_TEST_GAME, Packet},
-    ok = gen_tcp:send(Sock, pp:old_write(T)),
+start_game(Sock, Cmd = #start_game{}) ->
+    ok = gen_tcp:send(Sock, pp:old_write(Cmd)),
     receive
 	{tcp, Sock, Bin} ->
 	    case pp:old_read(Bin) of 
-		{?PP_GOOD, ?PP_MAKE_TEST_GAME, GID} ->
+		#good{ cmd = ?CMD_START_GAME, extra = GID } ->
 		    {ok, GID};
 		Any ->
 		    {error, Any}
@@ -715,7 +716,7 @@ start_game(Sock, Packet) ->
 	    none;
 	Any ->
 	    io:format("start_game: received ~w~n", [Any]),
-	    start_game(Sock, Packet)
+	    start_game(Sock, Cmd)
     after 600000 ->
 	    io:format("start_game: timeout, exiting~n"),
 	    none

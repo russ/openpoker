@@ -112,8 +112,8 @@ handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
 handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
     handle_cast_player_info_req(PID, Data);
 
-handle_cast({?PP_NEW_GAME_REQ, GameType, Expected, Limit}, Data) ->
-    handle_cast_new_game_req(GameType, Expected, Limit, Data);
+handle_cast(R = #start_game{}, Data) ->
+    handle_cast_new_game_req(R, Data);
 
 handle_cast(?PP_BALANCE_REQ, Data) ->
     handle_cast_balance_req(Data);
@@ -251,20 +251,20 @@ handle_cast_player_info_req(PID, Data) ->
     end,
     {noreply, Data}.
 
-handle_cast_new_game_req(GameType, Expected, Limit, Data) ->
+handle_cast_new_game_req(R, Data) ->
     [CC] = mnesia:dirty_read(tab_cluster_config, 0),
-    if
-	CC#tab_cluster_config.enable_dynamic_games ->
-	    case cardgame:start(GameType, Expected, Limit) of
-		{ok, Pid} ->
-		    handle_cast({?PP_GOOD, ?PP_NEW_GAME_REQ, Pid}, Data);
-		_ ->
-		    handle_cast({?PP_BAD, ?PP_NEW_GAME_REQ, ?ERR_UNKNOWN}, Data)
-	    end;
-	true ->
-	    handle_cast({?PP_BAD, ?PP_NEW_GAME_REQ, ?ERR_START_DISABLED}, Data)
-    end,
-    {noreply, Data}.
+    Cmd = if
+              CC#tab_cluster_config.enable_dynamic_games ->
+                  case cardgame:start(R#start_game{ rigged_deck = [] }) of
+                      {ok, Pid} ->
+                          #good{ cmd = ?CMD_START_GAME, extra = Pid};
+                      _ ->
+                          #bad{ cmd = ?CMD_START_GAME, error = ?ERR_UNKNOWN}
+                  end;
+              true ->
+                  #bad{ cmd = ?CMD_START_GAME, error = ?ERR_START_DISABLED}
+          end,
+    handle_cast(Cmd, Data).
 
 handle_cast_balance_req(Data) ->
     case mnesia:dirty_read(tab_balance, Data#player_data.pid) of

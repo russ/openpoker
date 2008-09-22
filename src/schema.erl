@@ -88,11 +88,10 @@ install_cluster_config(Nodes) ->
                             ]),
     Conf = #tab_cluster_config {
       id = 0,
-      mnesia_masters = Nodes
+      mnesia_masters = Nodes,
+      test_game_pass = <<"@!%#%E">>
      },
-    F = fun() ->
-		mnesia:write(Conf)
-	end,
+    F = fun() -> mnesia:write(Conf) end,
     {atomic, ok} = mnesia:transaction(F).
 
 install_game_config(Nodes) ->
@@ -125,19 +124,19 @@ install_counter(Nodes) ->
     
 populate() ->
     game:setup(?GT_IRC_TEXAS, 20, 
-			 {?LT_FIXED_LIMIT, 10, 20}, 
-			 ?START_DELAY, ?PLAYER_TIMEOUT,
-			 10),
+               #limit{ type = ?LT_FIXED_LIMIT, low = 10, high = 20}, 
+               ?START_DELAY, ?PLAYER_TIMEOUT,
+               10),
     game:setup(?GT_TEXAS_HOLDEM, 10, 
-	       {?LT_FIXED_LIMIT, 10, 20}, 
+               #limit{ type = ?LT_FIXED_LIMIT, low = 10, high = 20}, 
 	       ?START_DELAY, ?PLAYER_TIMEOUT,
 	       50),
     game:setup(?GT_TEXAS_HOLDEM, 10, 
-	       {?LT_NO_LIMIT, 10, 20}, 
+               #limit{ type = ?LT_NO_LIMIT, low = 10, high = 20}, 
 	       ?START_DELAY, ?PLAYER_TIMEOUT,
 	       50),
-	game:setup(?GT_TEXAS_HOLDEM, 10, 
-	       {?LT_POT_LIMIT, 10, 20}, 
+    game:setup(?GT_TEXAS_HOLDEM, 10, 
+               #limit{ type = ?LT_POT_LIMIT, low = 10, high = 20}, 
 	       ?START_DELAY, ?PLAYER_TIMEOUT,
 	       50).
     
