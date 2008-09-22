@@ -332,7 +332,7 @@ handle(R = #you_are{}, Bot) ->
 handle(#game_info{}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_PLAYER_INFO, _PID, _InPlay, _Nick, _Location}, Bot) ->
+handle(#player_info{}, Bot) ->
     {noreply, Bot};
 
 handle(R = #join{ notify = true }, Bot)

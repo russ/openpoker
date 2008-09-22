@@ -140,17 +140,20 @@ handle(R = #game_info{}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_PLAYER_INFO, PID, InPlay, Nick, Location}, Data) ->
+handle(R = #player_info{}, Data) ->
     if
 	Data#obs.trace ->
+            PID = R#player_info.player, 
+            Inplay = R#player_info.total_inplay, 
+            Nick = R#player_info.nick, 
+            Location = R#player_info.location,
 	    catch io:format("Player: #~w, in-play: ~w, nick: ~w, location: ~w~n",
-		      [PID, InPlay, Nick, Location]),
+                            [PID, Inplay,  Nick, Location]),
 	    Amount = gb_trees:get(PID, Data#obs.winners),
 	    T1 = gb_trees:delete(PID, Data#obs.winners),
-	    Nick1 = list_to_atom(binary_to_list(Nick)),
-	    catch io:format("Observer: Nick: ~w, Amount: ~w~n", [Nick1, Amount]),
+	    catch io:format("Observer: Nick: ~w, Amount: ~w~n", [Nick, Amount]),
 	    Data1 = Data#obs {
-		      winners = gb_trees:insert(Nick1, Amount, T1)
+		      winners = gb_trees:insert(Nick, Amount, T1)
 		     },
 	    {noreply, Data1};
 	true ->

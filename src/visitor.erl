@@ -81,11 +81,12 @@ handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
     P = mnesia:dirty_read(tab_player, PID),
     case {I, P} of
 	{[Info], [Player]} ->
-	    handle_cast({?PP_PLAYER_INFO, 
-			 Player#tab_player.process, 
-                         0.0,
-			 Info#tab_player_info.nick,
-			 Info#tab_player_info.location}, Data);
+	    handle_cast(_ = #player_info{
+                          player = Player#tab_player.process, 
+                          total_inplay = 0.0,
+                          nick = Info#tab_player_info.nick,
+                          location = Info#tab_player_info.location
+                         }, Data);
 	_ ->
 	    oops
     end,

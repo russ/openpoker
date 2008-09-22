@@ -253,11 +253,12 @@ handle_cast_seat_query(Game, Data) ->
 handle_cast_player_info_req(PID, Data) ->
     case mnesia:dirty_read(tab_player_info, PID) of
 	[Info] ->
-	    handle_cast({?PP_PLAYER_INFO, 
-			 PID, 
-			 inplay(Data),
-			 Info#tab_player_info.nick,
-			 Info#tab_player_info.location}, Data);
+	    handle_cast(_ = #player_info{
+                          player = self(),
+                          total_inplay = inplay(Data),
+                          nick = Info#tab_player_info.nick,
+                          location = Info#tab_player_info.location
+                         }, Data);
 	_ ->
 	    oops
     end,
