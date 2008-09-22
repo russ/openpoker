@@ -550,9 +550,9 @@ find_server(Sock) ->
     receive
 	{tcp, Sock, Bin} ->
 	    case pp:old_read(Bin) of 
-		{?PP_HANDOFF, Port, Host} when is_binary(Host) ->
+                #goto{ port = Port, host = Host } when is_binary(Host) ->
 		    {binary_to_list(Host), Port};
-		{?PP_HANDOFF, Port, Host} when is_list(Host) ->
+		#goto{ port = Port, host = Host} when is_list(Host) ->
 		    {Host, Port};
                 _ ->
                     find_server(Sock)

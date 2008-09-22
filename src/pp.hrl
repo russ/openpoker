@@ -508,7 +508,6 @@
 -define(PP_PLAYER_STATE, 31).
 -define(PP_GAME_STAGE, 32).
 -define(PP_SEAT_STATE, 33).
--define(PP_HANDOFF, 36).
 -define(PP_GAME_QUERY, 37).
 -define(PP_SEAT_QUERY, 39).
 -define(PP_PLAYER_INFO_REQ, 40).

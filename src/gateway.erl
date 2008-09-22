@@ -64,7 +64,7 @@ find_server(MaxPlayers) ->
 
 handoff(Socket, Max) ->
     {Host, Port} = find_server(Max),
-    ok = ?tcpsend(Socket, {?PP_HANDOFF, Port, Host}),
+    ok = ?tcpsend(Socket, #goto{ host = Host, port = Port }),
     timer:sleep(2000),
     ok = gen_tcp:close(Socket).
 
