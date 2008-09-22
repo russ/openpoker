@@ -979,6 +979,9 @@ broadcast(Game, Event)
        is_record(Event, join);
        is_record(Event, leave);
        is_record(Event, chat);
+       is_record(Event, notify_sb);
+       is_record(Event, notify_bb);
+       is_record(Event, notify_button);
        is_record(Event, notify_start_game);
        is_record(Event, notify_end_game);
        is_record(Event, notify_win);

@@ -290,21 +290,21 @@ handle({?PP_NOTIFY_RAISE, GID, PID, Amount, AmtPlusCall}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_SB, GID, PID, Amount}, Data) ->
+handle(R = #notify_sb{}, Data) ->
     if
 	Data#obs.trace ->
-	    catch io:format("~w: SB: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount / 1.0]);
+	    catch io:format("~w: SB: ~w~n",
+                            [R#notify_sb.game, R#notify_sb.sb]);
 	true ->
 	    ok
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_BB, GID, PID, Amount}, Data) ->
+handle(R = #notify_bb{}, Data) ->
     if
 	Data#obs.trace ->
-	    catch io:format("~w: BB: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount / 1.0]);
+	    catch io:format("~w: BB: ~w~n",
+                            [R#notify_bb.game, R#notify_bb.bb]);
 	true ->
 	    ok
     end,
@@ -339,28 +339,11 @@ handle(R = #notify_win{}, Data) ->
 	     },
     {noreply, Data1};
 
-handle({?PP_NOTIFY_BUTTON, GID, SeatNum}, Data) ->
+handle(R = #notify_button{}, Data) ->
     if
 	Data#obs.trace ->
-	    catch io:format("~w: DEALER: seat#~w~n", [GID, SeatNum]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle({?PP_NOTIFY_SB, GID, SeatNum}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: SB: seat#~w~n", [GID, SeatNum]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle({?PP_NOTIFY_BB, GID, SeatNum}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: BB: seat#~w~n", [GID, SeatNum]);
+	    catch io:format("~w: DEALER: seat#~w~n", 
+                            [R#notify_button.game, R#notify_button.button]);
 	true ->
 	    ok
     end,

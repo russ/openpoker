@@ -437,13 +437,13 @@ handle({?PP_NOTIFY_PRIVATE, _GID, _PID}, Bot) ->
 handle({?PP_NOTIFY_PRIVATE_CARDS, _GID, _Player, _Cards}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_BUTTON, _GID, _SeatNum}, Bot) ->
+handle(#notify_button{}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_SB, _GID, _SeatNum}, Bot) ->
+handle(#notify_sb{}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_BB, _GID, _SeatNum}, Bot) ->
+handle(#notify_bb{}, Bot) ->
     {noreply, Bot};
 
 handle({?PP_GOOD, _, _}, Bot) ->

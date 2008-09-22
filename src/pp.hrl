@@ -495,7 +495,6 @@
 
 -define(PP_GAME_INFO, 14).
 -define(PP_PLAYER_INFO, 15).
-%%-define(PP_BLIND_REQ, 16).
 -define(PP_BET_REQ, 17).
 -define(PP_NOTIFY_DRAW, 18).
 -define(PP_NOTIFY_PRIVATE, 19).
@@ -509,8 +508,6 @@
 -define(PP_PLAYER_STATE, 31).
 -define(PP_GAME_STAGE, 32).
 -define(PP_SEAT_STATE, 33).
--define(PP_NOTIFY_BUTTON, 34).
--define(PP_PID, 35).
 -define(PP_HANDOFF, 36).
 -define(PP_GAME_QUERY, 37).
 -define(PP_SEAT_QUERY, 39).
@@ -518,8 +515,6 @@
 -define(PP_NEW_GAME_REQ, 41).
 -define(PP_BALANCE_REQ, 42).
 -define(PP_BALANCE_INFO, 43).
--define(PP_NOTIFY_SB, 44).
--define(PP_NOTIFY_BB, 45).
 -define(PP_NOTIFY_PRIVATE_CARDS, 46).
 -define(PP_NOTIFY_GAME_INPLAY, 47).
 

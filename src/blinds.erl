@@ -209,7 +209,10 @@ small_blind_handle_start(Context, Data) ->
     Game = Data1#blinds.game,
     %% advance button and broadcast position
     {Button1, Bust} = advance_button(Data1),
-    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_BUTTON, Button1}}), 
+    gen_server:cast(Game, {'BROADCAST', #notify_button{
+                             game = Data1#blinds.fsm,
+                             button = Button1
+                            }}), 
     %% collect blinds
     SBPlayers = gen_server:call(Game, {'SEATS', Button1, ?PS_ACTIVE}),
     BBPlayers = gen_server:call(Game, {'SEATS', Button1, ?PS_BB_ACTIVE}),
@@ -361,8 +364,14 @@ big_blind_handle_call(Player, Amount, Data) ->
 			      expected = {none, none, 0}
 			     },
 		    %% notify players
-		    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_SB, SB}}),
-		    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_BB, BB}}),
+		    gen_server:cast(Game, {'BROADCAST', #notify_sb{
+                                             game = Data1#blinds.fsm, 
+                                             sb = SB
+                                            }}),
+		    gen_server:cast(Game, {'BROADCAST', #notify_bb{
+                                             game = Data1#blinds.fsm, 
+                                             bb = BB
+                                            }}),
 		    gen_server:cast(Game, {'BROADCAST', 
 		    			   {?PP_NOTIFY_BET, SBPlayer, Small}}),
 		    gen_server:cast(Game, {'BROADCAST', 
