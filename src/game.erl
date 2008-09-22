@@ -87,7 +87,7 @@ new(OID, FSM, R) ->
       seats = create_seats(R#start_game.seat_count),
       limit = Limit,
       limit_type = LimitType,
-      required_player_count = R#start_game.min_players,
+      required_player_count = R#start_game.required,
       timeout = R#start_game.player_timeout
      }.
 
@@ -109,7 +109,7 @@ init([FSM, R])
       table_name = R#start_game.table_name,
       seat_count = R#start_game.seat_count,
       timeout = R#start_game.player_timeout,
-      min_players = R#start_game.min_players
+      required = R#start_game.required
      },
     case mnesia:dirty_write(Game) of
 	ok ->
@@ -965,6 +965,7 @@ broadcast(Game, Event)
        is_record(Event, call);
        is_record(Event, raise);
        is_record(Event, chat);
+       is_record(Event, game_info);
        is_record(Event, notify_sb);
        is_record(Event, notify_bb);
        is_record(Event, notify_button);
@@ -1071,30 +1072,32 @@ find(GameType, LimitType,
      WaitOp, Waiting) ->
     F = fun() -> find_1(GameType, LimitType) end,
     {atomic, L} = mnesia:transaction(F),
-    F1 = fun(Packet) ->
-		 {_, _, _, Expected1, Joined1, Waiting1, _}
-		     = Packet,
-		 query_op(Expected1, ExpOp, Expected) 
-		     and query_op(Joined1, JoinOp, Joined) 
-		     and query_op(Waiting1, WaitOp, Waiting)
+    F1 = fun(R = #game_info{}) ->
+		 query_op(R#game_info.required, ExpOp, Expected) 
+		     and query_op(R#game_info.joined, JoinOp, Joined) 
+		     and query_op(R#game_info.waiting, WaitOp, Waiting)
 	 end,
     {atomic, lists:filter(F1, L)}.
 		 
 find_1(GameType, LimitType) ->
-    Q = qlc:q([{G#tab_game_xref.gid,
-		G#tab_game_xref.process,
-		G#tab_game_xref.type,
-		G#tab_game_xref.limit}
-	       || G <- mnesia:table(tab_game_xref),
-		  G#tab_game_xref.type == GameType,
-		  (G#tab_game_xref.limit)#limit.type == LimitType]),
+    Q = qlc:q([G || G <- mnesia:table(tab_game_xref),
+                    G#tab_game_xref.type == GameType,
+                    (G#tab_game_xref.limit)#limit.type == LimitType]),
     L = qlc:e(Q),
-    lists:map(fun({GID, Pid, Type, Limit}) ->
-		      Expected = cardgame:call(Pid, 'SEAT COUNT'),
-		      Joined = cardgame:call(Pid, 'JOINED'),
+    lists:map(fun(R) ->
+                      Game = R#tab_game_xref.process,
+		      Joined = cardgame:call(Game, 'JOINED'),
 		      Waiting = 0, % not implemented
-		      {?PP_GAME_INFO, GID, Type, 
-		       Expected, Joined, Waiting, Limit}
+                      _ = #game_info{
+                        game = Game,
+                        table_name = R#tab_game_xref.table_name,
+                        type = R#tab_game_xref.type,
+                        limit = R#tab_game_xref.limit,
+                        seat_count = R#tab_game_xref.seat_count,
+                        required = R#tab_game_xref.required,
+                        joined = Joined,
+                        waiting = Waiting
+                       }
 	      end, L).
 
 setup(GameType, SeatCount, Limit, Delay, Timeout, Max) ->

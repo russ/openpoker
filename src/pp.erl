@@ -50,7 +50,7 @@ rigged_deck() ->
 seat_count() ->
     int().
 
-max_seats() ->
+required_players() ->
     int().
 
 joined_players() ->
@@ -306,8 +306,8 @@ start_game() ->
              table_name(),
              game_type(),
              limit(),
-             max_seats(),
              seat_count(),
+             required_players(),
              start_delay(),
              player_timeout(),
              rigged_deck(),
@@ -320,8 +320,8 @@ game_info() ->
              table_name(),
              game_type(),
              limit(),
-             max_seats(),
              seat_count(),
+             required_players(),
              joined_players(),
              waiting_players()
             }).

@@ -39,7 +39,7 @@
           table_name,
           seat_count,
           timeout,
-          min_players
+          required % min player count 
 	 }).
 
 -record(tab_seat_history, {

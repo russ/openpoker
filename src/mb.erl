@@ -683,7 +683,7 @@ start_game(Host, Port, Game, Delay)
       type = ?GT_IRC_TEXAS,
       limit = #limit{ type = ?LT_FIXED_LIMIT, high = 20, low = 10 },
       seat_count = Game#irc_game.player_count,
-      min_players = Game#irc_game.player_count,
+      required = Game#irc_game.player_count,
       start_delay = Delay,
       rigged_deck = rig_deck(Game)
      },

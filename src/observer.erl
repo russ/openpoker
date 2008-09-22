@@ -126,14 +126,15 @@ handle_info(Info, Data) ->
 code_change(_OldVsn, Data, _Extra) ->
     {ok, Data}.
 
-handle({?PP_GAME_INFO, GID, ?GT_IRC_TEXAS, 
-	Expected, Joined, Waiting,
-	{_Limit, Low, High}}, Data) ->
+handle(R = #game_info{}, Data) ->
     if 
 	Data#obs.trace ->
 	    catch io:format("Game #~w, #players: ~w, joined: ~w, waiting: ~w; ",
-		      [GID, Expected, Joined, Waiting]),
-	    catch io:format("limit: low: ~w, high: ~w~n", [Low, High]);
+                            [R#game_info.game, R#game_info.required, 
+                             R#game_info.joined, R#game_info.waiting]),
+            Limit = R#game_info.limit,
+            catch io:format("limit: low: ~w, high: ~w~n", 
+                            [Limit#limit.low, Limit#limit.high]);
 	true ->
 	    ok
     end,

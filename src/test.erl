@@ -812,7 +812,7 @@ make_test_game(SeatCount, Players, Context, Modules) ->
       type = ?GT_IRC_TEXAS,
       limit = #limit{ type = ?LT_FIXED_LIMIT, low = 10, high = 20 },
       seat_count = SeatCount,
-      min_players = length(Players),
+      required = length(Players),
       player_timeout = 1000
      },
     {ok, Game} = cardgame:test_start(Cmd, Context, Modules),
@@ -863,10 +863,9 @@ find_game(Host, Port, GameType) ->
     GID = receive
 	      {tcp, _, Bin} ->
 		  case pp:old_read(Bin) of 
-		      {?PP_GAME_INFO, ID, GameType,
-		       _Expected, _Joined, _Waiting,
-		       #limit{ type = ?LT_FIXED_LIMIT }} ->
-			  ID
+                      R = #game_info{} 
+                      when (R#game_info.limit)#limit.type == ?LT_FIXED_LIMIT ->
+			  R#game_info.game
 		  end;
 	      Any ->
                   io:format("find_game: ~p~n", [Any]),

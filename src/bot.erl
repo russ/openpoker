@@ -329,9 +329,7 @@ handle_notify_cancel_game(GID, Bot) ->
 handle(R = #you_are{}, Bot) ->
     handle_you_are(R, Bot);
 
-handle({?PP_GAME_INFO, _GID, ?GT_IRC_TEXAS, 
-	_Expected, _Joined, _Waiting,
-	{_Limit, _Low, _High}}, Bot) ->
+handle(#game_info{}, Bot) ->
     {noreply, Bot};
 
 handle({?PP_PLAYER_INFO, _PID, _InPlay, _Nick, _Location}, Bot) ->

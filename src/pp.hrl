@@ -302,7 +302,7 @@
           type,
           limit,
           seat_count,
-          min_players = 2,
+          required = 2,
           start_delay = ?START_DELAY,
           player_timeout = ?PLAYER_TIMEOUT,
           rigged_deck = [],
@@ -314,10 +314,10 @@
 -record(game_info, {
           game,
           table_name,
-          game_type,
+          type,
           limit,
-          max_seats,
-          min_players,
+          seat_count,
+          required,
           joined,
           waiting
          }).
@@ -498,7 +498,6 @@
 
 %%% Server -> Client
 
--define(PP_GAME_INFO, 14).
 -define(PP_PLAYER_INFO, 15).
 -define(PP_BET_REQ, 17).
 -define(PP_NOTIFY_CHAT, 23).
