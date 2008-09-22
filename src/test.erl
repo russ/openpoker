@@ -709,7 +709,6 @@ check_pot(Game, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, N) ->
 %%% Leave out of turn
 
 leave_filter(#game_stage{ stage = ?GS_RIVER }, Bot) ->
-    io:format("Elvis #~w is leaving the building!~n", [Bot#bot.player]),
     ok = ?tcpsend(Bot#bot.socket, #leave{ 
                             player = Bot#bot.player,
                             game = Bot#bot.game 
@@ -731,24 +730,24 @@ leave_out_of_turn_test() ->
     cardgame:cast(Game, {'NOTE', leave_out_of_turn}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 1, % games to play
-                      [{<<"test220-bot1">>, 1, ['BLIND', %1
-                                                'CALL', %1
-                                                'CHECK', %2
-                                                'CHECK', %3
-                                                'CHECK'
-                                               ]},
-                       {<<"test220-bot2">>, 2, ['BLIND', %1
-                                                'CALL', %1
-                                                'CHECK', %2
-                                                'CHECK', %3
-                                                'CHECK'
-                                               ]},
-                       {<<"test220-bot3">>, 3, ['RAISE', 
-                                                'CALL', 
-                                                'CHECK', 
-                                                {'FILTER', fun leave_filter/2}
-                                               ]}
-                     ]),
+                      [{nick(), 1, ['BLIND', %1
+                                    'CALL', %1
+                                    'CHECK', %2
+                                    'CHECK', %3
+                                    'CHECK'
+                                   ]},
+                       {nick(), 2, ['BLIND', %1
+                                    'CALL', %1
+                                    'CHECK', %2
+                                    'CHECK', %3
+                                    'CHECK'
+                                   ]},
+                       {nick(), 3, ['RAISE', 
+                                    'CALL', 
+                                    'CHECK', 
+                                    {'FILTER', fun leave_filter/2}
+                                   ]}
+                      ]),
     %% make sure game is started
     ?assertMatch({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
     %% wait for game to end
