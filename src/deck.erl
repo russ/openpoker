@@ -6,6 +6,7 @@
 
 -include("test.hrl").
 -include("common.hrl").
+-include("pp.hrl").
 
 -record(deck, {
 	  rigged,
@@ -46,37 +47,24 @@ draw(Deck, [H|T]) ->
     {Deck#deck{ cards = T }, H}.
 
 make_deck() ->
-    Face = [ two, 
-	     three, 
-	     four,
-	     five,
-	     six,
-	     seven,
-	     eight,
-	     nine,
-	     ten,
-	     jack,
-	     queen,
-	     king,
-	     ace ],
-    Suit = [ clubs, 
-	     diamonds, 
-	     hearts,
-	     spades ],
-    make_deck(Face, Suit, []).
-
-make_deck(Face, [Suit|Rest], Acc) when atom(Face) ->
-    make_deck(Face, Rest, [hand:card_to_int(Face, Suit)|Acc]);
-
-make_deck(_Face, [], Acc) ->
-    Acc;
-
-make_deck([Face|Rest], Suit, Acc) ->
-    Acc1 = make_deck(Face, Suit, Acc),
-    make_deck(Rest, Suit, Acc1);
-
-make_deck([], _Suit, Acc) ->
-    Acc.
+    L1 = [ ?CF_TWO, 
+           ?CF_THREE, 
+           ?CF_FOUR,
+           ?CF_FIVE,
+           ?CF_SIX,
+           ?CF_SEVEN,
+           ?CF_EIGHT,
+           ?CF_NINE,
+           ?CF_TEN,
+           ?CF_JACK,
+           ?CF_QUEEN,
+           ?CF_KING,
+           ?CF_ACE ],
+    L2 = [ ?CS_CLUBS, 
+           ?CS_DIAMONDS, 
+           ?CS_HEARTS,
+           ?CS_SPADES ],
+    [hand:make_card(Face, Suit) || Face <- L1, Suit <- L2].
 
 shuffle(Cards) ->
     Temp = lists:map(fun(X) ->

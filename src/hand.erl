@@ -4,12 +4,12 @@
 
 -export([new/0, new/1, new/2, set/2, add/2, cards/1, rank/1]).
 
--export([make_card/1, face/1, suit/1, print_bin/1, 
-         card_to_int/1, card_to_int/2, int_to_card/1, 
+-export([make_card/1, make_card/2, print_bin/1, 
          print_rep/1, describe/1]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test.hrl").
+-include("pp.hrl").
 
 -record(hand, {
 	  id, 
@@ -26,10 +26,7 @@ new(Id) ->
     new(Id, []).
 
 new(Id, Cards) ->
-    #hand { 
-     id = Id, 
-     cards = Cards 
-    }.
+    #hand{ id = Id, cards = Cards }.
 
 set(Hand, Id) ->
     Hand#hand{ id = Id }.
@@ -47,63 +44,8 @@ rank(Hand)
     Score = NewHand#hand.score,
     {Id, Value, High, Score}.
 
-describe({8, High, _Score}) ->
-    "straight flush high " 
-	++ atom_to_list(face(High))
-	++ "s";
-
-describe({7, High, _Score}) ->
-    "four of a kind " 
-	++ atom_to_list(face(High))
-	++ "s";
-	
-describe({6, High, _Score}) ->
-    Bin = <<High:32>>,
-    <<High3:16, High2:16>> = Bin,
-    "house of " 
-	++ atom_to_list(face(High3)) 
-	++ "s full of " 
-	++ atom_to_list(face(High2))
-	++ "s";
-
-describe({5, High, _Score}) ->
-    "flush high "
-	++ atom_to_list(face(High))
-	++ "s";
-	
-describe({4, High, _Score}) ->
-    "straight high "
-	++ atom_to_list(face(High))
-	++ "s";
-	
-describe({3, High, _Score}) ->
-    "three of a kind "
-	++ atom_to_list(face(High))
-	++ "s";
-	
-describe({2, High, _Score}) ->
-    High1 = face(High),
-    HighVal2 = High band (bnot face(High1)),
-    High2 = face(HighVal2),
-    "two pairs of "
-	++ atom_to_list(High1)
-	++ "s and "
-	++ atom_to_list(High2)
-	++ "s";
-	
-describe({1, High, _Score}) ->
-    "pair of "
-	++ atom_to_list(face(High))
-	++ "s";
-	
-describe({0, High, _Score}) ->
-    "high card "
-	++ atom_to_list(face(High)).
-
 add(Hand, Card) ->
-    Hand#hand{ 
-      cards = [Card|Hand#hand.cards]
-     }.
+    Hand#hand{ cards = [Card|Hand#hand.cards] }.
 
 do_rank(Hand) ->
     Rep = make_rep(Hand),
@@ -138,15 +80,18 @@ score([], Rep) ->
     High = bits:clear_extra_bits(Mask, 5),
     {junk, High, 0}.
 
-make_rep(Hand) when record(Hand, hand) ->
+make_rep(Hand) 
+  when record(Hand, hand) ->
     make_rep(Hand#hand.cards);
 
-make_rep(Cards) when list(Cards) ->
+make_rep(Cards) 
+  when list(Cards) ->
     make_rep(Cards, {0, 0, 0, 0}).
 
-make_rep([H|T], Rep) when is_integer(H) -> 
-    Face = H bsr 16,
-    Suit = H band 16#ffff,
+make_rep([H|T], Rep) 
+  when is_integer(H) -> 
+    Face = 1 bsl (H bsr 8),
+    Suit = H band 16#ff,
     Old = element(Suit, Rep),
     make_rep(T, setelement(Suit, Rep, Old bor Face));
 
@@ -315,100 +260,136 @@ rank_value(Rank) when atom(Rank) ->
 	_ -> 0
     end.
 
-%% Make a list of {face, suit} tuples 
-%% from a space-delimited string 
-%% such as "AD JC 5S"
+%% Make a list of cards from a space-delimited string 
 
 make_cards(S)
   when is_list(S) ->
     lists:map(fun make_card/1, 
 	      string:tokens(S, " ")).
 
-%% Make a single card tuple
-
 make_card([H, T]) ->
-    Rank = case H of 
-	       $2 -> two;
-	       $3 -> three;
-	       $4 -> four;
-	       $5 -> five;
-	       $6 -> six;
-	       $7 -> seven;
-	       $8 -> eight;
-	       $9 -> nine;
-	       $T -> ten;
-	       $J -> jack;
-	       $Q -> queen;
-	       $K -> king;
-	       $A -> ace
+    Face = case H of 
+	       $2 -> ?CF_TWO;
+	       $3 -> ?CF_THREE;
+	       $4 -> ?CF_FOUR;
+	       $5 -> ?CF_FIVE;
+	       $6 -> ?CF_SIX;
+	       $7 -> ?CF_SEVEN;
+	       $8 -> ?CF_EIGHT;
+	       $9 -> ?CF_NINE;
+	       $T -> ?CF_TEN;
+	       $J -> ?CF_JACK;
+	       $Q -> ?CF_QUEEN;
+	       $K -> ?CF_KING;
+	       $A -> ?CF_ACE
 	   end,
     Suit = case T of 
-	       $C -> clubs;
-	       $D -> diamonds;
-	       $H -> hearts;
-	       $S -> spades
+	       $C -> ?CS_CLUBS;
+	       $D -> ?CS_DIAMONDS;
+	       $H -> ?CS_HEARTS;
+	       $S -> ?CS_SPADES
 	   end,
-    card_to_int(Rank, Suit).
+    make_card(Face, Suit).
 
-face(Face) when atom(Face)->
-    1 bsl case Face of
-	      ace -> 13;
-	      king -> 12;
-	      queen -> 11;
-	      jack -> 10;
-	      ten -> 9;
-	      nine -> 8;
-	      eight -> 7;
-	      seven -> 6;
-	      six -> 5;
-	      five -> 4;
-	      four -> 3;
-	      three -> 2;
-	      two -> 1
-	  end;
+make_card(Face, Suit) ->
+    (Face bsl 8) bor Suit.
+    
+face_from_mask(X) 
+  when is_number(X) ->
+    face_from_mask(X, [?CF_ACE, ?CF_KING, ?CF_QUEEN, 
+                       ?CF_JACK, ?CF_TEN, ?CF_NINE,
+                       ?CF_EIGHT, ?CF_SEVEN, ?CF_SIX, 
+                       ?CF_FIVE, ?CF_FOUR, ?CF_THREE, 
+                       ?CF_TWO]).
 
-face(X) when is_number(X) ->
-    face(X, [ace, king, queen, jack, ten, nine,
-	     eight, seven, six, five, four, three, two]).
+face_from_mask(_, []) ->
+    0;
 
-face(_X, []) ->
-    none;
+face_from_mask(X, [H|_])
+  when (X band H) > 0 ->
+    H;
 
-face(X, [Face|Rest]) ->
-    Match = (X band face(Face)) > 0,
-    if 
-	Match ->
-	    Face;
-	true ->
-	    face(X, Rest)
+face_from_mask(X, [_|T]) ->
+    face_from_mask(X, T).
+
+face_to_string(Face) 
+  when is_integer(Face) ->
+    case Face of
+        ?CF_TWO -> "two";
+        ?CF_THREE -> "three";
+        ?CF_FOUR -> "four";
+        ?CF_FIVE -> "five";
+        ?CF_SIX -> "six";
+        ?CF_SEVEN -> "seven";
+        ?CF_EIGHT -> "eight";
+        ?CF_NINE -> "nine";
+        ?CF_TEN -> "ten";
+        ?CF_JACK -> "jack";
+        ?CF_QUEEN -> "queen";
+        ?CF_KING -> "king";
+        ?CF_ACE -> "ace"
     end.
 
-suit(Suit) when is_atom(Suit) ->
+suit_to_string(Suit)
+  when is_integer(Suit) ->
     case Suit of 
-	clubs -> 1;
-	diamonds -> 2;
-	hearts -> 3;
-	spades -> 4
-    end;
-
-suit(Suit) when is_number(Suit) ->
-    case Suit of 
-	1 -> clubs;
-	2 -> diamonds;
-	3 -> hearts;
-	4 -> spades
+        ?CS_CLUBS -> "clubs";
+        ?CS_DIAMONDS -> "diamonds";
+        ?CS_HEARTS -> "hearts";
+        ?CS_SPADES -> "spades"
     end.
 
-card_to_int({Face, Suit}) ->
-    card_to_int(Face, Suit).
+describe({8, High, _Score}) ->
+    "straight flush high " 
+	++ face_to_string(face_from_mask(High))
+	++ "s";
 
-card_to_int(Face, Suit) ->
-    (hand:face(Face) bsl 16) bor hand:suit(Suit).
+describe({7, High, _Score}) ->
+    "four of a kind " 
+	++ face_to_string(face_from_mask(High))
+	++ "s";
+	
+describe({6, High, _Score}) ->
+    Bin = <<High:32>>,
+    <<High3:16, High2:16>> = Bin,
+    "house of " 
+	++ face_to_string(face_from_mask(High3)) 
+	++ "s full of " 
+	++ face_to_string(face_from_mask(High2))
+	++ "s";
 
-int_to_card(Int) ->
-    Face = Int bsr 16,
-    Suit = Int band 16#ffff,
-    {hand:face(Face), hand:suit(Suit)}.
+describe({5, High, _Score}) ->
+    "flush high "
+	++ face_to_string(face_from_mask(High))
+	++ "s";
+	
+describe({4, High, _Score}) ->
+    "straight high "
+	++ face_to_string(face_from_mask(High))
+	++ "s";
+	
+describe({3, High, _Score}) ->
+    "three of a kind "
+	++ face_to_string(face_from_mask(High))
+	++ "s";
+	
+describe({2, High, _Score}) ->
+    High1 = face_from_mask(High),
+    High2 = face_from_mask(High band (bnot High1)),
+    "two pairs of "
+	++ face_to_string(High1)
+	++ "s and "
+	++ face_to_string(High2)
+	++ "s";
+	
+describe({1, High, _Score}) ->
+    "pair of "
+	++ face_to_string(face_from_mask(High))
+	++ "s";
+	
+describe({0, High, _Score}) ->
+    "high card "
+	++ face_to_string(face_from_mask(High)).
          
 %%%
 %%% Test suite

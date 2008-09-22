@@ -95,11 +95,8 @@ bb() ->
 cards() ->
     list(byte(), card()).
 
-card() ->
-    record(card, {
-             byte(),
-             byte()
-            }).
+card() -> 
+    byte().
 
 hand() ->
     record(hand, {

@@ -229,11 +229,11 @@ handle(R = #leave{}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_PRIVATE, GID, PID}, Data) ->
+handle(R = #notify_draw{ card = 0 }, Data) ->
     if
 	Data#obs.trace ->
 	    catch io:format("~w: CARD: ~w~n",
-		      [GID, PID]);
+                            [R#notify_draw.game, R#notify_draw.player]);
 	true ->
 	    ok
     end,
@@ -310,12 +310,11 @@ handle(R = #notify_bb{}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_SHARED, GID, Card}, Data) ->
+handle(R = #notify_shared{}, Data) ->
     if
 	Data#obs.trace ->
-            {Face, Suit} = hand:int_to_card(Card),
-	    catch io:format("~w: BOARD: {~w, ~w}~n",
-		      [GID, Face, Suit]);
+	    catch io:format("~w: BOARD: ~w~n",
+                            [R#notify_draw.game, R#notify_draw.card]);
 	true ->
 	    ok
     end,

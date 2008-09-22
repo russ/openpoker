@@ -524,13 +524,10 @@ handle_cast_draw(Player, Game) ->
     Seat = element(SeatNum, Game#game.seats),
     Hand = hand:add(Seat#seat.hand, Card),
     Seats = setelement(SeatNum, Game#game.seats, Seat#seat{ hand = Hand }),
-    GID = Game#game.gid,
-    gen_server:cast(Player, {?PP_NOTIFY_DRAW, GID, Card}),
-    Game1 = broadcast(Game, {?PP_NOTIFY_PRIVATE, Player}),
-    Game2 = Game1#game {
-              seats = Seats,
-              deck = Deck
-             },
+    Draw = #notify_draw{ game = Game#game.fsm, player = Player, card = Card },
+    gen_server:cast(Player, Draw),
+    Game1 = broadcast(Game, Draw#notify_draw{ card = 0 }),
+    Game2 = Game1#game{ seats = Seats, deck = Deck },
     {noreply, Game2}.
 
 handle_cast_draw_shared(Game) ->
@@ -539,7 +536,8 @@ handle_cast_draw_shared(Game) ->
               deck = Deck,
 	      board = [Card|Game#game.board]
 	     },
-    Game2 = broadcast(Game1, {?PP_NOTIFY_SHARED, Card}),
+    Shared = #notify_shared{ game = Game#game.fsm, card = Card },
+    Game2 = broadcast(Game1, Shared),
     {noreply, Game2}.
 
 handle_cast_set_state(Player, State, Game) ->
@@ -969,6 +967,8 @@ broadcast(Game, Event)
        is_record(Event, notify_start_game);
        is_record(Event, notify_end_game);
        is_record(Event, notify_win);
+       is_record(Event, notify_draw);
+       is_record(Event, notify_shared);
        is_record(Event, game_inplay);
        is_record(Event, notify_cancel_game)
        ->

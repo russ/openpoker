@@ -114,6 +114,29 @@
         ?PS_SIT_OUT bor
         ?PS_MAKEUP_BB).
 
+%%% Face
+
+-define(CF_ACE, 13).
+-define(CF_KING, 12).
+-define(CF_QUEEN, 11).
+-define(CF_JACK, 10).
+-define(CF_TEN, 9).
+-define(CF_NINE, 8).
+-define(CF_EIGHT, 7).
+-define(CF_SEVEN, 6).
+-define(CF_SIX, 5).
+-define(CF_FIVE, 4).
+-define(CF_FOUR, 3).
+-define(CF_THREE, 2).
+-define(CF_TWO, 1).
+
+%%% Suit
+
+-define(CS_CLUBS, 1).
+-define(CS_DIAMONDS, 2).
+-define(CS_HEARTS, 3).
+-define(CS_SPADES, 4).
+
 %%% Hand combination
 
 -define(HC_HIGH_CARD, 0).
@@ -466,13 +489,6 @@
 -record(pong, {
          }).
 
-%%% 
-
--record(card, {
-          face, 
-          suit
-         }).
-
 %%% Internal game packets
 
 -record(query_seats, {
@@ -496,9 +512,6 @@
 -define(PP_GAME_INFO, 14).
 -define(PP_PLAYER_INFO, 15).
 -define(PP_BET_REQ, 17).
--define(PP_NOTIFY_DRAW, 18).
--define(PP_NOTIFY_PRIVATE, 19).
--define(PP_NOTIFY_SHARED, 20).
 -define(PP_NOTIFY_CHAT, 23).
 -define(PP_NOTIFY_WIN, 26).
 -define(PP_NOTIFY_BET, 27).

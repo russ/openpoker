@@ -428,10 +428,10 @@ handle({Cmd, _GID, _PID, _Amount}, Bot)
 handle({?PP_NOTIFY_RAISE, _GID, _PID, _Amount, _AmtPlusCall}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_DRAW, _GID, _Card}, Bot) ->
+handle(#notify_draw{}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_PRIVATE, _GID, _PID}, Bot) ->
+handle(#notify_shared{}, Bot) ->
     {noreply, Bot};
 
 handle({?PP_NOTIFY_PRIVATE_CARDS, _GID, _Player, _Cards}, Bot) ->
@@ -447,11 +447,6 @@ handle(#notify_bb{}, Bot) ->
     {noreply, Bot};
 
 handle({?PP_GOOD, _, _}, Bot) ->
-    {noreply, Bot};
-
-handle({Cmd, _GID, _Card}, Bot) 
-  when Cmd == ?PP_NOTIFY_DRAW;
-       Cmd == ?PP_NOTIFY_SHARED ->
     {noreply, Bot};
 
 %% Sink
