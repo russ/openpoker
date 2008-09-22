@@ -58,8 +58,8 @@ stop(Ref) ->
 small_blind({'START', Context}, Data) ->
     small_blind_handle_start(Context, Data);
 
-small_blind({?PP_CALL, Player, Amount}, Data) ->
-    small_blind_handle_call(Player, Amount, Data);
+small_blind(R = #call{}, Data) ->
+    small_blind_handle_call(R, Data);
 
 small_blind(R = #fold{}, Data) ->
     small_blind_handle_fold(R, Data);
@@ -67,27 +67,23 @@ small_blind(R = #fold{}, Data) ->
 small_blind({timeout, _Timer, Player}, Data) ->
     small_blind_handle_timeout(Player, Data);
 
-small_blind(R, Data)
-  when is_record(R, join) ->
+small_blind(R = #join{}, Data) ->
     small_blind_handle_join(R, Data);
 
-small_blind(R, Data) 
-  when is_record(R, leave) ->
+small_blind(R = #leave{}, Data) ->
     small_blind_handle_leave(R, Data);
 
-small_blind(R, Data) 
-  when is_record(R, sit_out) ->
+small_blind(R = #sit_out{}, Data) ->
     small_blind_handle_sit_out(R, Data);
 
-small_blind(R, Data) 
-  when is_record(R, come_back) ->
+small_blind(R = #come_back{}, Data) ->
     small_blind_handle_come_back(R, Data);
 
 small_blind(Event, Data) ->
     small_blind_other(Event, Data).
 
-big_blind({?PP_CALL, Player, Amount}, Data) ->
-    big_blind_handle_call(Player, Amount, Data);
+big_blind(R = #call{}, Data) ->
+    big_blind_handle_call(R, Data);
 
 big_blind(R = #fold{}, Data) ->
     big_blind_handle_fold(R, Data);
@@ -95,20 +91,16 @@ big_blind(R = #fold{}, Data) ->
 big_blind({timeout, _Timer, Player}, Data) ->
     big_blind_handle_timeout(Player, Data);
 
-big_blind(R, Data)
-  when is_record(R, join) ->
+big_blind(R = #join{}, Data) ->
     big_blind_handle_join(R, Data);
 
-big_blind(R, Data) 
-  when is_record(R, leave) ->
+big_blind(R = #leave{}, Data) ->
     big_blind_handle_leave(R, Data);
 
-big_blind(R, Data) 
-  when is_record(R, sit_out) ->
+big_blind(R = #sit_out{}, Data) ->
     big_blind_handle_sit_out(R, Data);
 
-big_blind(R, Data) 
-  when is_record(R, come_back) ->
+big_blind(R = #come_back{}, Data) ->
     big_blind_handle_come_back(R, Data);
 
 big_blind(Event, Data) ->
@@ -251,7 +243,7 @@ small_blind_handle_start(Context, Data) ->
 	    {next_state, small_blind, Data3}
     end.
 	
-small_blind_handle_call(Player, Amount, Data) ->
+small_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
     Game = Data#blinds.game,
     {ExpPlayer, Seat, ExpAmount} = Data#blinds.expected,
     if
@@ -269,6 +261,8 @@ small_blind_handle_call(Player, Amount, Data) ->
 			      small_blind_seat = Seat,
 			      small_blind_bet = Amount
 			     },
+                    gen_server:cast(Game, {'ADD BET', Player, Amount}),
+                    gen_server:cast(Game, {'BROADCAST', R#call{ notify = true }}),
 		    BBPlayers = gen_server:call(Game, 
 						{'SEATS', Seat, ?PS_BB_ACTIVE}),
 		    Data2 = ask_for_blind(Data1, 
@@ -320,7 +314,7 @@ small_blind_handle_come_back(R, Data) ->
 small_blind_other(Event, Data) ->
     handle_event(Event, small_blind, Data).
 
-big_blind_handle_call(Player, Amount, Data) ->
+big_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
     Game = Data#blinds.game,
     {ExpPlayer, Seat, ExpAmount} = Data#blinds.expected,
     if
@@ -341,16 +335,9 @@ big_blind_handle_call(Player, Amount, Data) ->
 		    gen_server:cast(Game, {'SET STATE', SBPlayer, ?PS_PLAY}),
 		    gen_server:cast(Game, {'SET STATE', BBPlayer, ?PS_PLAY}),
 		    %% record blind bets
-		    Small = Data#blinds.small_blind_bet,
-		    Big = Amount,
-		    if
-			Data#blinds.no_small_blind ->
-			    ok;
-			true ->
-			    gen_server:cast(Game, {'ADD BET', SBPlayer, Small})
-		    end,
-		    gen_server:cast(Game, {'ADD BET', BBPlayer, Big}),
-		    %% adjust button if a heads-up game
+		    gen_server:cast(Game, {'ADD BET', BBPlayer, Amount}),
+                    gen_server:cast(Game, {'BROADCAST', R#call{ notify = true }}),
+                    %% adjust button if a heads-up game
 		    Seats = gen_server:call(Game, {'SEATS', ?PS_ACTIVE}),
 		    if
 			(length(Seats) == 2) and (Data#blinds.type /= irc) ->
@@ -372,11 +359,7 @@ big_blind_handle_call(Player, Amount, Data) ->
                                              game = Data1#blinds.fsm, 
                                              bb = BB
                                             }}),
-		    gen_server:cast(Game, {'BROADCAST', 
-		    			   {?PP_NOTIFY_BET, SBPlayer, Small}}),
-		    gen_server:cast(Game, {'BROADCAST', 
-		    			   {?PP_NOTIFY_BET, BBPlayer, Big}}),
-		    Ctx = Data#blinds.context,
+                    Ctx = Data#blinds.context,
 		    Ctx1 = Ctx#texas {
 			     call = Amount,
 			     small_blind_seat = SB,
@@ -595,7 +578,7 @@ post_blinds_trigger(Game, Event, Pid) ->
     case Event of 
 	{in, {'$gen_cast', {?PP_BET_REQ, Game, Amount, 0, 0}}} ->
 	    %% post the blind
-	    cardgame:send_event(Game, {?PP_CALL, Pid, Amount}),
+	    cardgame:send_event(Game, #call{ player = Pid, amount = Amount }),
             done;
 	_ ->
 	    Game

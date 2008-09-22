@@ -49,11 +49,11 @@ stop(Ref) ->
 betting({'START', Context}, Data) ->
     betting_handle_start(Context, Data);
 
-betting({?PP_CALL, Player, Amount}, Data) ->
-    betting_handle_call(Player, Amount, Data);
+betting(R = #call{}, Data) ->
+    betting_handle_call(R, Data);
 
-betting({?PP_RAISE, Player, Amount}, Data) ->
-    betting_handle_raise(Player, Amount, Data);
+betting(R = #raise{}, Data) ->
+    betting_handle_raise(R, Data);
 
 betting(R = #fold{}, Data) ->
     betting_handle_fold(R, Data);
@@ -148,7 +148,7 @@ betting_handle_start(Context, Data) ->
 	    {next_state, betting, Data2}
     end.
 
-betting_handle_call(Player, Amount, Data) ->
+betting_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
     Game = Data#betting.game,
     {Expected, Call, _Min, _Max} = Data#betting.expected,
     if 
@@ -167,21 +167,21 @@ betting_handle_call(Player, Amount, Data) ->
 		    %% all-in
                     gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
 		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
-                    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CALL, 
-							 Player, Amount}}),
+                    gen_server:cast(Game, {'BROADCAST', R#call{ notify = true }}),
 		    next_turn(Data, Player);
 		true ->
 		    %% proper bet
 		    gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
 		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
-		    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_CALL, 
-							 Player, Amount}}),
+		    gen_server:cast(Game, {'BROADCAST', R#call{ notify = true }}),
 		    next_turn(Data, Player)
 	    end
     end.
 
-betting_handle_raise(Player, Amount, Data) ->
+betting_handle_raise(R, Data) ->
     Game = Data#betting.game,
+    Player = R#raise.player,
+    Amount = R#raise.raise,
     RaiseCount = Data#betting.raise_count,
     {Expected, Call, Min, Max} = Data#betting.expected,
     if
@@ -214,9 +214,12 @@ betting_handle_raise(Player, Amount, Data) ->
 			    gen_server:cast(Game, 
 					    {'SET STATE', Player, ?PS_BET})
 		    end,
-		    gen_server:cast(Game, {'BROADCAST', {?PP_NOTIFY_RAISE, 
-							 Player, Amount,
-                                                         Amount + Call}}),
+		    gen_server:cast(Game, {'BROADCAST', #raise{
+                                             player = Player,
+                                             raise = Amount,
+                                             total = Amount + Call,
+                                             notify = true
+                                            }}),
 		    Data1 = Data#betting {
 			      call = Data#betting.call + Amount,
 			      raise_count = RaiseCount1

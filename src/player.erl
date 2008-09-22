@@ -70,10 +70,14 @@ handle_cast(R, Data)
   when is_record(R, unwatch) ->
     handle_cast_unwatch(R, Data);
 
-handle_cast({Event, Game, Amount}, Data)
-  when Event == ?PP_CALL;
-       Event == ?PP_RAISE ->
-    handle_cast_call_raise(Event, Game, Amount, Data);
+handle_cast(R = #wait_bb{ notify = none }, Data) ->
+    handle_cast_wait_bb(R, Data);
+
+handle_cast(R = #call{ notify = none }, Data) ->
+    handle_cast_call(R, Data);
+
+handle_cast(R = #raise{ notify = none }, Data) ->
+    handle_cast_raise(R, Data);
 
 handle_cast(R = #logout{}, Data) ->
     handle_cast_logout(R, Data);
@@ -203,8 +207,16 @@ handle_cast_socket(Socket, Data) when is_pid(Socket) ->
 	     },
     {noreply, Data1}.
 
-handle_cast_call_raise(Event, Game, Amount, Data) ->
-    cardgame:send_event(Game, {Event, self(), Amount}),
+handle_cast_call(R, Data) ->
+    cardgame:send_event(R#call.game, R#call{ player = self() }),
+    {noreply, Data}.
+
+handle_cast_wait_bb(R, Data) ->
+    cardgame:send_event(R#call.game, R#wait_bb{ player = self() }),
+    {noreply, Data}.
+
+handle_cast_raise(R, Data) ->
+    cardgame:send_event(R#raise.game, R#raise{ player = self() }),
     {noreply, Data}.
 
 handle_cast_join(R, Data) ->

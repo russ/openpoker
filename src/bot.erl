@@ -207,16 +207,12 @@ handle_bet_req(GID, Amount, Bot) ->
 	    handle_cast(#sit_out{ game = GID }, Bot1),
 	    {noreply, Bot1};
 	'BLIND' ->
-	    handle_cast({?PP_CALL, GID, Amount}, Bot1),
-	    Bot2 = Bot1#bot {
-		     balance = Bot1#bot.balance - Amount
-		    },
+	    handle_cast(#call{ game = GID, amount = Amount }, Bot1),
+            Bot2 = Bot1#bot{ balance = Bot1#bot.balance - Amount },
 	    {noreply, Bot2};
 	{'BLIND', allin} ->
-	    handle_cast({?PP_CALL, GID, Bot1#bot.balance}, Bot1),
-	    Bot2 = Bot1#bot {
-		     balance = 0
-		    },
+            handle_cast(#call{ game = GID, amount = Bot1#bot.balance }, Bot1),
+	    Bot2 = Bot1#bot{ balance = 0 },
 	    {noreply, Bot2};
 	'FOLD' ->
 	    handle_cast(#fold{ game = GID }, Bot1),
@@ -255,55 +251,39 @@ handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot) ->
 	    handle_cast(#sit_out{ game = GID }, Bot1),
 	    {noreply, Bot1};
 	'BLIND' ->
-	    handle_cast({?PP_CALL, GID, Call}, Bot1),
-	    Bot2 = Bot1#bot {
-		     balance = Bot1#bot.balance - Call
-		    },
+	    handle_cast(#call{ game = GID, amount = Call }, Bot1),
+	    Bot2 = Bot1#bot{ balance = Bot1#bot.balance - Call },
 	    {noreply, Bot2};
 	{'BLIND', allin} ->
-	    handle_cast({?PP_CALL, GID, Bot1#bot.balance}, Bot1),
-	    Bot2 = Bot1#bot {
-		     balance = 0
-		    },
+	    handle_cast(#call{ game = GID, amount = Bot1#bot.balance }, Bot1),
+	    Bot2 = Bot1#bot{ balance = 0 },
 	    {noreply, Bot2};
 	'CHECK' ->
-	    handle_cast({?PP_CALL, GID, 0}, Bot1),
+	    handle_cast(#call{ game = GID, amount = 0 }, Bot1),
 	    {noreply, Bot1};
 	'CALL' ->
-	    handle_cast({?PP_CALL, GID, Call}, Bot1),
-	    Bot2 = Bot1#bot {
-		     balance = Bot1#bot.balance - Call
-		    },
+	    handle_cast(#call{ game = GID, amount = Call }, Bot1),
+	    Bot2 = Bot1#bot{ balance = Bot1#bot.balance - Call },
 	    {noreply, Bot2};
 	{'CALL', allin} ->
-	    handle_cast({?PP_CALL, GID, Bot1#bot.balance}, Bot1),
-	    Bot2 = Bot1#bot {
-		     balance = 0
-		    },
+	    handle_cast(#call{ game = GID, amount = Bot1#bot.balance }, Bot1),
+	    Bot2 = Bot1#bot{ balance = 0 },
 	    {noreply, Bot2};
 	'RAISE' ->
-	    handle_cast({?PP_RAISE, GID, RaiseMin}, Bot1),
-	    Bot2 = Bot1#bot {
-		     balance = Bot1#bot.balance - Call - RaiseMin
-		    },
+	    handle_cast(#raise{ game = GID, raise = RaiseMin }, Bot1),
+	    Bot2 = Bot1#bot{ balance = Bot1#bot.balance - Call - RaiseMin },
 	    {noreply, Bot2};
 	{'RAISE', allin} ->
-	    handle_cast({?PP_RAISE, GID, Bot1#bot.balance - Call}, Bot1),
-	    Bot2 = Bot1#bot {
-		     balance = 0
-		    },
+	    handle_cast(#raise{ game = GID, raise = Bot1#bot.balance - Call }, Bot1),
+	    Bot2 = Bot1#bot{ balance = 0 },
 	    {noreply, Bot2};
 	'BET' ->
-	    handle_cast({?PP_RAISE, GID, RaiseMin}, Bot1),
-	    Bot2 = Bot1#bot {
-		     balance = Bot1#bot.balance - RaiseMin
-		    },
+	    handle_cast(#raise{ game = GID, raise = RaiseMin}, Bot1),
+	    Bot2 = Bot1#bot{ balance = Bot1#bot.balance - RaiseMin },
 	    {noreply, Bot2};
 	{'BET', allin} ->
-	    handle_cast({?PP_RAISE, GID, Bot1#bot.balance - Call}, Bot1),
-	    Bot2 = Bot1#bot {
-		     balance = 0
-		    },
+	    handle_cast(#raise{ game = GID, raise = Bot1#bot.balance - Call }, Bot1),
+	    Bot2 = Bot1#bot{ balance = 0 },
 	    {noreply, Bot2};
 	'FOLD' ->
 	    handle_cast(#fold{ game = GID }, Bot1),
@@ -419,13 +399,14 @@ handle(#notify_win{}, Bot) ->
 handle(#fold{ notify = true }, Bot) ->
     {noreply, Bot};
 
-handle({Cmd, _GID, _PID, _Amount}, Bot)
-  when Cmd == ?PP_NOTIFY_WIN;
-       Cmd == ?PP_NOTIFY_CALL;
-       Cmd == ?PP_NOTIFY_BET ->
+handle(#call{ notify = true }, Bot) ->
     {noreply, Bot};
 
-handle({?PP_NOTIFY_RAISE, _GID, _PID, _Amount, _AmtPlusCall}, Bot) ->
+handle(#raise{ notify = true }, Bot) ->
+    {noreply, Bot};
+
+handle({Cmd, _GID, _PID, _Amount}, Bot)
+  when Cmd == ?PP_NOTIFY_WIN ->
     {noreply, Bot};
 
 handle(#notify_draw{}, Bot) ->

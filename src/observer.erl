@@ -260,17 +260,7 @@ handle(#game_stage{ game = GID, stage = Stage}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_BET, GID, PID, Amount}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: BET: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount / 1.0]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle({?PP_NOTIFY_CALL, GID, PID, Amount}, Data) ->
+handle(#call{ game = GID, player = PID, amount = Amount }, Data) ->
     if
 	Data#obs.trace ->
 	    catch io:format("~w: CALL: ~w, ~-14.2. f~n",
@@ -280,11 +270,11 @@ handle({?PP_NOTIFY_CALL, GID, PID, Amount}, Data) ->
     end,
     {noreply, Data};
 
-handle({?PP_NOTIFY_RAISE, GID, PID, Amount, AmtPlusCall}, Data) ->
+handle(#raise{ game = GID, player = PID, raise = Amt, total = Total}, Data) ->
     if
 	Data#obs.trace ->
 	    catch io:format("~w: RAISE: ~w, ~-14.2. f, ~-14.2. f~n",
-		      [GID, PID, Amount / 1.0, AmtPlusCall / 1.0]);
+                            [GID, PID, Amt / 1.0, Total / 1.0]);
 	true ->
 	    ok
     end,

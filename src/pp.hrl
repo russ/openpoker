@@ -496,17 +496,6 @@
           mask
          }).
 
-%%% Old stuff
-
--define(PP_BAD, 250).
--define(PP_GOOD, 0).
--define(PP_PID_NONE, 0).
-
-%%% Client -> Server
-
--define(PP_CALL, 6).
--define(PP_RAISE, 7).
-
 %%% Server -> Client
 
 -define(PP_GAME_INFO, 14).
@@ -514,16 +503,12 @@
 -define(PP_BET_REQ, 17).
 -define(PP_NOTIFY_CHAT, 23).
 -define(PP_NOTIFY_WIN, 26).
--define(PP_NOTIFY_BET, 27).
 -define(PP_NOTIFY_QUIT, 28).
--define(PP_NOTIFY_RAISE, 29).
--define(PP_NOTIFY_CALL, 30).
 -define(PP_PLAYER_STATE, 31).
 -define(PP_SEAT_STATE, 33).
 -define(PP_GAME_QUERY, 37).
 -define(PP_SEAT_QUERY, 39).
 -define(PP_PLAYER_INFO_REQ, 40).
--define(PP_NEW_GAME_REQ, 41).
 -define(PP_BALANCE_REQ, 42).
 -define(PP_BALANCE_INFO, 43).
 -define(PP_NOTIFY_PRIVATE_CARDS, 46).

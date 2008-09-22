@@ -960,6 +960,8 @@ broadcast(Game, Event)
        is_record(Event, fold);
        is_record(Event, join);
        is_record(Event, leave);
+       is_record(Event, call);
+       is_record(Event, raise);
        is_record(Event, chat);
        is_record(Event, notify_sb);
        is_record(Event, notify_bb);

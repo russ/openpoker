@@ -61,11 +61,6 @@ handle_cast(R, Data)
        is_record(R, start_game) ->
     {noreply, Data};
 
-handle_cast({Event, _Game, _Amount}, Data)
-  when Event == ?PP_CALL;
-       Event == ?PP_RAISE ->
-    {noreply, Data};
-
 handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
     GID = cardgame:call(Game, 'ID'),
     L = cardgame:call(Game, 'SEAT QUERY'),
@@ -94,9 +89,6 @@ handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
 	_ ->
 	    oops
     end,
-    {noreply, Data};
-
-handle_cast({?PP_NEW_GAME_REQ, _GameType, _Expected, _Limit}, Data) ->
     {noreply, Data};
 
 handle_cast(stop, Data) ->
