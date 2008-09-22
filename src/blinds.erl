@@ -502,15 +502,13 @@ advance_button(Data) ->
 	    BB = Data#blinds.big_blind_seat,
 	    BBPlayer = gen_server:call(Game, {'PLAYER AT', BB}),
 	    State = gen_server:call(Game, {'STATE', BBPlayer}),
-	    Bust = ?PS_FOLD == State,
-            io:format("advance_button: Players: ~p~n", [Players])
+	    Bust = ?PS_FOLD == State
     end,
     {Button, Bust}.
 
 ask_for_blind(Data, Seat, Amount) ->
     Game = Data#blinds.game,
     Player = gen_server:call(Game, {'PLAYER AT', Seat}),
-    io:format("ask_for_blind: Seat: ~p, Player: ~p~n", [Seat, Player]),
     gen_server:cast(Game, {'REQUEST BET', Seat, Amount, 0, 0}),
     Data1 = restart_timer(Data, Player),
     Data1#blinds{ expected = {Player, Seat, Amount }}.
@@ -573,17 +571,26 @@ make_game_5_bust(Button_N, SB_N, BB_N) ->
     Game = test:make_test_game(10, Players, Ctx, modules()),
     {Game, Players}.
 
+bust_trigger(Game, Event, Pid) ->
+    case Event of
+	{in, {'$gen_cast', #notify_start_game{}}} ->
+            cardgame:cast(Game, {'SET STATE', Pid, ?PS_FOLD}),
+            done;
+        _ ->
+            Game
+    end.
+        
 %% Both blinds are posted
 
 post_blinds_trigger(Game, Event, Pid) ->
     case Event of 
 	{in, {'$gen_cast', {?PP_BET_REQ, Game, Amount, 0, 0}}} ->
 	    %% post the blind
-	    cardgame:send_event(Game, {?PP_CALL, Pid, Amount});
+	    cardgame:send_event(Game, {?PP_CALL, Pid, Amount}),
+            done;
 	_ ->
-	    ok
-    end,
-    Game.
+	    Game
+    end.
 
 headsup_test() ->
     {Game, Players} = make_game_heads_up(),
@@ -609,8 +616,8 @@ headsup_test() ->
 three_players_button_bust_test() ->
     {Game, Players} = make_game_3_bust(),
     [A, B, C] = Players,
-    cardgame:cast(Game, {'SET STATE', element(1, A), ?PS_FOLD}),
     test:install_trigger(fun post_blinds_trigger/3, Game, [A, B, C]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, A)),
     Ctx = #texas {
       button_seat = element(2, C),
       small_blind_seat = element(2, C),
@@ -629,8 +636,8 @@ three_players_button_bust_test() ->
 three_players_sb_bust_test() ->
     {Game, Players} = make_game_3_bust(),
     [A, B, C] = Players,
-    cardgame:cast(Game, {'SET STATE', element(1, B), ?PS_FOLD}),
     test:install_trigger(fun post_blinds_trigger/3, Game, [A, B, C]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
     Ctx = #texas {
       button_seat = element(2, C),
       small_blind_seat = element(2, C),
@@ -649,8 +656,8 @@ three_players_sb_bust_test() ->
 three_players_bb_bust_test() ->
     {Game, Players} = make_game_3_bust(),
     [A, B, C] = Players,
-    cardgame:cast(Game, {'SET STATE', element(1, C), ?PS_FOLD}),
     test:install_trigger(fun post_blinds_trigger/3, Game, [A, B, C]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
     Ctx = #texas {
       button_seat = element(2, B),
       small_blind_seat = element(2, B),
@@ -669,8 +676,8 @@ three_players_bb_bust_test() ->
 five_players_sb_bust_test() ->
     {Game, Players} = make_game_5_bust(),
     [_, B, C, D, E] = Players,
-    cardgame:cast(Game, {'SET STATE', element(1, B), ?PS_FOLD}),
     test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
     Ctx = #texas {
       button_seat = element(2, B),
       small_blind_seat = element(2, C),
@@ -687,8 +694,8 @@ five_players_sb_bust_test() ->
 five_players_bust_test() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
     [_, B, C, D, E] = Players,
-    cardgame:cast(Game, {'SET STATE', element(1, B), ?PS_FOLD}),
     test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
     Ctx = #texas {
       button_seat = element(2, C),
       small_blind_seat = element(2, D),
@@ -707,8 +714,8 @@ five_players_bust_test() ->
 five_players_bb_bust_test() ->
     {Game, Players} = make_game_5_bust(),
     [_, B, C, D, E] = Players,
-    cardgame:cast(Game, {'SET STATE', element(1, C), ?PS_FOLD}),
     test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
     Ctx = #texas {
       button_seat = element(2, B),
       small_blind_seat = element(2, C),
@@ -725,8 +732,8 @@ five_players_bb_bust_test() ->
 five_players_bust1_test() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
     [_, B, C, D, E] = Players,
-    cardgame:cast(Game, {'SET STATE', element(1, C), ?PS_FOLD}),
     test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
     Ctx = #texas {
       button_seat = element(2, C),
       small_blind_seat = element(2, D),
@@ -745,9 +752,9 @@ five_players_bust1_test() ->
 five_players_blinds_bust_test() ->
     {Game, Players} = make_game_5_bust(),
     [_, B, C, D, E] = Players,
-    cardgame:cast(Game, {'SET STATE', element(1, B), ?PS_FOLD}),
-    cardgame:cast(Game, {'SET STATE', element(1, C), ?PS_FOLD}),
     test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
     Ctx = #texas {
       button_seat = element(2, B),
       small_blind_seat = element(2, C),
@@ -764,9 +771,9 @@ five_players_blinds_bust_test() ->
 five_players_blinds_bust1_test() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
     [_, B, C, D, E] = Players,
-    cardgame:cast(Game, {'SET STATE', element(1, B), ?PS_FOLD}),
-    cardgame:cast(Game, {'SET STATE', element(1, C), ?PS_FOLD}),
     test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
     Ctx = #texas {
       button_seat = element(2, C),
       small_blind_seat = element(2, D),
