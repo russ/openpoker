@@ -250,7 +250,7 @@ handle({?PP_NOTIFY_PRIVATE_CARDS, GID, PID, Cards}, Data) ->
     {noreply, Data};
 
 
-handle({?PP_GAME_STAGE, GID, Stage}, Data) ->
+handle(#game_stage{ game = GID, stage = Stage}, Data) ->
     if
 	Data#obs.trace ->
 	    catch io:format("~w: STAGE: ~w~n",

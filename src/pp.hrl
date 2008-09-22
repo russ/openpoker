@@ -519,7 +519,6 @@
 -define(PP_NOTIFY_RAISE, 29).
 -define(PP_NOTIFY_CALL, 30).
 -define(PP_PLAYER_STATE, 31).
--define(PP_GAME_STAGE, 32).
 -define(PP_SEAT_STATE, 33).
 -define(PP_GAME_QUERY, 37).
 -define(PP_SEAT_QUERY, 39).

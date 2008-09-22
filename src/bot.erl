@@ -397,7 +397,7 @@ handle({?PP_BET_REQ, GID, Call, RaiseMin, RaiseMax}, Bot) ->
 handle({?PP_PLAYER_STATE, _GID, _PID, _State}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_GAME_STAGE, _GID, _Stage}, Bot) ->
+handle(#game_stage{}, Bot) ->
     {noreply, Bot};
 
 handle(#notify_start_game{}, Bot) ->
@@ -446,7 +446,7 @@ handle(#notify_sb{}, Bot) ->
 handle(#notify_bb{}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_GOOD, _, _}, Bot) ->
+handle(#good{}, Bot) ->
     {noreply, Bot};
 
 %% Sink

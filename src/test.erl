@@ -697,7 +697,7 @@ check_pot(Game, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, N) ->
 
 %%% Leave out of turn
 
-leave_filter({?PP_GAME_STAGE, _, ?GS_RIVER, _}, Bot) ->
+leave_filter(#game_stage{ stage = ?GS_RIVER }, Bot) ->
     io:format("Elvis #~w is leaving the building!~n", [Bot#bot.player]),
     ok = ?tcpsend(Bot#bot.socket, #leave{ game = Bot#bot.game }),
     ok = ?tcpsend(Bot#bot.socket, #logout{}),

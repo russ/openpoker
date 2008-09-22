@@ -970,6 +970,7 @@ broadcast(Game, Event)
        is_record(Event, notify_draw);
        is_record(Event, notify_shared);
        is_record(Event, game_inplay);
+       is_record(Event, game_stage);
        is_record(Event, notify_cancel_game)
        ->
     %% notify players

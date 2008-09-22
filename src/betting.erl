@@ -124,8 +124,11 @@ betting_handle_start(Context, Data) ->
 	    {stop, {normal, Context}, Data};
 	true ->
 	    _Total = gen_server:call(Game, 'POT TOTAL'),
-	    gen_server:cast(Game, {'BROADCAST', 
-				   {?PP_GAME_STAGE, Data#betting.stage}}), 
+            Stage = #game_stage{ 
+              game = Data#betting.fsm, 
+              stage = Data#betting.stage
+             },
+	    gen_server:cast(Game, {'BROADCAST', Stage}),
 	    if 
 		Data#betting.have_blinds ->
 		    %% start with the player after the big blind
