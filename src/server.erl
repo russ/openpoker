@@ -14,7 +14,7 @@
 -include("schema.hrl").
 -include("test.hrl").
 
--define(STATS_TIMEOUT, 10000).
+-define(STATS_TIMEOUT, 30000).
 
 -record(server, {
 	  port,
@@ -159,13 +159,13 @@ handle_info('STATS', Server) ->
     Size = Server#server.size,
     RPS = trunc(Count / Elapsed),
     BPS = trunc(Size / Elapsed),
-%%     error_logger:info_report([{module, ?MODULE}, 
-%%                               {elapsed, Elapsed},
-%%                               {requests, Count},
-%%                               {bytes, Size},
-%%                               {requests_per_second, RPS},
-%%                               {bytes_per_second, BPS}
-%%                              ]),
+    error_logger:info_report([{module, ?MODULE}, 
+                              {elapsed, Elapsed},
+                              {requests, Count},
+                              {bytes, Size},
+                              {requests_per_second, RPS},
+                              {bytes_per_second, BPS}
+                             ]),
     Server1 = Server#server{ 
                 start = End,
                 count = 0,
