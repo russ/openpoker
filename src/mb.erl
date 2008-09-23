@@ -584,7 +584,7 @@ rig_deck(Game)
     Cards2 = player_cards(Players, Deck, 2, Count, []),
     %%io:format("Cards1: ~w~n", [Cards1]),
     %%io:format("Cards2: ~w~n", [Cards2]),
-    Cards1 ++ Cards2 ++ lists:map(fun hand:card_to_int/1, 
+    Cards1 ++ Cards2 ++ lists:map(fun make_card/1,
                                   Game#irc_game.board).
 
 player_cards(_Players, _Deck, _N, 0, Acc) ->
@@ -605,9 +605,36 @@ player_cards(Players, Deck, N, Count, Acc) ->
                 %%Nick = Player#irc_player.nick,
                 %%io:format("Dealing ~w to ~s~n", 
                 %%	     [X, Nick]),
-                {Deck, hand:card_to_int(Face, Suit)}
+                {Deck, make_card(Face, Suit)}
         end,
     player_cards(Players, Deck1, N, Count - 1, [Card|Acc]).
+
+make_card({Face, Suit}) ->
+    make_card(Face, Suit).
+
+make_card(Face, Suit) ->
+    Face1 = case Face of 
+                two -> ?CF_TWO;
+                three-> ?CF_THREE;
+                four -> ?CF_FOUR;
+                five -> ?CF_FIVE;
+                six -> ?CF_SIX;
+                seven -> ?CF_SEVEN;
+                eight -> ?CF_EIGHT;
+                nine -> ?CF_NINE;
+                ten -> ?CF_TEN;
+                jack -> ?CF_JACK;
+                queen -> ?CF_QUEEN;
+                king -> ?CF_KING;
+                ace -> ?CF_ACE
+            end,
+    Suit1 = case Suit of 
+                clubs -> ?CS_CLUBS;
+                diamonds -> ?CS_DIAMONDS;
+                hearts -> ?CS_HEARTS;
+                spades -> ?CS_SPADES
+            end,
+    hand:make_card(Face1, Suit1).
 
 setup(Host) ->
     setup(Host, true).
