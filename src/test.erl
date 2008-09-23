@@ -82,9 +82,21 @@ simple_seat_query_test() ->
     Players = [{Player, _, _}] = make_players(1),
     Game = make_game(2, Players),
     X = cardgame:call(Game, 'SEAT QUERY'),
+    S1 = #seat_state{ 
+      game = Game, 
+      seat_num = 1, 
+      state = ?PS_PLAY, 
+      player = Player,
+      inplay = 1000.0 
+     },
+    S2 = #seat_state{
+      game = Game,
+      seat_num = 2,
+      state = ?PS_EMPTY,
+      player = none
+     },
     cardgame:cast(Game, {'NOTE', simple_seat_query}),
-    ?assertEqual([{1, ?SS_TAKEN, Player},
-                  {2, ?SS_EMPTY, none}], X),
+    ?assertEqual([S1, S2], X),
     Z = cardgame:call(Game, 'JOINED'),
     ?assertEqual(1, Z),
     cleanup_players(Players),
@@ -116,7 +128,7 @@ complex_seat_query_test() ->
       notify = true
      },
     ?assertEqual(Cmd, Packet),
-    player:cast(PID, {?PP_SEAT_QUERY, Game}),
+    player:cast(PID, #seat_query{ game = Game }),
     Packet1 = receive
 		  Any1 ->
 		      Any1
@@ -135,10 +147,16 @@ complex_seat_query_test() ->
       seat_num = N,
       amount = 1000.00
      },
+    SeatState = #seat_state{
+      game = Game,
+      seat_num = 1,
+      state = ?PS_PLAY,
+      player = Player,
+      inplay = 1000.0
+     },
     ?assertEqual({packet, GameInplay}, Packet1),
-    ?assertEqual({packet, {?PP_SEAT_STATE, Game, 1, ?SS_TAKEN, PID}}, 
-                 Packet2),
-    ?assertNot(none == pp:old_write({?PP_SEAT_STATE, Game, 1, ?SS_TAKEN, Player})),
+    ?assertEqual({packet, SeatState}, Packet2),
+    ?assertNot(none == pp:old_write(SeatState)),
     cleanup_players(Players),
     ?assertEqual(ok, stop_game(Game)),
     ok.
@@ -441,10 +459,10 @@ dynamic_game_start_test() ->
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, #login{ nick = Nick, pass = Nick}),
-    X = wait_for_msg(2000, []),
+    X1 = wait_for_msg(2000, []),
     [TP] = mnesia:dirty_read(tab_player, ID),
     Player = TP#tab_player.process,
-    ?assertMatch(#you_are{ player = Player }, X),
+    ?assertMatch(#you_are{ player = Player }, X1),
     Cmd = #start_game{ 
       type = ?GT_IRC_TEXAS,
       seat_count = 1,
@@ -475,9 +493,15 @@ dynamic_game_start_test() ->
 		  ?assertEqual(0, timeout)
 	  end,
     %% make sure it's our game
-    ?tcpsend(Socket, {?PP_SEAT_QUERY, Game}),
-    ?assertMatch({?PP_SEAT_STATE, Game, 1, ?PS_EMPTY, 0}, 
-                 wait_for_msg(2000, [])),
+    ?tcpsend(Socket, #seat_query{ game = Game }),
+    X2 = wait_for_msg(2000, []),
+    SeatState = #seat_state{
+      game = Game,
+      seat_num = 1,
+      state = ?PS_EMPTY,
+      player = none
+     },
+    ?assertEqual(SeatState, X2),
     %% clean up
     gen_tcp:close(Socket),
     ok = mnesia:dirty_delete(tab_player, ID),

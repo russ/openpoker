@@ -61,22 +61,13 @@ handle_cast(R, Data)
        is_record(R, start_game) ->
     {noreply, Data};
 
-handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
-    GID = cardgame:call(Game, 'ID'),
+handle_cast(#seat_query{ game = Game }, Data) ->
     L = cardgame:call(Game, 'SEAT QUERY'),
-    F = fun({SeatNum, State, Player}) -> 
-		PID = if 
-			  State /= ?SS_EMPTY ->
-			      gen_server:call(Player, 'ID');
-			  true ->
-			      0
-		      end,
-		handle_cast({?PP_SEAT_STATE, GID, SeatNum, State, PID}, Data) 
-	end,
+    F = fun(R) -> handle_cast(R, Data) end,
     lists:foreach(F, L),
     {noreply, Data};
 
-handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
+handle_cast(#player_query{ player = PID }, Data) ->
     I = mnesia:dirty_read(tab_player_info, PID),
     P = mnesia:dirty_read(tab_player, PID),
     case {I, P} of

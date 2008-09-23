@@ -109,10 +109,10 @@ handle_cast(R = #sit_out{ notify = none }, Data) ->
 handle_cast(R = #come_back{ notify = none }, Data) ->
     handle_cast_come_back(R, Data);
 
-handle_cast({?PP_SEAT_QUERY, Game}, Data) ->
-    handle_cast_seat_query(Game, Data);
+handle_cast(R = #seat_query{}, Data) ->
+    handle_cast_seat_query(R, Data);
 
-handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
+handle_cast(#player_query{ player = PID }, Data) ->
     handle_cast_player_info_req(PID, Data);
 
 handle_cast(R = #start_game{}, Data) ->
@@ -233,19 +233,9 @@ handle_cast_chat(R, Data) ->
     cardgame:cast(R#chat.game, R),
     {noreply, Data}.
 
-handle_cast_seat_query(Game, Data) ->
+handle_cast_seat_query(#seat_query{ game = Game }, Data) ->
     L = cardgame:call(Game, 'SEAT QUERY'),
-    F = fun({SeatNum, State, Player}) -> 
-		PID = if 
-			  Player == self() ->
-			      Data#player_data.pid;
-			  State /= ?SS_EMPTY ->
-			      gen_server:call(Player, 'ID');
-			  true ->
-			      0
-		      end,
-		handle_cast({?PP_SEAT_STATE, Game, SeatNum, State, PID}, Data) 
-	end,
+    F = fun(R) -> handle_cast(R, Data) end,
     lists:foreach(F, L),
     {noreply, Data}.
 

@@ -212,17 +212,6 @@ handle(R = #fold{ notify = true }, Data) ->
     end,
     {noreply, Data};
 
-
-handle({?PP_PLAYER_STATE, GID, PID, State}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: STATE: ~w = ~w~n",
-		      [GID, PID, State]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
 handle(R = #leave{}, Data) ->
     if
 	Data#obs.trace ->

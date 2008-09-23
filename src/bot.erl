@@ -367,9 +367,6 @@ handle(R = #bet_req{ raise_min = 0, raise_max = 0 }, Bot) ->
 handle(R = #bet_req{}, Bot) ->
     handle_bet_req_min_max(R, Bot);
 
-handle({?PP_PLAYER_STATE, _GID, _PID, _State}, Bot) ->
-    {noreply, Bot};
-
 handle(#game_stage{}, Bot) ->
     {noreply, Bot};
 

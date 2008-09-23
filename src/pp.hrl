@@ -43,12 +43,6 @@
           high
           }).
 
-%%% Seat state
-
--define(SS_EMPTY, 0).
--define(SS_RESERVED, 1).
--define(SS_TAKEN, 2).
-
 %%% Query operator
 
 -define(OP_IGNORE, 0).
@@ -489,11 +483,3 @@
           from,
           mask
          }).
-
-%%% Server -> Client
-
--define(PP_PLAYER_STATE, 31).
--define(PP_PLAYER_INFO_REQ, 40).
-
--define(PP_SEAT_QUERY, 39).
--define(PP_SEAT_STATE, 33).

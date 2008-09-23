@@ -556,7 +556,7 @@ handle_cast_set_state(Player, State, Game) ->
                 none ->
                     Game
             end,
-    handle_cast({'BROADCAST', {?PP_PLAYER_STATE, Player, State}}, Game1).
+    {noreply, Game1}.
 
 handle_cast_reset_state(Source, Target, Game) ->
     Game1 = reset_state(Game, Source, Target),
@@ -579,10 +579,8 @@ handle_cast_add_bet(Player, Amount, Game) ->
 		Amount == GameInplay ->
 		    State = ?PS_ALL_IN,
 		    AllIn = true,
-		    Game1 = broadcast(Game, {?PP_PLAYER_STATE, 
-					     Player, 
-					     ?PS_ALL_IN});
-		true ->
+                    Game1 = Game;
+                true ->
 		    State = Seat#seat.state,
 		    AllIn = false,
 		    Game1 = Game
@@ -956,45 +954,12 @@ make_players(Game, [SeatNum|Rest], Acc) ->
     Player = Seat#seat.player,
     make_players(Game, Rest, [Player|Acc]).
 
-broadcast(Game, Event) 
-  when is_record(Event, watch);
-       is_record(Event, unwatch);
-       is_record(Event, sit_out);
-       is_record(Event, come_back);
-       is_record(Event, fold);
-       is_record(Event, join);
-       is_record(Event, leave);
-       is_record(Event, call);
-       is_record(Event, raise);
-       is_record(Event, chat);
-       is_record(Event, game_info);
-       is_record(Event, notify_sb);
-       is_record(Event, notify_bb);
-       is_record(Event, notify_button);
-       is_record(Event, notify_start_game);
-       is_record(Event, notify_end_game);
-       is_record(Event, notify_win);
-       is_record(Event, notify_draw);
-       is_record(Event, notify_shared);
-       is_record(Event, game_inplay);
-       is_record(Event, game_stage);
-       is_record(Event, notify_cancel_game)
-       ->
+broadcast(Game, Event) ->
     %% notify players
     Seats = get_seats(Game, ?PS_ANY),
     Players = make_players(Game, Seats),
     broadcast(Game, Players, Event), 
-    broadcast(Game, Game#game.observers, Event);
-
-broadcast(Game, Event) 
-  when is_record(Game, game) ->
-    Event1 = add_seqnum(Game, Event),
-    Event2 = list_to_tuple(Event1),
-    %% notify players
-    Seats = get_seats(Game, ?PS_ANY),
-    Players = make_players(Game, Seats),
-    broadcast(Game, Players, Event2), 
-    broadcast(Game, Game#game.observers, Event2).
+    broadcast(Game, Game#game.observers, Event).
 
 broadcast(Game, [Player|Rest], Event) ->
     gen_server:cast(Player, Event),
@@ -1014,16 +979,14 @@ seat_query(_Game, 0, Acc) ->
 
 seat_query(Game, SeatNum, Acc) ->
     Seat = element(SeatNum, Game#game.seats),
-    Player = Seat#seat.player,
-    State = case Seat#seat.state of
-		?PS_EMPTY ->
-		    ?SS_EMPTY;
-		?PS_RESERVED ->
-		    ?SS_RESERVED;
-		_ ->
-		    ?SS_TAKEN
-	    end,
-    Acc1 = [{SeatNum, State, Player}|Acc],
+    SeatState = #seat_state{
+      game = Game#game.fsm,
+      seat_num = SeatNum,
+      state = Seat#seat.state,
+      player = Seat#seat.player,
+      inplay = Seat#seat.inplay
+     },
+    Acc1 = [SeatState|Acc],
     seat_query(Game, SeatNum - 1, Acc1).
 
 join_player(R, Game) ->
