@@ -685,7 +685,8 @@ start_game(Host, Port, Game, Delay)
       seat_count = Game#irc_game.player_count,
       required = Game#irc_game.player_count,
       start_delay = Delay,
-      rigged_deck = rig_deck(Game)
+      rigged_deck = rig_deck(Game),
+      pass = <<"@!%#%2E35D$%#$^">>
      },
     spawn(fun()  -> do_start_game(Host, Port, Parent, Cmd) end),
     receive

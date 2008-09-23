@@ -89,7 +89,7 @@ install_cluster_config(Nodes) ->
     Conf = #tab_cluster_config {
       id = 0,
       mnesia_masters = Nodes,
-      test_game_pass = <<"@!%#%E">>
+      test_game_pass = <<"@!%#%2E35D$%#$^">>
      },
     F = fun() -> mnesia:write(Conf) end,
     {atomic, ok} = mnesia:transaction(F).
