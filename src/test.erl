@@ -501,15 +501,17 @@ query_own_balance_test() ->
     Player = TP#tab_player.process,
     ?assertMatch(#you_are{ player = Player }, X),
     %% balance check 
-    ?tcpsend(Socket, ?PP_BALANCE_REQ),
-    ?assertMatch({?PP_BALANCE_INFO, 10000000, 0}, wait_for_msg(2000, [])),
+    ?tcpsend(Socket, #balance_query{}),
+    ?assertMatch(#balance{ amount = 10000000, inplay = 0}, 
+                 wait_for_msg(2000, [])),
     [P1] = mnesia:dirty_read(tab_balance, ID),
     ?assertEqual(10000000, P1#tab_balance.amount),
     %% move some money
     player:update_balance(ID, -150.00),
     %% another balance check 
-    ?tcpsend(Socket, ?PP_BALANCE_REQ),
-    ?assertMatch({?PP_BALANCE_INFO, 8500000, 0}, wait_for_msg(2000, [])),
+    ?tcpsend(Socket, #balance_query{}),
+    ?assertMatch(#balance{ amount = 8500000, inplay = 0}, 
+                 wait_for_msg(2000, [])),
     [P2] = mnesia:dirty_read(tab_balance, ID),
     ?assertEqual(8500000, P2#tab_balance.amount),
     %% clean up

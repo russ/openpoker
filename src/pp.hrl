@@ -497,7 +497,3 @@
 
 -define(PP_SEAT_QUERY, 39).
 -define(PP_SEAT_STATE, 33).
-
--define(PP_BALANCE_REQ, 42).
--define(PP_BALANCE_INFO, 43).
-

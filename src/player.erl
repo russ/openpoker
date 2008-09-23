@@ -118,7 +118,7 @@ handle_cast({?PP_PLAYER_INFO_REQ, PID}, Data) ->
 handle_cast(R = #start_game{}, Data) ->
     handle_cast_new_game_req(R, Data);
 
-handle_cast(?PP_BALANCE_REQ, Data) ->
+handle_cast(#balance_query{}, Data) ->
     handle_cast_balance_req(Data);
 
 handle_cast(stop, Data) ->
@@ -281,9 +281,10 @@ handle_cast_new_game_req(R, Data) ->
 handle_cast_balance_req(Data) ->
     case mnesia:dirty_read(tab_balance, Data#player_data.pid) of
 	[Balance] ->
-	    handle_cast({?PP_BALANCE_INFO, 
-			 Balance#tab_balance.amount,
-			 trunc(inplay(Data) * 10000)}, Data);
+	    handle_cast(_ = #balance{
+                          amount = Balance#tab_balance.amount,
+                          inplay = trunc(inplay(Data) * 10000)
+                         }, Data);
 	_ ->
 	    oops
     end,
