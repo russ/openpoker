@@ -6,7 +6,7 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 
--export([start/0, stop/1, setup/1, setup/0, setup/2, cleanup/0]).
+-export([start/1, stop/1, setup/1, setup/0, setup/2, cleanup/0]).
 
 -export([remove/1, print/1, filter/0, create_players/0,
 	 test/0, test/1, test/3, test/4, test/5, count/0]).
@@ -41,17 +41,18 @@
 	  trace = false
 	 }).
 
-new() ->
+new(Trace) ->
     #data {
-     start_time = erlang:now()
+     start_time = erlang:now(),
+     trace = Trace
     }.
     
-start() ->
-    gen_server:start(mb, [], []).
+start(Trace) ->
+    gen_server:start(mb, [Trace], []).
 
-init([]) ->
+init([Trace]) ->
     process_flag(trap_exit, true),
-    {ok, new()}.
+    {ok, new(Trace)}.
 
 stop(Ref) ->
     gen_server:cast(Ref, stop).
@@ -275,7 +276,7 @@ test(Host, Port, MaxGames, Delay, Trace)
        is_atom(Host), is_number(Port) ->
     io:format("Simulating gameplay with ~p games...~n", [MaxGames]),
     DB = opendb(),
-    {ok, Mb} = start(),
+    {ok, Mb} = start(Trace),
     erlang:monitor(process, Mb),
     T1 = erlang:now(),
     Key = dets:first(DB),
