@@ -328,8 +328,10 @@ setup_players(IRC_ID, GID, Host, Port, [Player|Rest], N, Acc) ->
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, infinity),
     gen_server:cast(Bot, {'SET ACTIONS', Player#irc_player.actions}),
     gen_server:cast(Bot, #login{ nick = Nick, pass = Pass }),
-    [Game] = mnesia:dirty_read(tab_game_xref, GID),
-    gen_server:cast(Bot, #watch{ game = Game#tab_game_xref.process }),
+    %% XXX temp fix
+    %% [Game] = mnesia:dirty_read(tab_game_xref, GID),
+    %% gen_server:cast(Bot, #watch{ game = Game#tab_game_xref.process }),
+    gen_server:cast(Bot, #watch{ game = GID }),
     setup_players(IRC_ID, GID, Host, Port, Rest, N - 1, [{Bot, N}|Acc]).
 
 ircdb_nicks(Game) ->
@@ -518,8 +520,10 @@ setup_observer(Parent, GID, Host, Port, Trace) ->
     gen_server:cast(Observer, {'TRACE', Trace}),
     %% watch game
     ok = gen_server:call(Observer, {'CONNECT', Host, Port}, infinity),
-    [Game] = mnesia:dirty_read(tab_game_xref, GID),
-    gen_server:cast(Observer, #watch{ game = Game#tab_game_xref.process }),
+    %% XXX temp fix
+    %% [Game] = mnesia:dirty_read(tab_game_xref, GID),
+    %% gen_server:cast(Observer, #watch{ game = Game#tab_game_xref.process }),
+    gen_server:cast(Observer, #watch{ game = GID }),
     Observer.
 
 find_server(Host, Port) ->
