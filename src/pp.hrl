@@ -492,8 +492,6 @@
 
 %%% Server -> Client
 
--define(PP_NOTIFY_CHAT, 23).
--define(PP_NOTIFY_WIN, 26).
 -define(PP_PLAYER_STATE, 31).
 -define(PP_SEAT_STATE, 33).
 -define(PP_GAME_QUERY, 37).
@@ -501,6 +499,4 @@
 -define(PP_PLAYER_INFO_REQ, 40).
 -define(PP_BALANCE_REQ, 42).
 -define(PP_BALANCE_INFO, 43).
--define(PP_NOTIFY_PRIVATE_CARDS, 46).
--define(PP_NOTIFY_GAME_INPLAY, 47).
 

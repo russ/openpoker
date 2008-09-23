@@ -940,9 +940,6 @@ add_seqnum(Game, Event)
   when is_tuple(Event) ->
     add_seqnum(Game, tuple_to_list(Event));
 
-add_seqnum(Game, [?PP_NOTIFY_CHAT, Player, Msg]) ->
-    [?PP_NOTIFY_CHAT, Game#game.fsm, Player, Msg];
-
 add_seqnum(Game, List) 
   when is_list(List) ->
     [Type|Rest] = List,

@@ -192,11 +192,11 @@ handle(R = #game_inplay{}, Data) ->
 	     },
     {noreply, Data1};
 
-handle({?PP_NOTIFY_CHAT, GID, PID, Message}, Data) ->
+handle(R = #chat{ notify = true }, Data) ->
     if
 	Data#obs.trace ->
 	    catch io:format("~w: CHAT: ~w: ~p~n",
-		      [GID, PID, Message]);
+		      [R#chat.game, R#chat.player, R#chat.message]);
 	true ->
 	    ok
     end,
@@ -242,17 +242,6 @@ handle(R = #notify_draw{ card = 0 }, Data) ->
 	    ok
     end,
     {noreply, Data};
-
-handle({?PP_NOTIFY_PRIVATE_CARDS, GID, PID, Cards}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: ~w WON WITH CARDS: ~w~n",
-		      [GID, PID, Cards]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
 
 handle(#game_stage{ game = GID, stage = Stage}, Data) ->
     if

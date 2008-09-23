@@ -398,17 +398,10 @@ handle(#call{ notify = true }, Bot) ->
 handle(#raise{ notify = true }, Bot) ->
     {noreply, Bot};
 
-handle({Cmd, _GID, _PID, _Amount}, Bot)
-  when Cmd == ?PP_NOTIFY_WIN ->
-    {noreply, Bot};
-
 handle(#notify_draw{}, Bot) ->
     {noreply, Bot};
 
 handle(#notify_shared{}, Bot) ->
-    {noreply, Bot};
-
-handle({?PP_NOTIFY_PRIVATE_CARDS, _GID, _Player, _Cards}, Bot) ->
     {noreply, Bot};
 
 handle(#notify_button{}, Bot) ->
