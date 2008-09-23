@@ -559,6 +559,8 @@ find_server(Sock) ->
 		    {binary_to_list(Host), Port};
 		#goto{ port = Port, host = Host} when is_list(Host) ->
 		    {Host, Port};
+		#goto{ port = Port, host = Host} when is_atom(Host) ->
+		    {atom_to_list(Host), Port};
                 _ ->
                     find_server(Sock)
             end;
