@@ -413,11 +413,6 @@ notify_muck() ->
              hand()
             }).
 
-notify_quit() ->
-    record(notify_quit, {
-             player()
-            }).
-
 game_stage() ->
     record(game_stage, {
              game(),
@@ -561,9 +556,6 @@ write(R) when is_record(R, notify_my_hand) ->
 write(R) when is_record(R, notify_muck) ->
     [?CMD_NOTIFY_MUCK|pickle(notify_muck(), R)];
 
-write(R) when is_record(R, notify_quit) ->
-    [?CMD_NOTIFY_QUIT|pickle(notify_quit(), R)];
-
 write(R) when is_record(R, game_stage) ->
     [?CMD_GAME_STAGE|pickle(game_stage(), R)];
 
@@ -692,9 +684,6 @@ read(<<?CMD_NOTIFY_MY_HAND, Bin/binary>>) ->
 
 read(<<?CMD_NOTIFY_MUCK, Bin/binary>>) ->
     unpickle(notify_muck(), Bin);
-
-read(<<?CMD_NOTIFY_QUIT, Bin/binary>>) ->
-    unpickle(notify_quit(), Bin);
 
 read(<<?CMD_GAME_STAGE, Bin/binary>>) ->
     unpickle(game_stage(), Bin);

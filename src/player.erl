@@ -53,7 +53,6 @@ stop(Player, Reason)
     gen_server:cast(Player, {stop, Reason}).
 
 terminate(_Reason, Data) ->
-    catch handle_cast_other(?PP_NOTIFY_QUIT, Data),
     ok = mnesia:dirty_delete(tab_player, Data#player_data.pid).
 
 handle_cast('DISCONNECT', Data) ->

@@ -355,9 +355,6 @@ handle(R = #game_inplay{}, Bot) ->
 handle(#chat{}, Bot) ->
     {noreply, Bot};
 
-handle(?PP_NOTIFY_QUIT, Bot) ->
-    {stop, normal, Bot};
-
 handle({?PP_BET_REQ, GID, Amount}, Bot) ->
     handle_bet_req(GID, Amount, Bot);
 

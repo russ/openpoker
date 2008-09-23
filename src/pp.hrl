@@ -398,20 +398,14 @@
           hand
          }).
 
--define(CMD_NOTIFY_QUIT, 29).
-
--record(notify_quit, {
-          player
-         }).
-
--define(CMD_GAME_STAGE, 30).
+-define(CMD_GAME_STAGE, 29).
 
 -record(game_stage, {
           game,
           stage
          }).
 
--define(CMD_SEAT_STATE, 31).
+-define(CMD_SEAT_STATE, 30).
 
 -record(seat_state, {
           game, 
@@ -421,27 +415,27 @@
           inplay
          }).
 
--define(CMD_YOU_ARE, 32).
+-define(CMD_YOU_ARE, 31).
 
 -record(you_are, {
           player
          }).
 
--define(CMD_GOTO, 33).
+-define(CMD_GOTO, 32).
 
 -record(goto, {
           host, 
           port
          }).
 
--define(CMD_BALANCE, 34).
+-define(CMD_BALANCE, 33).
 
 -record(balance, {
           amount,
           inplay
          }).
 
--define(CMD_GAME_INPLAY, 35).
+-define(CMD_GAME_INPLAY, 34).
 
 -record(game_inplay, {
           game, 
@@ -450,28 +444,28 @@
           amount
          }).
 
--define(CMD_NOTIFY_BUTTON, 36).
+-define(CMD_NOTIFY_BUTTON, 35).
 
 -record(notify_button, {
           game,
           button
          }).
 
--define(CMD_NOTIFY_SB, 37).
+-define(CMD_NOTIFY_SB, 36).
 
 -record(notify_sb, {
           game,
           sb
          }).
 
--define(CMD_NOTIFY_BB, 38).
+-define(CMD_NOTIFY_BB, 37).
 
 -record(notify_bb, {
           game,
           bb
          }).
 
--define(CMD_WAIT_BB, 39).
+-define(CMD_WAIT_BB, 38).
 
 -record(wait_bb, {
           game, 
@@ -501,7 +495,6 @@
 -define(PP_BET_REQ, 17).
 -define(PP_NOTIFY_CHAT, 23).
 -define(PP_NOTIFY_WIN, 26).
--define(PP_NOTIFY_QUIT, 28).
 -define(PP_PLAYER_STATE, 31).
 -define(PP_SEAT_STATE, 33).
 -define(PP_GAME_QUERY, 37).
