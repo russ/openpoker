@@ -854,12 +854,13 @@ find_game(Host, Port) ->
 
 find_game(Host, Port, GameType) ->
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
-    ?tcpsend(Socket, {?PP_GAME_QUERY,
-		      GameType,
-		      ?LT_FIXED_LIMIT,
-		      ?OP_IGNORE, 2, % required
-		      ?OP_EQUAL, 0, % joined
-		      ?OP_IGNORE, 0}), % waiting
+    ?tcpsend(Socket, _ = #game_query{
+                       game_type = GameType,
+                       limit_type = ?LT_FIXED_LIMIT,
+                       expected = #query_op{ op = ?OP_IGNORE, val = 2},
+                       joined = #query_op{ op = ?OP_EQUAL, val = 0},
+                       waiting = #query_op{ op = ?OP_IGNORE, val = 0}
+                      }),
     GID = receive
 	      {tcp, _, Bin} ->
 		  case pp:old_read(Bin) of 

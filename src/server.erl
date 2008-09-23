@@ -225,6 +225,16 @@ process_test_start_game(Client, Socket, R) ->
     end,
     Client.
 
+process_game_query(Client, Socket, Q) 
+  when is_record(Q, game_query) ->
+    find_games(Socket, 
+               Q#game_query.game_type, 
+               Q#game_query.limit_type,
+               Q#game_query.expected,
+               Q#game_query.joined,
+               Q#game_query.waiting),
+    Client.
+
 parse_packet(Socket, Client) ->
     receive
 	{tcp, Socket, Bin} ->
@@ -242,22 +252,9 @@ parse_packet(Socket, Client) ->
                 R = #start_game{ rigged_deck = [_|_] } ->
                     Client1 = process_test_start_game(Client, Socket, R),
                     parse_packet(Socket, Client1);
-		{?PP_GAME_QUERY, 
-		 GameType, LimitType,
-		 ExpOp, Expected, 
-		 JoinOp, Joined,
-		 WaitOp, Waiting} ->
-		    _ST = now(),
-		    find_games(Socket, 
-			       GameType, LimitType,
-			       ExpOp, Expected, 
-			       JoinOp, Joined,
-			       WaitOp, Waiting),
-		    _ET = now(),
-		    %%Elapsed = timer:now_diff(ET, ST) / 1000,
-		    %%io:format("~wms to send games to ~w~n", 
-		    %%	      [Elapsed, Socket]),
-		    parse_packet(Socket, Client);
+                R when is_record(R, game_query) ->
+                    Client1 = process_game_query(Client, Socket, R),
+                    parse_packet(Socket, Client1);
 		none ->
 		    io:format("Unrecognized packet: ~w~n", [Bin]);
 		Event ->
@@ -297,9 +294,9 @@ send_games(Socket, [H|T]) ->
 
 find_games(Socket, 
 	   GameType, LimitType,
-	   ExpOp, Expected, 
-	   JoinOp, Joined,
-	   WaitOp, Waiting) ->
+	   #query_op{ op = ExpOp, val = Expected }, 
+	   #query_op{ op = JoinOp, val = Joined },
+	   #query_op{ op = WaitOp, val = Waiting }) ->
     {atomic, L} = game:find(GameType, LimitType,
 			    ExpOp, Expected, 
 			    JoinOp, Joined,
