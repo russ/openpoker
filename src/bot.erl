@@ -185,7 +185,9 @@ handle_notify_game_inplay(R, Bot) ->
 	   end,
     {noreply, Bot1}.
 
-handle_bet_req(GID, Amount, Bot) ->
+handle_bet_req(R, Bot) ->
+    GID = R#bet_req.game,
+    Amount = R#bet_req.call,
     %%io:format("~w: BLIND_REQ: ~w/~w, ~.2. f~n", 
     %%	      [GID, Bot#bot.player, Bot#bot.seat_num, Amount]),
     [Action|Rest] = Bot#bot.actions,
@@ -225,7 +227,11 @@ handle_bet_req(GID, Amount, Bot) ->
 	    {noreply, Bot1}
     end.
 
-handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot) ->
+handle_bet_req_min_max(R, Bot) ->
+    GID = R#bet_req.game,
+    Call = R#bet_req.call,
+    RaiseMin = R#bet_req.raise_min,
+    RaiseMax = R#bet_req.raise_max,
     [Action|Rest] = Bot#bot.actions,
     Bot1 = Bot#bot {
 	     actions = Rest
@@ -355,11 +361,11 @@ handle(R = #game_inplay{}, Bot) ->
 handle(#chat{}, Bot) ->
     {noreply, Bot};
 
-handle({?PP_BET_REQ, GID, Amount}, Bot) ->
-    handle_bet_req(GID, Amount, Bot);
+handle(R = #bet_req{ raise_min = 0, raise_max = 0 }, Bot) ->
+    handle_bet_req(R, Bot);
 
-handle({?PP_BET_REQ, GID, Call, RaiseMin, RaiseMax}, Bot) ->
-    handle_bet_req_min_max(GID, Call, RaiseMin, RaiseMax, Bot);
+handle(R = #bet_req{}, Bot) ->
+    handle_bet_req_min_max(R, Bot);
 
 handle({?PP_PLAYER_STATE, _GID, _PID, _State}, Bot) ->
     {noreply, Bot};

@@ -576,7 +576,12 @@ bust_trigger(Game, Event, Pid) ->
 
 post_blinds_trigger(Game, Event, Pid) ->
     case Event of 
-	{in, {'$gen_cast', {?PP_BET_REQ, Game, Amount, 0, 0}}} ->
+	{in, {'$gen_cast', #bet_req{ 
+                game = Game, 
+                call = Amount, 
+                raise_min = 0, 
+                raise_max = 0
+               }}} ->
 	    %% post the blind
 	    cardgame:send_event(Game, #call{ player = Pid, amount = Amount }),
             done;

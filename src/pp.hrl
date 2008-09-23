@@ -492,7 +492,6 @@
 
 %%% Server -> Client
 
--define(PP_BET_REQ, 17).
 -define(PP_NOTIFY_CHAT, 23).
 -define(PP_NOTIFY_WIN, 26).
 -define(PP_PLAYER_STATE, 31).

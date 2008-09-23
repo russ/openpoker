@@ -620,9 +620,14 @@ handle_cast_request_bet(SeatNum, Call, RaiseMin, RaiseMax, Game) ->
                     {noreply, Game1};
                 %% regular bet request
                 true ->
-                    FSM = Game#game.fsm,
-                    Msg = {?PP_BET_REQ, FSM, Call, RaiseMin, RaiseMax},
-                    gen_server:cast(Seat#seat.player, Msg),
+                    BetReq = #bet_req{
+                      game = Game#game.fsm,
+                      player = Seat#seat.player,
+                      call = Call,
+                      raise_min = RaiseMin,
+                      raise_max = RaiseMax
+                     },
+                    gen_server:cast(Seat#seat.player, BetReq),
                     {noreply, Game}
             end
     end.
