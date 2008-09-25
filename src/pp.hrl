@@ -155,8 +155,7 @@
 -define(CMD_GOOD, 0).
 
 -record(good, { 
-          cmd, 
-          extra
+          cmd
          }).
 
 -define(CMD_LOGIN, 1).
@@ -191,8 +190,7 @@
           game,
           player,
           amount,
-          expected, % internal
-          notify = none % internal
+          expected % internal
          }).
 
 -define(CMD_RAISE, 6).
@@ -204,16 +202,14 @@
           total, % notification only
           call, % internal
           min, % internal
-          max, % internal
-          notify = none % internal
+          max % internal
          }).
 
 -define(CMD_FOLD, 7).
 
 -record(fold, {
           game,
-          player,
-          notify = none % internal
+          player
          }).
 
 -define(CMD_JOIN, 8).
@@ -224,8 +220,7 @@
           seat_num,
           amount,
           state = ?PS_PLAY, % internal
-          pid, % internal
-          notify = none % internal
+          pid % internal
          }).
 
 -define(CMD_LEAVE, 9).
@@ -233,24 +228,21 @@
 -record(leave, {
           game,
           player,
-          state, % internal
-          notify = none % internal
+          state % internal
          }).
 
 -define(CMD_SIT_OUT, 10).
 
 -record(sit_out, {
           game,
-          player,
-          notify = none % internal
+          player
          }).
 
 -define(CMD_COME_BACK, 11).
 
 -record(come_back, {
           game,
-          player,
-          notify = none % internal
+          player
          }).
 
 -define(CMD_CHAT, 12).
@@ -258,8 +250,7 @@
 -record(chat, {
           game,
           player,
-          message,
-          notify = none % internal
+          message
          }).
 
 -define(CMD_GAME_QUERY, 13).
@@ -465,6 +456,12 @@
           game, 
           player,
           notify % internal
+         }).
+
+-define(CMD_YOUR_GAME, 39).
+
+-record(your_game, {
+          game
          }).
 
 -define(CMD_PING, 253).

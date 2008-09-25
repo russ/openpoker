@@ -2,8 +2,6 @@
 
 -module(pp).
 
--export([old_write/1, old_read/1]).
-
 -export([read/1, write/1, test/0]).
 
 -include("test.hrl").
@@ -19,12 +17,6 @@
                 ]).
 
 -define(PP_VER, 1).
-
-old_write(Data) ->
-    term_to_binary(Data).
-
-old_read(Bin) when is_binary(Bin) ->
-    binary_to_term(Bin).
 
 nick() ->
     string().
@@ -65,20 +57,29 @@ player_timeout() ->
 start_delay() ->
     int().
 
-total_inplay() ->
-    int().
+amount_to_int(Amount) ->
+    trunc(Amount * 10000).
+
+int_to_amount(Int) ->    
+    Int / 10000.0.
+
+amount() ->
+    wrap({fun amount_to_int/1, fun int_to_amount/1}, int()).
+
+total_inplay_amount() ->
+    amount().
 
 total_amount() ->
-    int().
+    amount().
 
 call_amount() ->
-    int().
+    amount().
 
 raise_min() ->
-    int().
+    amount().
 
 raise_max() ->
-    int().
+    amount().
 
 stage() ->
     byte().
@@ -137,10 +138,15 @@ id_to_game(GID) ->
     
 game() ->
     wrap({fun game_to_id/1, fun id_to_game/1}, int()).
-         
+
+player_to_id(undefined) ->
+    0;
 player_to_id(Player) ->
     gen_server:call(Player, 'ID').
     
+id_to_player(0) ->
+    undefined;
+
 id_to_player(PID) ->
     case mnesia:dirty_read(tab_player, PID) of
         [Player] ->
@@ -151,9 +157,6 @@ id_to_player(PID) ->
     
 player() ->
     wrap({fun player_to_id/1, fun id_to_player/1}, int()).
-
-amount() ->
-    int().
 
 seat_num() ->
     byte().
@@ -177,7 +180,6 @@ bad() ->
 
 good() ->
     record(good, {
-             byte(),
              byte()
             }).
 
@@ -215,7 +217,6 @@ call() ->
              game(),
              player(),
              amount(),
-             internal(),
              internal()
             }).
 
@@ -225,7 +226,6 @@ raise() ->
              player(),
              raise(),
              total_amount(), % notification only
-             internal(),
              internal(),
              internal(),
              internal()
@@ -244,7 +244,6 @@ join() ->
              seat_num(),
              amount(),
              internal(),
-             internal(),
              internal()
             }).
 
@@ -252,30 +251,26 @@ leave() ->
     record(leave, {
              game(),
              player(),
-             internal(),
              internal()
             }).
 
 sit_out() ->
     record(sit_out, {
              game(),
-             player(),
-             internal()
+             player()
             }).
 
 come_back() ->
     record(come_back, {
              game(),
-             player(),
-             internal()
+             player()
             }).
 
 chat() ->
     record(chat, {
              game(),
              player(),
-             message(),
-             internal()
+             message()
             }).
 
 game_query() ->
@@ -329,7 +324,7 @@ game_info() ->
 player_info() ->
     record(player_info, {
              player(),
-             total_inplay(), 
+             total_inplay_amount(), 
              nick(),
              location()
             }).
@@ -358,10 +353,7 @@ notify_shared() ->
 
 notify_start_game() ->
     record(notify_start_game, {
-             game(),
-             button(),
-             sb(), 
-             bb()
+             game()
             }).
 
 notify_button() ->
@@ -441,8 +433,8 @@ goto() ->
 
 balance() ->
     record(balance, {
-             amount(),
-             amount()
+             int(),
+             int()
             }).
 
 game_inplay() ->
@@ -451,6 +443,11 @@ game_inplay() ->
              player(),
              seat_num(),
              amount()
+            }).
+
+your_game() ->
+    record(your_game, {
+             game()
             }).
 
 ping() ->
@@ -583,6 +580,9 @@ write(R) when is_record(R, notify_sb) ->
 write(R) when is_record(R, notify_bb) ->
     [?CMD_NOTIFY_BB|pickle(notify_bb(), R)];
 
+write(R) when is_record(R, your_game) ->
+    [?CMD_YOUR_GAME|pickle(your_game(), R)];
+
 write(R) when is_record(R, ping) ->
     [?CMD_PING|pickle(ping(), R)];
 
@@ -711,6 +711,9 @@ read(<<?CMD_NOTIFY_SB, Bin/binary>>) ->
 
 read(<<?CMD_NOTIFY_BB, Bin/binary>>) ->
     unpickle(notify_bb(), Bin);
+
+read(<<?CMD_YOUR_GAME, Bin/binary>>) ->
+    unpickle(your_game(), Bin);
 
 read(<<?CMD_PING, Bin/binary>>) ->
     unpickle(ping(), Bin);

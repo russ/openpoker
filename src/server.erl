@@ -78,9 +78,7 @@ init([Host, Port, TestMode]) ->
     %%error_logger:logfile({open, "/tmp/" 
     %%		  ++ atom_to_list(node()) 
     %%		  ++ ".log"}),
-    Client = #client {
-      server = self()
-     },
+    Client = #client{ server = self() },
     if
         not TestMode ->
             start_games();
@@ -90,7 +88,7 @@ init([Host, Port, TestMode]) ->
     F = fun(Sock) -> parse_packet(Sock, Client) end, 
     tcp_server:stop(Port),
     {ok, _} = tcp_server:start_raw_server(Port, F, 32768, 32768),
-    Server = #server {
+    Server = #server{
       host = Host,
       port = Port,
       avg = 0,
@@ -191,7 +189,7 @@ code_change(_OldVsn, Server, _Extra) ->
 process_login(Client, Socket, Nick, Pass) ->
     case login:login(Nick, Pass, self()) of
         {error, Error} ->
-            ok = ?tcpsend(Socket, #bad{ cmd = login, error = Error}),
+            ok = ?tcpsend(Socket, #bad{ cmd = ?CMD_LOGIN, error = Error}),
             Client;
         {ok, Player} ->
             %% disconnect visitor
@@ -202,12 +200,14 @@ process_login(Client, Socket, Nick, Pass) ->
                     ok
             end,
             ok = ?tcpsend(Socket, #you_are{ player = Player }),
+            io:format("server: ~p: good login: player: ~p~n", 
+                      [self(), Player]),
             Client#client{ player = Player }
     end.
 
 process_logout(Client, Socket) ->
     gen_server:cast(Client#client.player, #logout{}),
-    ok = ?tcpsend(Socket, #good{ cmd = ?CMD_LOGOUT }),
+    ?tcpsend(Socket, #good{ cmd = ?CMD_LOGOUT }),
     %% replace player process with a visitor
     {ok, Visitor} = visitor:start(self()),
     Client#client{ player = Visitor }.
@@ -235,41 +235,43 @@ process_game_query(Client, Socket, Q)
                Q#game_query.waiting),
     Client.
 
+process_event(Client, Socket, Event) ->
+    if 
+        Client#client.player == none ->
+            %% start a proxy
+            {ok, Visitor} = visitor:start(self()),
+            Client1 = Client#client{ player = Visitor };
+        true ->
+            Client1 = Client
+    end,
+    io:format("server: ~p: player: ~p, event: ~p~n",
+              [Socket, Client1#client.player, Event]),
+    gen_server:cast(Client1#client.player, Event),
+    Client1.
+
 parse_packet(Socket, Client) ->
     receive
 	{tcp, Socket, Bin} ->
             gen_server:cast(Client#client.server, {'BUMP', size(Bin)}),
-	    case pp:old_read(Bin) of
-                #login{ nick = Nick, pass = Pass} ->
-                    Client1 = process_login(Client, Socket, Nick, Pass),
-                    parse_packet(Socket, Client1);
-                #logout{} ->
-                    Client1 = process_logout(Client, Socket),
-                    parse_packet(Socket, Client1);
-                #ping{} ->
-                    Client1 = process_ping(Client, Socket),
-                    parse_packet(Socket, Client1);
-                R = #start_game{ rigged_deck = [_|_] } ->
-                    Client1 = process_test_start_game(Client, Socket, R),
-                    parse_packet(Socket, Client1);
-                R when is_record(R, game_query) ->
-                    Client1 = process_game_query(Client, Socket, R),
-                    parse_packet(Socket, Client1);
-		none ->
-		    io:format("Unrecognized packet: ~w~n", [Bin]);
-		Event ->
-		    Client1 = if 
-				  Client#client.player == none ->
-				      %% start a proxy
-				      {ok, Visitor} = visitor:start(self()),
-				      Client#client{ player = Visitor };
-				  true ->
-				      Client
-			      end,
-		    gen_server:cast(Client1#client.player, Event),
-		    parse_packet(Socket, Client1)
-	    end;
-	{tcp_closed, Socket} ->
+	    Client1 = case pp:read(Bin) of
+                          #login{ nick = Nick, pass = Pass} ->
+                              process_login(Client, Socket, Nick, Pass);
+                          #logout{} ->
+                              process_logout(Client, Socket);
+                          #ping{} ->
+                              process_ping(Client, Socket);
+                          R = #start_game{ rigged_deck = [_|_] } ->
+                              process_test_start_game(Client, Socket, R);
+                          R when is_record(R, game_query) ->
+                              process_game_query(Client, Socket, R);
+                          none ->
+                              io:format("Unrecognized packet: ~w~n", [Bin]),
+                              Client;
+                          Event ->
+                              process_event(Client, Socket, Event)
+                      end,
+            parse_packet(Socket, Client1);
+        {tcp_closed, Socket} ->
 	    gen_server:cast(Client#client.player, 'DISCONNECT');
 	{packet, Packet} ->
 	    %%io:format("<-- ~w~n", [Packet]),
@@ -343,7 +345,7 @@ start_test_game(R) ->
     if
 	CC#tab_cluster_config.test_game_pass == R#start_game.pass ->
             {ok, Pid} = cardgame:start(R),
-            #good{ cmd = ?CMD_START_GAME, extra = Pid };
+            #your_game{ game = Pid };
         true ->
             #bad{ cmd = ?CMD_START_GAME }
     end.

@@ -22,13 +22,15 @@
 
 -define(tcpsend(Socket, Data),
 	fun() ->
-		XXX = pp:old_write(Data),
+		XXX = pp:write(Data),
 		case catch gen_tcp:send(Socket, XXX) of
 		    ok ->
 			ok;
 		    {error, closed} ->
+                        io:format("tcpsend: connection closed~n"),
 			ok;
 		    {error,econnaborted} ->
+                        io:format("tcpsend: connection aborted~n"),
 			ok;
 		    Any ->
 			error_logger:error_report([

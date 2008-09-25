@@ -148,6 +148,9 @@ handle_cast({'TIMEOUT', Timeout}, Game) ->
 handle_cast({'BROADCAST', Event}, Game) ->
     handle_cast_broadcast(Game, Event);
 
+handle_cast({'BROADCAST', Event, Except}, Game) ->
+    handle_cast_broadcast(Game, Event, Except);
+
 handle_cast(R, Game)
   when is_record(R, notify_start_game) ->
     handle_cast_notify_start_game(R, Game);
@@ -158,20 +161,16 @@ handle_cast(R, Game)
 
 %%% Watch the game without joining
 
-handle_cast(R, Game) 
-  when is_record(R, watch) ->
+handle_cast(R = #watch{}, Game) ->
     handle_cast_watch(R, Game);
 
-handle_cast(R, Game) 
-  when is_record(R, unwatch) ->
+handle_cast(R= #unwatch{}, Game) ->
     handle_cast_unwatch(R, Game);
     
-handle_cast(R, Game) 
-  when is_record(R, notify_sb) ->
+handle_cast(R = #notify_sb{}, Game) ->
     handle_cast_notify_sb(R, Game);
 
-handle_cast(R, Game) 
-  when is_record(R, notify_bb) ->
+handle_cast(R = #notify_bb{}, Game) ->
     handle_cast_notify_bb(R, Game);
 
 %%% Need to be watching the game or playing
@@ -183,16 +182,13 @@ handle_cast(R = #chat{}, Game) ->
 %%% You need to have enough money to buy in 
 %%% and the seat has to be empty.
 
-handle_cast(R, Game) 
-  when is_record(R, join) ->
+handle_cast(R = #join{}, Game) ->
     handle_cast_join(R, Game);
 
-handle_cast(R, Game) 
-  when is_record(R, leave) ->
+handle_cast(R = #leave{}, Game) ->
     handle_cast_leave(R, Game);
 
-handle_cast(R, Game) 
-  when is_record(R, fold) ->
+handle_cast(R = #fold{}, Game) ->
     handle_cast_fold(R, Game);
 
 handle_cast({'DRAW', Player}, Game) ->
@@ -334,7 +330,7 @@ code_change(_OldVsn, Game, _Extra) ->
 handle_cast_reset(Game) ->
     broadcast_inplay(Game),
     Deck = deck:reset(Game#game.deck),
-    Game1 = Game#game {
+    Game1 = Game#game{
               deck = Deck,
 	      board = [],
 	      call = 0,
@@ -348,13 +344,14 @@ handle_cast_reset(Game) ->
     {noreply, Game3}.
     
 handle_cast_timeout(Timeout, Game) ->
-    Game1 = Game#game { 
-	      timeout = Timeout
-	     },
+    Game1 = Game#game{ timeout = Timeout },
     {noreply, Game1}.
 
 handle_cast_broadcast(Game, Event) ->
-    Game1 = broadcast(Game, Event),
+    handle_cast_broadcast(Game, Event, none).
+
+handle_cast_broadcast(Game, Event, Except) ->
+    Game1 = broadcast(Game, Event, Except),
     {noreply, Game1}.
 
 handle_cast_notify_start_game(R, Game) ->
@@ -362,7 +359,7 @@ handle_cast_notify_start_game(R, Game) ->
     Game1 = reset(Game),
     Game2 = broadcast(Game1, #chat{ 
                         game = Game#game.fsm, 
-                        player = 0, message = Msg 
+                        message = Msg 
                        }),
     Game3 = broadcast(Game2, R),
     {noreply, Game3}.
@@ -371,20 +368,19 @@ handle_cast_notify_cancel_game(R, Game) ->
     Msg = lang:msg(?GAME_CANCELLED),
     Game1 = broadcast(Game, #chat{ 
                         game = Game#game.fsm,
-                        player = 0, 
                         message = Msg 
                        }),
     Game2 = broadcast(Game1, R),
     {noreply, Game2}.
 
 handle_cast_watch(R, Game) ->
-    Game1 = Game#game { 
+    Game1 = Game#game{ 
 	      observers = [R#watch.player|Game#game.observers]
 	     },
     {noreply, Game1}.
 
 handle_cast_unwatch(R, Game) ->
-    Game1 = Game#game { 
+    Game1 = Game#game{ 
 	      observers = lists:delete(R#unwatch.player, Game#game.observers)
 	     },
     {noreply, Game1}.
@@ -396,7 +392,7 @@ handle_cast_chat(R, Game) ->
 	or lists:member(Player, Game#game.observers),
     Game1 = if 
 		OurPlayer ->
-		    broadcast(Game, R#chat{ game = Game#game.fsm });
+		    broadcast(Game, R#chat{ game = Game#game.fsm }, Player);
 		true ->
 		    Game
 	    end,
@@ -428,11 +424,11 @@ handle_cast_join(R, Game) ->
 	    %% from balance to inplay
             case do_buy_in(Game#game.gid, R#join.pid, R#join.amount) of
 		ok ->
+                    %% tell player
+                    gen_server:cast(Player, {'NOTIFY JOIN', R}),
 		    %% take seat and broadcast the fact
 		    Game1 = join_player(R, Game),
-		    Game2 = broadcast(Game1, R#join{ notify = true }),
-                    %% broadcast other player's current playins to the game
-                    broadcast_inplay(Game2),
+		    Game2 = broadcast(Game1, R, Player),
 		    {noreply, Game2};
 		_Any ->
                     %% no money or other error
@@ -453,8 +449,10 @@ handle_cast_leave(R, Game) ->
             if 
                 %% can leave, unless playing
                 Seat#seat.state band R#leave.state > 0 ->
+                    %% tell player
+                    gen_server:cast(Player, {'NOTIFY LEAVE', R}),
                     %% notify players
-                    Game1 = broadcast(Game, R#leave{ notify = true }),
+                    Game1 = broadcast(Game, R, Player),
                     XRef1 = gb_trees:delete(Player, XRef),
                     Game2 = Game1#game {
                               xref = XRef1,
@@ -489,9 +487,10 @@ handle_cast_leave(R, Game) ->
     end.
 
 handle_cast_fold(R, Game) ->
-    Game1 = set_state(Game, R#fold.player, ?PS_FOLD),
+    Player = R#fold.player,
+    Game1 = set_state(Game, Player, ?PS_FOLD),
     %% notify fold
-    Game2 = broadcast(Game1, R#fold{ game = Game#game.fsm, notify = true }),
+    Game2 = broadcast(Game1, R#fold{ game = Game#game.fsm }, Player),
     {noreply, Game2}.
     
 handle_cast_inplay_plus(Player, Amount, Game) ->
@@ -936,17 +935,25 @@ make_players(Game, [SeatNum|Rest], Acc) ->
     make_players(Game, Rest, [Player|Acc]).
 
 broadcast(Game, Event) ->
+    broadcast(Game, Event, none).
+
+broadcast(Game, Event, Except) ->
     %% notify players
     Seats = get_seats(Game, ?PS_ANY),
     Players = make_players(Game, Seats),
-    broadcast(Game, Players, Event), 
-    broadcast(Game, Game#game.observers, Event).
+    broadcast(Game, Players, Event, Except), 
+    broadcast(Game, Game#game.observers, Event, none).
 
-broadcast(Game, [Player|Rest], Event) ->
-    gen_server:cast(Player, Event),
-    broadcast(Game, Rest, Event);
-    
-broadcast(Game, [], _) ->
+broadcast(Game, [Player|Rest], Event, Except) ->
+    if
+        Player /= Except ->
+            gen_server:cast(Player, Event);
+        true ->
+            ok
+    end,
+    broadcast(Game, Rest, Event, Except);
+
+broadcast(Game, [], _, _) ->
     Game.
 
 %% Seat query
@@ -1139,8 +1146,7 @@ force_player_leave(Game, Seats, N) ->
                     %% notify others
                     Game1 = broadcast(Game, #leave{
                                         game = Game#game.fsm,
-                                        player = Player,
-                                        notify = true
+                                        player = Player
                                        }),
                     XRef1 = gb_trees:delete(Player, XRef),
                     Game1#game {

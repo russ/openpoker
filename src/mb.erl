@@ -554,7 +554,7 @@ find_server(Host, Port) ->
 find_server(Sock) ->
     receive
 	{tcp, Sock, Bin} ->
-	    case pp:old_read(Bin) of 
+	    case pp:read(Bin) of 
                 #goto{ port = Port, host = Host } when is_binary(Host) ->
 		    {binary_to_list(Host), Port};
 		#goto{ port = Port, host = Host} when is_list(Host) ->
@@ -747,11 +747,11 @@ start_game(Host, Port, Game, Delay)
     end.
 
 start_game(Sock, Cmd = #start_game{}) ->
-    ok = gen_tcp:send(Sock, pp:old_write(Cmd)),
+    ok = gen_tcp:send(Sock, pp:write(Cmd)),
     receive
 	{tcp, Sock, Bin} ->
-	    case pp:old_read(Bin) of 
-		#good{ cmd = ?CMD_START_GAME, extra = GID } ->
+	    case pp:read(Bin) of 
+		#your_game{ game = GID } ->
 		    {ok, GID};
 		Any ->
 		    {error, Any}

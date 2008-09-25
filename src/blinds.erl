@@ -262,7 +262,7 @@ small_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
 			      small_blind_bet = Amount
 			     },
                     gen_server:cast(Game, {'ADD BET', Player, Amount}),
-                    gen_server:cast(Game, {'BROADCAST', R#call{ notify = true }}),
+                    gen_server:cast(Game, {'BROADCAST', R, Player}),
 		    BBPlayers = gen_server:call(Game, 
 						{'SEATS', Seat, ?PS_BB_ACTIVE}),
 		    Data2 = ask_for_blind(Data1, 
@@ -336,7 +336,7 @@ big_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
 		    gen_server:cast(Game, {'SET STATE', BBPlayer, ?PS_PLAY}),
 		    %% record blind bets
 		    gen_server:cast(Game, {'ADD BET', BBPlayer, Amount}),
-                    gen_server:cast(Game, {'BROADCAST', R#call{ notify = true }}),
+                    gen_server:cast(Game, {'BROADCAST', R, Player}),
                     %% adjust button if a heads-up game
 		    Seats = gen_server:call(Game, {'SEATS', ?PS_ACTIVE}),
 		    if

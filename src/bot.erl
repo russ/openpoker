@@ -17,6 +17,7 @@ new(Nick, IRC_ID, SeatNum, Balance)
     Bot = #bot {
       nick = Nick,
       player = none,
+      watch = none,
       game = none,
       balance = Balance,
       socket = none,
@@ -51,6 +52,7 @@ terminate(_Reason, Bot) ->
                     error_logger:info_report([{message, "Premature connection close"},
                                               {module, ?MODULE},
                                               {line, ?LINE},
+                                              {self, self()},
                                               {bot, Bot},
                                               {actions, Bot#bot.actions}]);
                 _ ->
@@ -65,6 +67,9 @@ handle_cast({'SET ACTIONS', Actions}, Bot) ->
 
 handle_cast({'GAMES TO PLAY', N}, Bot) ->
     handle_games_to_play(N, Bot);
+
+handle_cast({'WATCH', Game}, Bot) ->
+    handle_watch(Game, Bot);
 
 handle_cast(stop, Bot) ->
     handle_stop(Bot);
@@ -157,6 +162,7 @@ handle_tcp_closed(Socket, Bot) ->
 	    error_logger:info_report([{message, "Premature connection close"},
                                       {module, ?MODULE},
                                       {line, ?LINE},
+                                      {self, self()},
                                       {socket, Socket},
                                       {bot, Bot}]);
 	_ ->
@@ -165,7 +171,7 @@ handle_tcp_closed(Socket, Bot) ->
     {stop, normal, Bot}.
 
 handle_tcp_data(Bin, Bot) ->
-    case pp:old_read(Bin) of
+    case pp:read(Bin) of
 	none ->
 	    {noreply, Bot};
 	Event ->
@@ -174,6 +180,7 @@ handle_tcp_data(Bin, Bot) ->
     end.
 
 handle_you_are(R, Bot) ->
+    handle_cast(#watch{ game = Bot#bot.watch }, Bot),
     {noreply, Bot#bot{ player = R#you_are.player }}.
 
 handle_notify_game_inplay(R, Bot) ->
@@ -328,6 +335,9 @@ handle_notify_cancel_game(GID, Bot) ->
                                    }),
     {noreply, Bot}.
 
+handle_watch(Game, Bot) ->
+    {noreply, Bot#bot{ watch = Game }}.
+
 %%% 
 %%% Utility
 %%%
@@ -341,11 +351,11 @@ handle(#game_info{}, Bot) ->
 handle(#player_info{}, Bot) ->
     {noreply, Bot};
 
-handle(R = #join{ notify = true }, Bot)
+handle(R = #join{}, Bot)
   when R#join.player == Bot#bot.player ->
     handle_notify_join(R, Bot);
 
-handle(R = #leave{ notify = true }, Bot) 
+handle(R = #leave{}, Bot) 
   when R#leave.player == Bot#bot.player ->
     handle_notify_leave(R, Bot);
 
@@ -386,13 +396,13 @@ handle(#notify_cancel_game{ game = GID }, Bot) ->
 handle(#notify_win{}, Bot) ->
     {noreply, Bot};
 
-handle(#fold{ notify = true }, Bot) ->
+handle(#fold{}, Bot) ->
     {noreply, Bot};
 
-handle(#call{ notify = true }, Bot) ->
+handle(#call{}, Bot) ->
     {noreply, Bot};
 
-handle(#raise{ notify = true }, Bot) ->
+handle(#raise{}, Bot) ->
     {noreply, Bot};
 
 handle(#notify_draw{}, Bot) ->

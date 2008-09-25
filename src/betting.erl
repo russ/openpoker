@@ -167,13 +167,13 @@ betting_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
 		    %% all-in
                     gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
 		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
-                    gen_server:cast(Game, {'BROADCAST', R#call{ notify = true }}),
+                    gen_server:cast(Game, {'BROADCAST', R, Player}),
 		    next_turn(Data, Player);
 		true ->
 		    %% proper bet
 		    gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
 		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
-		    gen_server:cast(Game, {'BROADCAST', R#call{ notify = true }}),
+		    gen_server:cast(Game, {'BROADCAST', R, Player}),
 		    next_turn(Data, Player)
 	    end
     end.
@@ -214,12 +214,9 @@ betting_handle_raise(R, Data) ->
 			    gen_server:cast(Game, 
 					    {'SET STATE', Player, ?PS_BET})
 		    end,
-		    gen_server:cast(Game, {'BROADCAST', #raise{
-                                             player = Player,
-                                             raise = Amount,
-                                             total = Amount + Call,
-                                             notify = true
-                                            }}),
+		    gen_server:cast(Game, {'BROADCAST', R#raise{
+                                                          total = Amount + Call
+                                                         }, Player}),
 		    Data1 = Data#betting {
 			      call = Data#betting.call + Amount,
 			      raise_count = RaiseCount1

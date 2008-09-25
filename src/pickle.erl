@@ -5,6 +5,7 @@
 	 int/0, sint/0, long/0, slong/0]).
 -export([list/2, choice/2, optional/1, wrap/2,
 	 tuple/1, record/2, binary/1, wstring/0]).
+-export([string/0]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -281,6 +282,9 @@ binary(Size) ->
     {fun (Acc, Bin) -> write_binary(Size, Acc, Bin) end, 
      fun (Bin) -> read_binary(Size, Bin) end}.
 
+write_binary({Size, _}, Acc, undefined) -> 
+    Size(Acc, 0);
+
 write_binary({Size, _}, Acc, Bin) -> 
     Acc1 = Size(Acc, size(Bin)),
     [Bin|Acc1].
@@ -310,6 +314,9 @@ read_wstring(<<0:16, Bin/binary>>, Acc) ->
 
 read_wstring(<<X:16/little, Bin/binary>>, Acc) ->
     read_wstring(Bin, [X|Acc]).
+
+string() ->    
+    binary(byte()).
     
 %%%
 %%% Unit test

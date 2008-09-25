@@ -61,52 +61,62 @@ handle_cast('DISCONNECT', Data) ->
 handle_cast({'SOCKET', Socket}, Data) ->
     handle_cast_socket(Socket, Data);
 
-handle_cast(R, Data) 
-  when is_record(R, watch) ->
+handle_cast({'NOTIFY JOIN', R}, Data) ->
+    handle_cast_notify_join(R, Data);
+
+handle_cast({'NOTIFY LEAVE', R}, Data) ->
+    handle_cast_notify_leave(R, Data);
+
+handle_cast(R = #watch{}, Data) ->
     handle_cast_watch(R, Data);
 
-handle_cast(R, Data) 
-  when is_record(R, unwatch) ->
+handle_cast(R = #unwatch{}, Data) ->
     handle_cast_unwatch(R, Data);
 
-handle_cast(R = #wait_bb{ notify = none }, Data) ->
+handle_cast(R = #wait_bb{}, Data) ->
     handle_cast_wait_bb(R, Data);
 
-handle_cast(R = #call{ notify = none }, Data) ->
+handle_cast(R = #call{}, Data)
+  when R#call.player == Data#player_data.self;
+       R#call.player == undefined ->
     handle_cast_call(R, Data);
 
-handle_cast(R = #raise{ notify = none }, Data) ->
+handle_cast(R = #raise{}, Data)
+  when R#raise.player == Data#player_data.self;
+       R#raise.player == undefined ->
     handle_cast_raise(R, Data);
 
 handle_cast(R = #logout{}, Data) ->
     handle_cast_logout(R, Data);
 
-handle_cast(R = #join{ notify = none }, Data) ->
+handle_cast(R = #join{}, Data)
+  when R#join.player == Data#player_data.self;
+       R#join.player == undefined ->
     handle_cast_join(R, Data);
 
-handle_cast(R, Data)
-  when is_record(R, join), R#join.player == Data#player_data.self ->
-    handle_cast_notify_join(R, Data);
-
-handle_cast(R = #leave{ notify = none }, Data) ->
+handle_cast(R = #leave{}, Data)
+  when R#leave.player == Data#player_data.self;
+       R#leave.player == undefined ->
     handle_cast_leave(R, Data);
 
-handle_cast(R, Data)
-  when is_record(R, leave), 
-       R#leave.notify == true,
-       R#leave.player == Data#player_data.self ->
-    handle_cast_notify_leave(R, Data);
-
-handle_cast(R = #chat{}, Data) ->
+handle_cast(R = #chat{}, Data)
+  when R#chat.player == Data#player_data.self;
+       R#chat.player == undefined ->
     handle_cast_chat(R, Data);
 
-handle_cast(R = #fold{ notify = none }, Data) ->
+handle_cast(R = #fold{}, Data)
+  when R#fold.player == Data#player_data.self;
+       R#fold.player == undefined ->
     handle_cast_fold(R, Data);
 
-handle_cast(R = #sit_out{ notify = none }, Data) ->
+handle_cast(R = #sit_out{}, Data)
+  when R#sit_out.player == Data#player_data.self;
+       R#sit_out.player == undefined ->
     handle_cast_sit_out(R, Data);
 
-handle_cast(R = #come_back{ notify = none }, Data) ->
+handle_cast(R = #come_back{}, Data)
+  when R#come_back.player == Data#player_data.self;
+       R#come_back.player == undefined ->
     handle_cast_come_back(R, Data);
 
 handle_cast(R = #seat_query{}, Data) ->
@@ -201,9 +211,7 @@ handle_cast_disconnect(Data) ->
     {noreply, Data}.
 
 handle_cast_socket(Socket, Data) when is_pid(Socket) ->
-    Data1 = Data#player_data {
-	      socket = Socket
-	     },
+    Data1 = Data#player_data{ socket = Socket },
     {noreply, Data1}.
 
 handle_cast_call(R, Data) ->
@@ -259,7 +267,7 @@ handle_cast_new_game_req(R, Data) ->
               CC#tab_cluster_config.enable_dynamic_games ->
                   case cardgame:start(R#start_game{ rigged_deck = [] }) of
                       {ok, Pid} ->
-                          #good{ cmd = ?CMD_START_GAME, extra = Pid};
+                          #your_game{ game = Pid };
                       _ ->
                           #bad{ cmd = ?CMD_START_GAME, error = ?ERR_UNKNOWN}
                   end;

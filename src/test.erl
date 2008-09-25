@@ -124,29 +124,11 @@ complex_seat_query_test() ->
       player = Player, 
       pid = PID,
       seat_num = N, 
-      amount = 1000.0,
-      notify = true
+      amount = 1000.0
      },
     ?assertEqual(Cmd, Packet),
     player:cast(PID, #seat_query{ game = Game }),
-    Packet1 = receive
-		  Any1 ->
-		      Any1
-	      after 100 ->
-		      none
-	      end,
-	Packet2 = receive
-		  Any2 ->
-		      Any2
-	      after 200 ->
-		      none
-	      end,
-    GameInplay = #game_inplay{
-      game = Game,
-      player = Player, 
-      seat_num = N,
-      amount = 1000.00
-     },
+    X = wait_for_msg(100, [chat, notify_cancel_game]),
     SeatState = #seat_state{
       game = Game,
       seat_num = 1,
@@ -154,9 +136,8 @@ complex_seat_query_test() ->
       player = Player,
       inplay = 1000.0
      },
-    ?assertEqual({packet, GameInplay}, Packet1),
-    ?assertEqual({packet, SeatState}, Packet2),
-    ?assertNot(none == pp:old_write(SeatState)),
+    ?assertEqual(SeatState, X),
+    ?assertNot(none == pp:write(SeatState)),
     cleanup_players(Players),
     ?assertEqual(ok, stop_game(Game)),
     ok.
@@ -303,12 +284,6 @@ player_online_playing_test() ->
                  seat_num = 1,
                  amount = 1000.00
                 }, wait_for_msg(100, [chat, notify_cancel_game])),
-    ?assertMatch(#game_inplay{
-                 game = Game, 
-                 player = Pid, 
-                 seat_num = 1,
-                 amount = 1000.00
-                }, wait_for_msg(100, [chat, notify_cancel_game])),
     ?assertEqual(ok, stop_player(Pid, ID)),
     ?assertEqual(ok, stop_game(Game)),
     ok.
@@ -345,7 +320,7 @@ network_login_logout_test() ->
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, #login{ nick = Nick, pass = <<"@#%^@#">> }),
     X = wait_for_msg(2000, [leave, chat]),
-    ?assertMatch(#bad{ cmd = login, error = ?ERR_BAD_LOGIN }, X),
+    ?assertMatch(#bad{ cmd = ?CMD_LOGIN, error = ?ERR_BAD_LOGIN }, X),
     ?tcpsend(Socket, #ping{}),
     X1 = wait_for_msg(2000, []),
     ?assertMatch(#pong{}, X1),
@@ -481,27 +456,9 @@ dynamic_game_start_test() ->
                               enable_dynamic_games = true
                              }),
     ?tcpsend(Socket, Cmd),
-    Game = receive
-	      {tcp, _, Bin1} ->
-		  case pp:old_read(Bin1) of 
-		      #good{ cmd = ?CMD_START_GAME, extra = Temp } ->
-			  Temp
-                  end;
-	      Temp1 ->
-		  ?assertEqual(0, Temp1)
-	  after 2000 ->
-		  ?assertEqual(0, timeout)
-	  end,
-    %% make sure it's our game
-    ?tcpsend(Socket, #seat_query{ game = Game }),
     X2 = wait_for_msg(2000, []),
-    SeatState = #seat_state{
-      game = Game,
-      seat_num = 1,
-      state = ?PS_EMPTY,
-      player = none
-     },
-    ?assertEqual(SeatState, X2),
+    ?assertEqual(your_game, element(1, X2)),
+    ?assert(util:is_process_alive(X2#your_game.game)),
     %% clean up
     gen_tcp:close(Socket),
     ok = mnesia:dirty_delete(tab_player, ID),
@@ -573,7 +530,7 @@ test190(Host, Port, [Info|Rest])
     Player = TP#tab_player.process,
     ?assertMatch(#you_are{ player = Player }, X),
     ?tcpsend(Socket, #logout{}),
-    ?assertMatch(#good{ cmd = logout, extra = 0}, wait_for_msg(2000, [])),
+    ?assertMatch(#good{ cmd = ?CMD_LOGOUT }, wait_for_msg(2000, [])),
     gen_tcp:close(Socket),
     timer:sleep(100),
     test190(Host, Port, Rest).
@@ -889,7 +846,7 @@ find_game(Host, Port, GameType) ->
                       }),
     GID = receive
 	      {tcp, _, Bin} ->
-		  case pp:old_read(Bin) of 
+		  case pp:read(Bin) of 
                       R = #game_info{} 
                       when (R#game_info.limit)#limit.type == ?LT_FIXED_LIMIT ->
 			  R#game_info.game
@@ -941,9 +898,9 @@ connect_player(Nick, Host, Port, Game, SeatNum, GamesToPlay, Actions) ->
     {ok, Bot} = bot:start(Nick, SeatNum, SeatNum, 1000.0),
     gen_server:cast(Bot, {'SET ACTIONS', Actions}),
     gen_server:cast(Bot, {'GAMES TO PLAY', GamesToPlay}),
+    gen_server:cast(Bot, {'WATCH', Game}),
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, 15000),
     gen_server:cast(Bot, #login{ nick = Nick, pass = Nick }),
-    gen_server:cast(Bot, #watch{ game = Game }),
     F = fun() -> stop_proc(Bot, fun bot:stop/1) end,
     {Bot, ID, F}.
 
@@ -1010,7 +967,7 @@ wait_for_msg(Timeout, Skip) ->
              {packet, M1} ->
                  M1;
              {tcp, _, M2} ->
-                 pp:old_read(M2);
+                 pp:read(M2);
              M3 ->
                  M3
          after Timeout ->

@@ -100,7 +100,7 @@ handle_info({tcp_closed, _Socket}, Data) ->
     {stop, normal, Data#obs{ socket = none }};
 
 handle_info({tcp, _Socket, Bin}, Data) ->
-    case pp:old_read(Bin) of
+    case pp:read(Bin) of
 	none ->
             error_logger:info_report([{module, ?MODULE}, 
                                       {line, ?LINE},
@@ -192,7 +192,7 @@ handle(R = #game_inplay{}, Data) ->
 	     },
     {noreply, Data1};
 
-handle(R = #chat{ notify = true }, Data) ->
+handle(R = #chat{}, Data) ->
     if
 	Data#obs.trace ->
 	    catch io:format("~w: CHAT: ~w: ~p~n",
@@ -202,7 +202,7 @@ handle(R = #chat{ notify = true }, Data) ->
     end,
     {noreply, Data};
 
-handle(R = #fold{ notify = true }, Data) ->
+handle(R = #fold{}, Data) ->
     if
 	Data#obs.trace ->
 	    catch io:format("~w: FOLD: ~w~n",
