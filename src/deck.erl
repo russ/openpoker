@@ -2,7 +2,7 @@
 
 -module(deck).
 
--export([new/0, reset/1, rig/2, draw/1, test/0]).
+-export([new/0, new/1, reset/1, draw/1, test/0]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -14,9 +14,18 @@
 	 }).
 
 new() ->
-    #deck {
+    new([]).
+
+new([]) ->
+    #deck{
      rigged = [],
      cards = shuffle(make_deck())
+    };
+
+new(Cards) ->
+    #deck{
+     rigged = Cards,
+     cards = Cards
     }.
 
 reset(Deck) 
@@ -27,14 +36,6 @@ reset(Deck)
         Cards ->
             Deck#deck{ cards = Cards }
     end.
-
-rig(Deck, Cards)
-  when is_record(Deck, deck),
-       is_list(Cards) ->
-    Deck#deck {
-      rigged = Cards,
-      cards = Cards
-     }.
 
 draw(Deck)
   when is_record(Deck, deck) ->

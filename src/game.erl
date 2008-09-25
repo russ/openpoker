@@ -82,7 +82,7 @@ new(OID, FSM, R) ->
       gid = OID,
       fsm = FSM,
       type = R#start_game.type, 
-      deck = deck:new(),
+      deck = deck:new(R#start_game.rigged_deck),
       pot = pot:new(),
       seats = create_seats(R#start_game.seat_count),
       limit = Limit,
@@ -147,11 +147,6 @@ handle_cast({'TIMEOUT', Timeout}, Game) ->
 
 handle_cast({'BROADCAST', Event}, Game) ->
     handle_cast_broadcast(Game, Event);
-
-%%% Only used for testing to rig the deck 
-
-handle_cast({'RIG', Deck}, Game) ->
-    handle_cast_rig(Deck, Game);
 
 handle_cast(R, Game)
   when is_record(R, notify_start_game) ->
@@ -362,11 +357,6 @@ handle_cast_broadcast(Game, Event) ->
     Game1 = broadcast(Game, Event),
     {noreply, Game1}.
 
-handle_cast_rig(Cards, Game) ->
-    Deck = Game#game.deck,
-    Game1 = Game#game{ deck = deck:rig(Deck, Cards) },
-    {noreply, Game1}.
-    
 handle_cast_notify_start_game(R, Game) ->
     Msg = lang:msg(?GAME_STARTING),
     Game1 = reset(Game),
@@ -933,15 +923,6 @@ get_seats(Seats, Size, At, Counter, Mask, Acc) ->
     get_seats(Seats, Size, At + 1, Counter - 1, Mask, List).
 
 %% Broadcast event
-
-add_seqnum(Game, Event) 
-  when is_tuple(Event) ->
-    add_seqnum(Game, tuple_to_list(Event));
-
-add_seqnum(Game, List) 
-  when is_list(List) ->
-    [Type|Rest] = List,
-    [Type, Game#game.fsm|Rest].
 
 make_players(Game, Seats) ->
     make_players(Game, Seats, []).

@@ -575,6 +575,25 @@ find_server(Sock) ->
 	    none
     end.
 
+%% dump_cards(Cards) ->
+%%     [hand:card_to_string(Card) || Card <- Cards].
+
+%% dump_game(Game = #irc_game{}) ->
+%%     io:format("Board: ~p~n", [Game#irc_game.board]),
+%%     dump_game(Game, tuple_to_list(Game#irc_game.players)).
+
+%% dump_game(_, []) ->
+%%     ok;
+
+%% dump_game(Game, [H|T]) ->
+%%     Cards = [hand:make_card(Card) || Card <- Game#irc_game.board 
+%%                                          ++ H#irc_player.cards],
+%%     Hand = hand:new(0, Cards),
+%%     Rank = hand:rank(Hand),
+%%     io:format("Nick: ~p, Cards: ~p, Hand: ~p~n",
+%%               [H#irc_player.nick, H#irc_player.cards, hand:describe(Rank)]),
+%%     dump_game(Game, T).
+
 rig_deck(Game) 
   when is_record(Game, irc_game) ->
     Deck = deck:new(),
@@ -582,10 +601,8 @@ rig_deck(Game)
     Count = size(Players),
     Cards1 = player_cards(Players, Deck, 1, Count, []),
     Cards2 = player_cards(Players, Deck, 2, Count, []),
-    %%io:format("Cards1: ~w~n", [Cards1]),
-    %%io:format("Cards2: ~w~n", [Cards2]),
-    Cards1 ++ Cards2 ++ lists:map(fun make_card/1,
-                                  Game#irc_game.board).
+    Cards3 = lists:map(fun make_card/1, Game#irc_game.board),
+    Cards1 ++ Cards2 ++ Cards3.
 
 player_cards(_Players, _Deck, _N, 0, Acc) ->
     Acc;
@@ -595,16 +612,9 @@ player_cards(Players, Deck, N, Count, Acc) ->
     {Deck1, Card} = 
         if
             length(Player#irc_player.cards) < N ->
-                %%Nick = Player#irc_player.nick,
-                %%io:format("~s has ~w~n", [Nick, Player#irc_player.cards]),
-                %%io:format("No card at round ~w, drawing from deck~n",
-                %%	     [N]),
                 deck:draw(Deck);
             true ->
                 {Face, Suit} = lists:nth(N, Player#irc_player.cards),
-                %%Nick = Player#irc_player.nick,
-                %%io:format("Dealing ~w to ~s~n", 
-                %%	     [X, Nick]),
                 {Deck, make_card(Face, Suit)}
         end,
     player_cards(Players, Deck1, N, Count - 1, [Card|Acc]).
