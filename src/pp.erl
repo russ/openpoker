@@ -81,6 +81,9 @@ total_amount() ->
 call_amount() ->
     amount().
 
+raise_amount() ->
+    amount().
+
 raise_min() ->
     amount().
 
@@ -230,7 +233,7 @@ raise() ->
     record(raise, {
              game(),
              player(),
-             raise(),
+             raise_amount(),
              total_amount(), % notification only
              internal(),
              internal(),
