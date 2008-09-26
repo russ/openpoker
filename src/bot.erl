@@ -115,10 +115,7 @@ code_change(_OldVsn, Bot, _Extra) ->
 
 handle_set_actions(Actions, Bot) ->
     {Filters, Actions1} = extract_filters(Actions),
-    Bot1 = Bot#bot {
-	     actions = Actions1,
-             filters = Filters
-	    },
+    Bot1 = Bot#bot{ actions = Actions1, filters = Filters },
     {noreply, Bot1}.
     
 handle_games_to_play(N, Bot) ->
@@ -198,9 +195,7 @@ handle_bet_req(R, Bot) ->
     %%io:format("~w: BLIND_REQ: ~w/~w, ~.2. f~n", 
     %%	      [GID, Bot#bot.player, Bot#bot.seat_num, Amount]),
     [Action|Rest] = Bot#bot.actions,
-    Bot1 = Bot#bot {
-	     actions = Rest
-	    },
+    Bot1 = Bot#bot{ actions = Rest },
     case Action of
 	'SIT OUT' ->
 	    handle_cast(#sit_out{ game = GID }, Bot1),
@@ -240,9 +235,7 @@ handle_bet_req_min_max(R, Bot) ->
     RaiseMin = R#bet_req.raise_min,
     RaiseMax = R#bet_req.raise_max,
     [Action|Rest] = Bot#bot.actions,
-    Bot1 = Bot#bot {
-	     actions = Rest
-	    },
+    Bot1 = Bot#bot{ actions = Rest },
     %%io:format("#~w/~w: BET_REQ ~.2. f/~.2. f/~.2. f~n", 
     %%	      [Bot#bot.player, Bot#bot.seat_num, Call, RaiseMin, RaiseMax]),
     %%io:format("#~w/~w: Actions: ~w~n", 
