@@ -297,8 +297,7 @@
           required = 2,
           start_delay = ?START_DELAY,
           player_timeout = ?PLAYER_TIMEOUT,
-          rigged_deck = [],
-          pass
+          rigged_deck = []
          }).
 
 -define(CMD_GAME_INFO, 18).
@@ -382,12 +381,11 @@
           hand
          }).
 
--define(CMD_NOTIFY_MUCK, 28).
+-define(CMD_MUCK, 28).
 
--record(notify_muck, {
+-record(muck, {
           game,
-          player,
-          hand
+          player
          }).
 
 -define(CMD_GAME_STAGE, 29).
@@ -469,6 +467,14 @@
 
 -record(your_game, {
           game
+         }).
+
+-define(CMD_SHOW_CARDS, 40).
+
+-record(show_cards, {
+          game,
+          player,
+          cards
          }).
 
 -define(CMD_PING, 253).

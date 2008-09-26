@@ -100,6 +100,8 @@ showdown_handle_start(Context, Data) ->
 	    gen_server:cast(Game, {'BROADCAST', Event}),
 	    Winners = [{{Player, none, none, none}, Total}];
 	true ->
+            Button = element(2, Context),
+            gen_server:cast(Game, {'SHOW CARDS', Button}),
 	    Ranks = gen_server:call(Game,'RANK HANDS'),
             %% tell each player the hand they have
             lists:foreach(fun(X) ->

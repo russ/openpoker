@@ -27,10 +27,8 @@
 		    ok ->
 			ok;
 		    {error, closed} ->
-                        io:format("tcpsend: connection closed~n"),
 			ok;
 		    {error,econnaborted} ->
-                        io:format("tcpsend: connection aborted~n"),
 			ok;
 		    Any ->
 			error_logger:error_report([

@@ -380,6 +380,24 @@ handle(H = #notify_hand{}, Data) ->
     end,
     {noreply, Data};
 
+handle(#muck{ game = Game, player = Player }, Data) ->
+    if
+	Data#obs.trace ->
+	    catch io:format("~w: MUCK: ~w~n", [Game, Player]);
+	true ->
+	    ok
+    end,
+    {noreply, Data};
+
+handle(#show_cards{ game = Game, player = Player, cards = Cards }, Data) ->
+    if
+	Data#obs.trace ->
+            Cards1 = [hand:card_to_string(Card) || Card <- Cards],
+	    catch io:format("~w: SHOW: ~w: ~p~n", [Game, Player, Cards1]);
+	true ->
+	    ok
+    end,
+    {noreply, Data};
 
 %% Sink
 

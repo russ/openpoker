@@ -342,14 +342,8 @@ kill_games([H|T]) ->
     kill_games(T).
 
 start_test_game(R) ->
-    [CC] = mnesia:dirty_read(tab_cluster_config, 0),
-    if
-	CC#tab_cluster_config.test_game_pass == R#start_game.pass ->
-            {ok, Pid} = cardgame:start(R),
-            #your_game{ game = Pid };
-        true ->
-            #bad{ cmd = ?CMD_START_GAME }
-    end.
+    {ok, Pid} = cardgame:start(R),
+    #your_game{ game = Pid }.
 	    
 %%
 %% Test suite

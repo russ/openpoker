@@ -2,7 +2,7 @@
 
 -module(hand).
 
--export([new/0, new/1, new/2, set/2, add/2, cards/1, rank/1]).
+-export([new/0, new/1, new/2, set/2, id/1, add/2, cards/1, rank/1]).
 
 -export([make_card/1, make_card/2, print_bin/1, 
          print_rep/1, describe/1, hand/1, card_to_string/1]).
@@ -33,8 +33,11 @@ new(Id, Cards) ->
 set(Hand, Id) ->
     Hand#data{ id = Id }.
 
+id(Hand = #data{}) ->
+    Hand#data.id.
+
 cards(Hand = #data{}) ->
-    {Hand#data.id, Hand#data.cards}.
+    Hand#data.cards.
 
 rank(Hand = #data{}) ->
     NewHand = do_rank(Hand),

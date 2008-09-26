@@ -197,6 +197,9 @@ handle_bet_req(R, Bot) ->
     [Action|Rest] = Bot#bot.actions,
     Bot1 = Bot#bot{ actions = Rest },
     case Action of
+	'MUCK' ->
+	    handle_cast(#muck{ game = GID }, Bot1),
+	    {noreply, Bot1};
 	'SIT OUT' ->
 	    handle_cast(#sit_out{ game = GID }, Bot1),
 	    {noreply, Bot1};
@@ -243,6 +246,9 @@ handle_bet_req_min_max(R, Bot) ->
     %%io:format("#~w/~w: Balance: ~.2. f~n", 
     %%	      [Bot#bot.player, Bot#bot.seat_num, Bot#bot.balance * 1.0]),
     case Action of
+	'MUCK' ->
+	    handle_cast(#muck{ game = GID }, Bot1),
+	    {noreply, Bot1};
 	'SIT OUT' ->
 	    handle_cast(#sit_out{ game = GID }, Bot1),
 	    {noreply, Bot1};
@@ -414,6 +420,12 @@ handle(#notify_sb{}, Bot) ->
     {noreply, Bot};
 
 handle(#notify_bb{}, Bot) ->
+    {noreply, Bot};
+
+handle(#muck{}, Bot) ->
+    {noreply, Bot};
+
+handle(#show_cards{}, Bot) ->
     {noreply, Bot};
 
 handle(#good{}, Bot) ->

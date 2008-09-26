@@ -28,6 +28,7 @@
 	  hand,
 	  %% player state
 	  state,
+          muck = false,
           %% auto-play queue
           cmd_que = []
 	 }).
@@ -151,13 +152,17 @@ handle_cast({'BROADCAST', Event}, Game) ->
 handle_cast({'BROADCAST', Event, Except}, Game) ->
     handle_cast_broadcast(Game, Event, Except);
 
-handle_cast(R, Game)
-  when is_record(R, notify_start_game) ->
+handle_cast({'SHOW CARDS', Button}, Game) ->
+    handle_cast_show_cards(Game, Button);
+
+handle_cast(R = #notify_start_game{}, Game) ->
     handle_cast_notify_start_game(R, Game);
 
-handle_cast(R, Game)
-  when is_record(R, notify_cancel_game) ->
+handle_cast(R = #notify_cancel_game{}, Game) ->
     handle_cast_notify_cancel_game(R, Game);
+
+handle_cast(R = #muck{}, Game) ->
+    handle_cast_muck(R, Game);
 
 %%% Watch the game without joining
 
@@ -234,9 +239,6 @@ handle_call('ID', _From, Game) ->
 
 handle_call('SHARED', _From, Game) ->
     handle_call_shared(Game);
-
-handle_call({'PRIVATE CARDS',Player}, _From, Game) ->
-    handle_call_private_cards(Player, Game);
 
 handle_call('FSM', _From, Game) ->
     handle_call_fsm(Game);
@@ -347,6 +349,11 @@ handle_cast_timeout(Timeout, Game) ->
     Game1 = Game#game{ timeout = Timeout },
     {noreply, Game1}.
 
+handle_cast_show_cards(Game, Button) ->
+    SeatNums = get_seats(Game, Button, ?PS_PLAY),
+    Game1 = show_cards(Game, SeatNums),
+    {noreply, Game1}.
+    
 handle_cast_broadcast(Game, Event) ->
     handle_cast_broadcast(Game, Event, none).
 
@@ -384,6 +391,20 @@ handle_cast_unwatch(R, Game) ->
 	      observers = lists:delete(R#unwatch.player, Game#game.observers)
 	     },
     {noreply, Game1}.
+
+handle_cast_muck(R, Game) ->
+    case gb_trees:lookup(R#muck.player, Game#game.xref) of
+        {value, SeatNum} ->
+            Seat = element(SeatNum, Game#game.seats),
+            Game1 = Game#game{
+                      seats = setelement(SeatNum,
+                                         Game#game.seats,
+                                         Seat#seat{ muck = true })
+                     },
+            {noreply, Game1};
+        none ->
+            {noreply, Game}
+    end.
 
 handle_cast_chat(R, Game) ->
     Player = R#chat.player,
@@ -460,7 +481,8 @@ handle_cast_leave(R, Game) ->
                                                  Seats,
                                                  Seat#seat {
                                                    player = none,
-                                                   state = ?PS_EMPTY
+                                                   state = ?PS_EMPTY,
+                                                   muck = false
                                                   })
                              },
                     %% update inplay balance
@@ -488,11 +510,29 @@ handle_cast_leave(R, Game) ->
 
 handle_cast_fold(R, Game) ->
     Player = R#fold.player,
+    FSM = Game#game.fsm,
     Game1 = set_state(Game, Player, ?PS_FOLD),
-    %% notify fold
-    Game2 = broadcast(Game1, R#fold{ game = Game#game.fsm }, Player),
-    {noreply, Game2}.
-    
+    case gb_trees:lookup(Player, Game1#game.xref) of
+        {value, SeatNum} ->
+            Seat = element(SeatNum, Game1#game.seats),
+            if 
+                Seat#seat.muck ->
+                    Event = #show_cards{ 
+                      game = FSM,
+                      player = Player,
+                      cards = hand:cards(Seat#seat.hand)
+                     },
+                    Game2 = broadcast(Game1, Event, Player);
+                true ->
+                    Game2 = Game1
+            end,
+            %% notify fold
+            Game3 = broadcast(Game2, R#fold{ game = FSM }, Player),
+            {noreply, Game3};
+        _ ->
+            {noreply, Game1}
+    end.
+
 handle_cast_inplay_plus(Player, Amount, Game) ->
     case gb_trees:lookup(Player, Game#game.xref) of
         {value, SeatNum} ->
@@ -538,9 +578,7 @@ handle_cast_set_state(Player, State, Game) ->
                     Game#game {
                       seats = setelement(SeatNum,
                                          Game#game.seats,
-                                         Seat#seat {
-                                           state = State
-                                          })
+                                         Seat#seat{ state = State })
                      };
                 none ->
                     Game
@@ -638,14 +676,6 @@ handle_call_id(Game) ->
 
 handle_call_shared(Game) ->
     {reply, Game#game.board, Game}.
-
-handle_call_private_cards(Player, Game) ->
-    SeatNum = gb_trees:get(Player, Game#game.xref),
-    Seat = element(SeatNum, Game#game.seats),
-    {_,GameCards} = hand:cards(Seat#seat.hand),
-    N = erlang:length(GameCards),
-    PrivateCards = [lists:nth(N,GameCards),lists:nth(N-1,GameCards)],
-    {reply, PrivateCards, Game}.
 
 handle_call_fsm(Game) ->
     {reply, Game#game.fsm, Game}.
@@ -887,7 +917,10 @@ reset_hands(Seats, 0) ->
 reset_hands(Seats, Count) ->
     Seat = element(Count, Seats),
     Player = Seat#seat.player,
-    Seats1 = setelement(Count, Seats, Seat#seat{ hand = hand:new(Player) }),
+    Seats1 = setelement(Count, Seats, Seat#seat{ 
+                                        hand = hand:new(Player),
+                                        muck = false
+                                       }),
     reset_hands(Seats1, Count - 1).
 	    
 %% Create a list of seats matching a certain state
@@ -1175,6 +1208,25 @@ reset(Game) ->
     Game2 = reset_bets(Game1#game{ seats = Seats }),
     ResetMask = ?PS_ANY band (bnot ?PS_WAIT_BB),
     reset_state(Game2, ResetMask, ?PS_PLAY).
-  
+
+show_cards(Game, []) -> 
+    Game;
+
+show_cards(Game, [H|T]) ->
+    Seat = element(H, Game#game.seats),
+    if 
+        Seat#seat.muck == false ->
+            Player = Seat#seat.player,
+            Event = #show_cards{
+              game = Game#game.fsm,
+              player = Player,
+              cards = hand:cards(Seat#seat.hand)
+             },
+            broadcast(Game, Event, Player);
+        true ->
+            ok
+    end,
+    show_cards(Game, T).
+    
 test() ->
     ok.

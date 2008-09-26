@@ -317,8 +317,7 @@ start_game() ->
              required_players(),
              start_delay(),
              player_timeout(),
-             rigged_deck(),
-             pass()
+             rigged_deck()
             }).
 
 game_info() ->
@@ -410,11 +409,10 @@ notify_hand() ->
              hand()
             }).
 
-notify_muck() ->
-    record(notify_muck, {
+muck() ->
+    record(muck, {
              game(),
-             player(),
-             hand()
+             player()
             }).
 
 game_stage() ->
@@ -460,6 +458,13 @@ game_inplay() ->
 your_game() ->
     record(your_game, {
              game()
+            }).
+
+show_cards() ->
+    record(show_cards, {
+             game(),
+             player(),
+             cards()
             }).
 
 ping() ->
@@ -562,8 +567,8 @@ write(R) when is_record(R, notify_win) ->
 write(R) when is_record(R, notify_hand) ->
     [?CMD_NOTIFY_HAND|pickle(notify_hand(), R)];
 
-write(R) when is_record(R, notify_muck) ->
-    [?CMD_NOTIFY_MUCK|pickle(notify_muck(), R)];
+write(R) when is_record(R, muck) ->
+    [?CMD_MUCK|pickle(muck(), R)];
 
 write(R) when is_record(R, game_stage) ->
     [?CMD_GAME_STAGE|pickle(game_stage(), R)];
@@ -594,6 +599,9 @@ write(R) when is_record(R, notify_bb) ->
 
 write(R) when is_record(R, your_game) ->
     [?CMD_YOUR_GAME|pickle(your_game(), R)];
+
+write(R) when is_record(R, show_cards) ->
+    [?CMD_SHOW_CARDS|pickle(show_cards(), R)];
 
 write(R) when is_record(R, ping) ->
     [?CMD_PING|pickle(ping(), R)];
@@ -694,8 +702,8 @@ read(<<?CMD_NOTIFY_WIN, Bin/binary>>) ->
 read(<<?CMD_NOTIFY_HAND, Bin/binary>>) ->
     unpickle(notify_hand(), Bin);
 
-read(<<?CMD_NOTIFY_MUCK, Bin/binary>>) ->
-    unpickle(notify_muck(), Bin);
+read(<<?CMD_MUCK, Bin/binary>>) ->
+    unpickle(muck(), Bin);
 
 read(<<?CMD_GAME_STAGE, Bin/binary>>) ->
     unpickle(game_stage(), Bin);
@@ -726,6 +734,9 @@ read(<<?CMD_NOTIFY_BB, Bin/binary>>) ->
 
 read(<<?CMD_YOUR_GAME, Bin/binary>>) ->
     unpickle(your_game(), Bin);
+
+read(<<?CMD_SHOW_CARDS, Bin/binary>>) ->
+    unpickle(show_cards(), Bin);
 
 read(<<?CMD_PING, Bin/binary>>) ->
     unpickle(ping(), Bin);
