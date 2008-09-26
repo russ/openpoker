@@ -327,11 +327,8 @@ setup_players(IRC_ID, GID, Host, Port, [Player|Rest], N, Acc) ->
     Pass = <<"foo">>,
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, infinity),
     gen_server:cast(Bot, {'SET ACTIONS', Player#irc_player.actions}),
+    gen_server:cast(Bot, {'WATCH', GID}),
     gen_server:cast(Bot, #login{ nick = Nick, pass = Pass }),
-    %% XXX temp fix
-    %% [Game] = mnesia:dirty_read(tab_game_xref, GID),
-    %% gen_server:cast(Bot, #watch{ game = Game#tab_game_xref.process }),
-    gen_server:cast(Bot, #watch{ game = GID }),
     setup_players(IRC_ID, GID, Host, Port, Rest, N - 1, [{Bot, N}|Acc]).
 
 ircdb_nicks(Game) ->
