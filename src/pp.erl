@@ -30,6 +30,12 @@ message() ->
 location() ->
     string().
 
+host() ->
+    string().
+
+port() ->
+    short().
+
 game_type() ->
     byte().
 
@@ -427,8 +433,8 @@ you_are() ->
 
 goto() ->
     record(goto, {
-             host, 
-             port
+             host(), 
+             port()
             }).
 
 balance() ->
