@@ -338,8 +338,6 @@ network_login_logout_test() ->
     X3 = wait_for_msg(2000, []),
     ?assertMatch(#you_are{ player = Player }, X3),
     ?tcpsend(Socket1, #logout{}),
-    X4 = wait_for_msg(2000, []),
-    ?assertMatch(#good{ cmd = ?CMD_LOGOUT }, X4),
     gen_tcp:close(Socket1),
     %% clean up
     ok = mnesia:dirty_delete(tab_player, ID),
@@ -530,7 +528,6 @@ test190(Host, Port, [Info|Rest])
     Player = TP#tab_player.process,
     ?assertMatch(#you_are{ player = Player }, X),
     ?tcpsend(Socket, #logout{}),
-    ?assertMatch(#good{ cmd = ?CMD_LOGOUT }, wait_for_msg(2000, [])),
     gen_tcp:close(Socket),
     timer:sleep(100),
     test190(Host, Port, Rest).
@@ -585,9 +582,9 @@ two_games_with_leave_test() ->
     cardgame:cast(Game, {'NOTE', two_games_with_leave}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 1, % games to play
-                      [{<<"bot1">>, 1, ['BLIND', 'RAISE', 'CALL', 'CHECK', 'CHECK']},
-                       {<<"bot2">>, 2, ['BLIND', 'QUIT']},
-                       {<<"bot3">>, 3, ['RAISE', 'CALL', 'CALL', 'CHECK', 'CHECK']}
+                      [{nick(), 1, ['BLIND', 'RAISE', 'CALL', 'CHECK', 'CHECK']},
+                       {nick(), 2, ['BLIND', 'QUIT']},
+                       {nick(), 3, ['RAISE', 'CALL', 'CALL', 'CHECK', 'CHECK']}
                       ]),
     %% make sure game is started
     ?assertMatch({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
