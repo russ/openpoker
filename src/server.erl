@@ -200,8 +200,6 @@ process_login(Client, Socket, Nick, Pass) ->
                     ok
             end,
             ok = ?tcpsend(Socket, #you_are{ player = Player }),
-            io:format("server: ~p: good login: player: ~p~n", 
-                      [self(), Player]),
             Client#client{ player = Player }
     end.
 
@@ -243,8 +241,6 @@ process_event(Client, _Socket, Event) ->
         true ->
             Client1 = Client
     end,
-    io:format("server: ~p: player: ~p, event: ~p~n",
-              [Socket, Client1#client.player, Event]),
     gen_server:cast(Client1#client.player, Event),
     Client1.
 

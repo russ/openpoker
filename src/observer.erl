@@ -367,6 +367,20 @@ handle(#notify_end_game{ game = GID }, Data) ->
 handle(#good{}, Data) ->
     {noreply, Data};
 
+handle(H = #notify_hand{}, Data) ->
+    if
+	Data#obs.trace ->
+            Game = H#notify_hand.game,
+            Player = H#notify_hand.player,
+            H1 = H#notify_hand.hand,
+	    catch io:format("~w: HAND: ~w, with ~p~n", 
+                            [Game, Player, hand:describe(H1)]);
+	true ->
+	    ok
+    end,
+    {noreply, Data};
+
+
 %% Sink
 
 handle(Event, Data) ->

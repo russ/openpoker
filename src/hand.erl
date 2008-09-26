@@ -5,7 +5,7 @@
 -export([new/0, new/1, new/2, set/2, add/2, cards/1, rank/1]).
 
 -export([make_card/1, make_card/2, print_bin/1, 
-         print_rep/1, describe/1, card_to_string/1]).
+         print_rep/1, describe/1, hand/1, card_to_string/1]).
 
 -export([debug_score/1]).
 
@@ -13,7 +13,7 @@
 -include("test.hrl").
 -include("pp.hrl").
 
--record(hand, {
+-record(data, {
 	  id, 
 	  cards = [], 
 	  rank = none,
@@ -28,31 +28,29 @@ new(Id) ->
     new(Id, []).
 
 new(Id, Cards) ->
-    #hand{ id = Id, cards = Cards }.
+    #data{ id = Id, cards = Cards }.
 
 set(Hand, Id) ->
-    Hand#hand{ id = Id }.
+    Hand#data{ id = Id }.
 
-cards(Hand) 
-  when is_record(Hand, hand) ->
-    {Hand#hand.id, Hand#hand.cards}.
+cards(Hand = #data{}) ->
+    {Hand#data.id, Hand#data.cards}.
 
-rank(Hand)
-  when is_record(Hand, hand) ->
+rank(Hand = #data{}) ->
     NewHand = do_rank(Hand),
-    Id = NewHand#hand.id,
-    Value = NewHand#hand.rank,
-    High = NewHand#hand.high,
-    Score = NewHand#hand.score,
+    Id = NewHand#data.id,
+    Value = NewHand#data.rank,
+    High = NewHand#data.high,
+    Score = NewHand#data.score,
     {Id, Value, High, Score}.
 
 add(Hand, Card) ->
-    Hand#hand{ cards = [Card|Hand#hand.cards] }.
+    Hand#data{ cards = [Card|Hand#data.cards] }.
 
 do_rank(Hand) ->
     Rep = make_rep(Hand),
     {Rank, High, Score} = score(Rep),
-    Hand#hand {
+    Hand#data {
       rank = Rank, 
       high = High, 
       score = Score
@@ -82,9 +80,8 @@ score([], Rep) ->
     High = bits:clear_extra_bits(Mask, 5),
     {?HC_HIGH_CARD, High, 0}.
 
-make_rep(Hand) 
-  when record(Hand, hand) ->
-    make_rep(Hand#hand.cards);
+make_rep(Hand = #data{}) ->
+    make_rep(Hand#data.cards);
 
 make_rep(Cards) 
   when list(Cards) ->
@@ -360,57 +357,115 @@ card_to_string(Card) ->
     Suit = Card band 16#ff,
     face_to_string(Face) ++ " of " ++ suit_to_string(Suit).
     
-describe({_, ?HC_STRAIGHT_FLUSH, High, _Score}) ->
+describe(H = #hand{ combo = ?HC_STRAIGHT_FLUSH }) ->
     "straight flush high " 
-	++ face_to_string(face_from_mask(High))
+	++ face_to_string(H#hand.high_face1)
 	++ "s";
 
-describe({_, ?HC_FOUR_KIND, High, _Score}) ->
+describe(H = #hand{ combo = ?HC_FOUR_KIND }) ->
     "four of a kind " 
-	++ face_to_string(face_from_mask(High))
+	++ face_to_string(H#hand.high_face1)
 	++ "s";
 	
-describe({_, ?HC_FULL_HOUSE, High, _Score}) ->
+describe(H = #hand{ combo = ?HC_FULL_HOUSE }) ->
+    "house of " 
+	++ face_to_string(H#hand.high_face1) 
+	++ "s full of " 
+	++ face_to_string(H#hand.high_face2)
+	++ "s";
+
+describe(H = #hand{ combo = ?HC_FLUSH }) ->
+    "flush high "
+	++ face_to_string(H#hand.high_face1)
+	++ "s";
+	
+describe(H = #hand{ combo = ?HC_STRAIGHT }) ->
+    "straight high "
+	++ face_to_string(H#hand.high_face1)
+	++ "s";
+	
+describe(H = #hand{ combo = ?HC_THREE_KIND }) ->
+    "three of a kind "
+	++ face_to_string(H#hand.high_face1)
+	++ "s";
+	
+describe(H = #hand{ combo = ?HC_TWO_PAIR }) ->
+    "two pairs of "
+	++ face_to_string(H#hand.high_face1)
+	++ "s and "
+	++ face_to_string(H#hand.high_face2)
+	++ "s";
+	
+describe(H = #hand{ combo = ?HC_PAIR }) ->
+    "pair of "
+	++ face_to_string(H#hand.high_face1)
+	++ "s";
+	
+describe(H = #hand{ combo = ?HC_HIGH_CARD }) ->
+    "high card "
+	++ face_to_string(H#hand.high_face1).
+
+%%% Description for the poker client
+
+hand({_, ?HC_STRAIGHT_FLUSH, High, _Score}) ->
+    _ = #hand{
+      combo = ?HC_STRAIGHT_FLUSH,
+      high_face1 = face_from_mask(High)
+     };
+
+hand({_, ?HC_FOUR_KIND, High, _Score}) ->
+    _ = #hand{
+      combo = ?HC_FOUR_KIND,
+      high_face1 = face_from_mask(High)
+     };
+	
+hand({_, ?HC_FULL_HOUSE, High, _Score}) ->
     High3 = High bsr 16,
     High2 = High band 16#ffff,
-    "house of " 
-	++ face_to_string(face_from_mask(High3)) 
-	++ "s full of " 
-	++ face_to_string(face_from_mask(High2))
-	++ "s";
+    _ = #hand{
+      combo = ?HC_FULL_HOUSE,
+      high_face1 = face_from_mask(High3),
+      high_face2 = face_from_mask(High2)
+     };
 
-describe({_, ?HC_FLUSH, High, _Score}) ->
-    "flush high "
-	++ face_to_string(face_from_mask(High))
-	++ "s";
+hand({_, ?HC_FLUSH, High, _Score}) ->
+    _ = #hand{
+      combo = ?HC_FLUSH,
+      high_face1 = face_from_mask(High)
+     };
 	
-describe({_, ?HC_STRAIGHT, High, _Score}) ->
-    "straight high "
-	++ face_to_string(face_from_mask(High))
-	++ "s";
+hand({_, ?HC_STRAIGHT, High, _Score}) ->
+    _ = #hand{
+      combo = ?HC_STRAIGHT,
+      high_face1 = face_from_mask(High)
+     };
 	
-describe({_, ?HC_THREE_KIND, High, _Score}) ->
-    "three of a kind "
-	++ face_to_string(face_from_mask(High))
-	++ "s";
+hand({_, ?HC_THREE_KIND, High, _Score}) ->
+    _ = #hand{
+      combo = ?HC_THREE_KIND,
+      high_face1 = face_from_mask(High)
+     };
 	
-describe({_, ?HC_TWO_PAIR, High, _Score}) ->
+hand({_, ?HC_TWO_PAIR, High, _Score}) ->
     High1 = face_from_mask(High),
     High2 = face_from_mask(High band (bnot High1)),
-    "two pairs of "
-	++ face_to_string(High1)
-	++ "s and "
-	++ face_to_string(High2)
-	++ "s";
+    _ = #hand{
+      combo = ?HC_TWO_PAIR,
+      high_face1 = face_from_mask(High1),
+      high_face2 = face_from_mask(High2)
+     };
 	
-describe({_, ?HC_PAIR, High, _Score}) ->
-    "pair of "
-	++ face_to_string(face_from_mask(High))
-	++ "s";
+hand({_, ?HC_PAIR, High, _Score}) ->
+    _ = #hand{
+      combo = ?HC_PAIR,
+      high_face1 = face_from_mask(High)
+     };
 	
-describe({_, ?HC_HIGH_CARD, High, _Score}) ->
-    "high card "
-	++ face_to_string(face_from_mask(High)).
+hand({_, ?HC_HIGH_CARD, High, _Score}) ->
+    _ = #hand{
+      combo = ?HC_HIGH_CARD,
+      high_face1 = face_from_mask(High)
+     }.
          
 %%%
 %%% Test suite

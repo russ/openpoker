@@ -108,15 +108,18 @@ cards() ->
 card() -> 
     short().
 
-hand() ->
-    record(hand, {
-             combo(),
-             card(), 
-             card()
-            }).
+face() ->
+    byte().
 
 combo() ->
     byte().
+
+hand() ->
+    record(hand, {
+             combo(),
+             face(),
+             face()
+            }).
 
 limit_type() ->
     byte().
@@ -688,8 +691,8 @@ read(<<?CMD_NOTIFY_CANCEL_GAME, Bin/binary>>) ->
 read(<<?CMD_NOTIFY_WIN, Bin/binary>>) ->
     unpickle(notify_win(), Bin);
 
-read(<<?CMD_NOTIFY_MY_HAND, Bin/binary>>) ->
-    unpickle(notify_my_hand(), Bin);
+read(<<?CMD_NOTIFY_HAND, Bin/binary>>) ->
+    unpickle(notify_hand(), Bin);
 
 read(<<?CMD_NOTIFY_MUCK, Bin/binary>>) ->
     unpickle(notify_muck(), Bin);

@@ -101,6 +101,16 @@ showdown_handle_start(Context, Data) ->
 	    Winners = [{{Player, none, none, none}, Total}];
 	true ->
 	    Ranks = gen_server:call(Game,'RANK HANDS'),
+            %% tell each player the hand they have
+            lists:foreach(fun(X) ->
+                                  Hand = hand:hand(X),
+                                  Event = #notify_hand{
+                                    player = element(1, X),
+                                    game = FSM,
+                                    hand = Hand
+                                   },
+                                  gen_server:cast(Game, {'BROADCAST', Event})
+                          end, Ranks),
 	    Pots = gen_server:call(Game,'POTS'),
 	    Winners = gb_trees:to_list(winners(Ranks, Pots)),
 	    lists:foreach(fun({{Player, _, _, _}, Amount}) ->

@@ -389,6 +389,9 @@ handle(#notify_cancel_game{ game = GID }, Bot) ->
 handle(#notify_win{}, Bot) ->
     {noreply, Bot};
 
+handle(#notify_hand{}, Bot) ->
+    {noreply, Bot};
+
 handle(#fold{}, Bot) ->
     {noreply, Bot};
 

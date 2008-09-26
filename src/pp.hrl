@@ -123,6 +123,7 @@
 -define(CF_FOUR, 3).
 -define(CF_THREE, 2).
 -define(CF_TWO, 1).
+-define(CF_NONE, 0).
 
 %%% Suit
 
@@ -142,6 +143,12 @@
 -define(HC_FULL_HOUSE, 6).
 -define(HC_FOUR_KIND, 7).
 -define(HC_STRAIGHT_FLUSH, 8).
+
+-record(hand, {
+          combo = ?HC_HIGH_CARD,
+          high_face1 = ?CF_NONE,
+          high_face2 = ?CF_NONE
+         }).
 
 %%% Commands
 
