@@ -53,7 +53,7 @@ find_server(MaxPlayers) ->
 	    if
 		Count < MaxPlayers ->
 		    %%io:format("~s:~w: ~w players~n", [Host, Port, Count]),
-		    {Host, Port};
+		    {list_to_binary(Host), Port};
 		true ->
 		    io:format("~s:~w is full...~n", [Host, Port]),
 		    find_server(MaxPlayers)
