@@ -205,9 +205,8 @@ process_login(Client, Socket, Nick, Pass) ->
             Client#client{ player = Player }
     end.
 
-process_logout(Client, Socket) ->
+process_logout(Client, _Socket) ->
     gen_server:cast(Client#client.player, #logout{}),
-    ?tcpsend(Socket, #good{ cmd = ?CMD_LOGOUT }),
     %% replace player process with a visitor
     {ok, Visitor} = visitor:start(self()),
     Client#client{ player = Visitor }.
@@ -235,7 +234,7 @@ process_game_query(Client, Socket, Q)
                Q#game_query.waiting),
     Client.
 
-process_event(Client, Socket, Event) ->
+process_event(Client, _Socket, Event) ->
     if 
         Client#client.player == none ->
             %% start a proxy
