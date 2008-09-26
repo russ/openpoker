@@ -650,8 +650,8 @@ setup(Host) ->
     setup(Host, true).
 
 setup(Host, TestMode) 
-  when is_list(Host) ->
-    setup(list_to_atom(Host), TestMode);
+  when is_atom(Host) ->
+    setup(atom_to_list(Host), TestMode);
 
 setup(Host, TestMode) ->
     schema:install(),
