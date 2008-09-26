@@ -253,7 +253,16 @@ parse_packet(Socket, Client) ->
     receive
 	{tcp, Socket, Bin} ->
             gen_server:cast(Client#client.server, {'BUMP', size(Bin)}),
-	    Client1 = case pp:read(Bin) of
+	    Client1 = case catch pp:read(Bin) of
+                          {'EXIT', Error} ->
+                              error_logger:error_report(
+                                [{module, ?MODULE},
+                                 {line, ?LINE},
+                                 {message, "Could not parse command"},
+                                 {Bin, Bin},
+                                 {error, Error},
+                                 {now, now()}]),
+                              Client;
                           #login{ nick = Nick, pass = Pass} ->
                               process_login(Client, Socket, Nick, Pass);
                           #logout{} ->
@@ -264,9 +273,6 @@ parse_packet(Socket, Client) ->
                               process_test_start_game(Client, Socket, R);
                           R when is_record(R, game_query) ->
                               process_game_query(Client, Socket, R);
-                          none ->
-                              io:format("Unrecognized packet: ~w~n", [Bin]),
-                              Client;
                           Event ->
                               process_event(Client, Socket, Event)
                       end,
