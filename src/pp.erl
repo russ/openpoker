@@ -106,7 +106,7 @@ cards() ->
     list(byte(), card()).
 
 card() -> 
-    byte().
+    short().
 
 hand() ->
     record(hand, {
@@ -400,8 +400,8 @@ notify_win() ->
              amount()
             }).
 
-notify_my_hand() ->
-    record(notify_my_hand, {
+notify_hand() ->
+    record(notify_hand, {
              game(),
              player(),
              hand()
@@ -556,8 +556,8 @@ write(R) when is_record(R, notify_cancel_game) ->
 write(R) when is_record(R, notify_win) ->
     [?CMD_NOTIFY_WIN|pickle(notify_win(), R)];
 
-write(R) when is_record(R, notify_my_hand) ->
-    [?CMD_NOTIFY_MY_HAND|pickle(notify_my_hand(), R)];
+write(R) when is_record(R, notify_hand) ->
+    [?CMD_NOTIFY_HAND|pickle(notify_hand(), R)];
 
 write(R) when is_record(R, notify_muck) ->
     [?CMD_NOTIFY_MUCK|pickle(notify_muck(), R)];

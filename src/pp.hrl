@@ -199,7 +199,7 @@
           game,
           player,
           raise,
-          total, % notification only
+          total = 0.0, % notification only
           call, % internal
           min, % internal
           max % internal
@@ -367,9 +367,9 @@
           amount
          }).
 
--define(CMD_NOTIFY_MY_HAND, 27).
+-define(CMD_NOTIFY_HAND, 27).
 
--record(notify_my_hand, {
+-record(notify_hand, {
           game,
           player,
           hand
