@@ -35,10 +35,10 @@ short() ->
     {fun write_short/2, fun read_short/1}.
      
 write_short(Acc, Word) -> 
-    [<<Word:16/little>>|Acc].
+    [<<Word:16>>|Acc].
 
 read_short(Bin) -> 
-    <<Word:16/little, Rest/binary>> = Bin,
+    <<Word:16, Rest/binary>> = Bin,
     {Word, Rest}.
 
 %%% Signed short
@@ -47,10 +47,10 @@ sshort() ->
     {fun write_sshort/2, fun read_sshort/1}.
 
 write_sshort(Acc, Word) -> 
-    [<<Word:16/little-signed>>|Acc].
+    [<<Word:16/signed>>|Acc].
 
 read_sshort(Bin) -> 
-    <<Word:16/little-signed, Rest/binary>> = Bin,
+    <<Word:16/signed, Rest/binary>> = Bin,
     {Word, Rest}.
      
 %%% Unsigned int
@@ -59,10 +59,10 @@ int() ->
     {fun write_int/2, fun read_int/1}.
      
 write_int(Acc, Word) -> 
-    [<<Word:32/little>>|Acc].
+    [<<Word:32>>|Acc].
 
 read_int(Bin) -> 
-    <<Word:32/little, Rest/binary>> = Bin,
+    <<Word:32, Rest/binary>> = Bin,
     {Word, Rest}.
 
 %%% Signed int
@@ -71,10 +71,10 @@ sint() ->
     {fun write_sint/2, fun read_sint/1}.
      
 write_sint(Acc, Word) -> 
-    [<<Word:32/little-signed>>|Acc].
+    [<<Word:32/signed>>|Acc].
 
 read_sint(Bin) -> 
-    <<Word:32/little-signed, Rest/binary>> = Bin,
+    <<Word:32/signed, Rest/binary>> = Bin,
     {Word, Rest}.
 
 %%% Unsigned long
@@ -83,10 +83,10 @@ long() ->
     {fun write_long/2, fun read_long/1}.
      
 write_long(Acc, Word) -> 
-    [<<Word:64/little>>|Acc].
+    [<<Word:64>>|Acc].
 
 read_long(Bin) -> 
-    <<Word:64/little, Rest/binary>> = Bin,
+    <<Word:64, Rest/binary>> = Bin,
     {Word, Rest}.
 
 %%% Signed long
@@ -95,10 +95,10 @@ slong() ->
     {fun write_slong/2, fun read_slong/1}.
      
 write_slong(Acc, Word) -> 
-    [<<Word:64/little-signed>>|Acc].
+    [<<Word:64/signed>>|Acc].
 
 read_slong(Bin) -> 
-    <<Word:64/little-signed, Rest/binary>> = Bin,
+    <<Word:64/signed, Rest/binary>> = Bin,
     {Word, Rest}.
 
 %%% List. We supply a pickler for list length 
@@ -304,7 +304,7 @@ write_wstring(Acc, []) ->
     [<<0:16>>|Acc];
 
 write_wstring(Acc, [H|T]) ->
-    write_wstring([<<H:16/little>>|Acc], T).
+    write_wstring([<<H:16>>|Acc], T).
 
 read_wstring(Bin) ->
     read_wstring(Bin, []).
@@ -312,7 +312,7 @@ read_wstring(Bin) ->
 read_wstring(<<0:16, Bin/binary>>, Acc) ->
     {lists:reverse(Acc), Bin};
 
-read_wstring(<<X:16/little, Bin/binary>>, Acc) ->
+read_wstring(<<X:16, Bin/binary>>, Acc) ->
     read_wstring(Bin, [X|Acc]).
 
 string() ->    
