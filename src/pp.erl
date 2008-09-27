@@ -153,6 +153,8 @@ game() ->
 
 player_to_id(undefined) ->
     0;
+player_to_id(none) ->
+    0;
 player_to_id(Player) ->
     gen_server:call(Player, 'ID').
     
