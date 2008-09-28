@@ -239,7 +239,7 @@ raise() ->
              game(),
              player(),
              raise_amount(),
-             total_amount(), % notification only
+             total_amount(), % do set to 0
              internal(),
              internal(),
              internal()
