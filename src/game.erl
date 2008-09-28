@@ -21,7 +21,7 @@
           %% player id
           pid,
           %% inplay balance
-          inplay,
+          inplay = 0.0,
 	  %% total bet
 	  bet,
 	  %% cards
