@@ -18,11 +18,12 @@
 
 -record(showdown, {
           fsm,
-	  game
+	  game,
+          gid
 	 }).
 
-init([FSM, Game]) ->
-    Data = #showdown{ fsm = FSM, game = Game },
+init([FSM, Game, GID]) ->
+    Data = #showdown{ fsm = FSM, game = Game, gid = GID },
     {ok, showdown, Data}.
 
 stop(Ref) ->
@@ -81,7 +82,7 @@ code_change(_OldVsn, State, Data, _Extra) ->
 
 showdown_handle_start(Context, Data) ->
     Game = Data#showdown.game,
-    FSM = Data#showdown.fsm,
+    GID = Data#showdown.gid,
     Seats = gen_server:call(Game, {'SEATS', ?PS_SHOWDOWN}),
     N = length(Seats),
     if 
@@ -92,8 +93,8 @@ showdown_handle_start(Context, Data) ->
             gen_server:cast(Game, {'INPLAY+', Player, Total}),
             PID = gen_server:call(Player, 'ID'),
 	    Event = #notify_win{ 
-              game = FSM, 
-              player = Player, 
+              game = GID, 
+              player = PID, 
               amount = Total
              },
             PID = gen_server:call(Player, 'ID'),
@@ -107,26 +108,26 @@ showdown_handle_start(Context, Data) ->
             lists:foreach(fun(X) ->
                                   Hand = hand:hand(X),
                                   Event = #notify_hand{
-                                    player = element(1, X),
-                                    game = FSM,
+                                    player = element(5, X),
+                                    game = GID,
                                     hand = Hand
                                    },
                                   gen_server:cast(Game, {'BROADCAST', Event})
                           end, Ranks),
 	    Pots = gen_server:call(Game,'POTS'),
 	    Winners = gb_trees:to_list(winners(Ranks, Pots)),
-	    lists:foreach(fun({{Player, _, _, _}, Amount}) ->
+	    lists:foreach(fun({{Player, _, _, _, PID}, Amount}) ->
                                   gen_server:cast(Game, {'INPLAY+', 
                                                          Player, Amount}),
                                   Event = #notify_win{ 
-                                    game = FSM, 
-                                    player = Player, 
+                                    game = GID, 
+                                    player = PID, 
                                     amount = Amount
                                    },
                                   gen_server:cast(Game, {'BROADCAST', Event})
 			  end, Winners)
     end,
-    gen_server:cast(Game, {'BROADCAST', #notify_end_game{ game = FSM }}),
+    gen_server:cast(Game, {'BROADCAST', #notify_end_game{ game = GID }}),
     _Ctx = setelement(4, Context, Winners),
     {stop, {normal, restart, Context}, Data}.
 
@@ -153,7 +154,7 @@ winners(_Ranks, [], Winners) ->
     Winners;
 
 winners(Ranks, [{Total, Members}|Rest], Winners) ->
-    F = fun({Player, _Value, _High, _Score}) ->
+    F = fun({Player, _Value, _High, _Score, _PID}) ->
 		gb_trees:is_defined(Player, Members)
 	end,
     M = lists:filter(F, Ranks),

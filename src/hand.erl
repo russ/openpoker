@@ -2,7 +2,7 @@
 
 -module(hand).
 
--export([new/0, new/1, new/2, set/2, id/1, add/2, cards/1, rank/1]).
+-export([new/0, new/1, new/2, set/2, set_pid/2, id/1, add/2, cards/1, rank/1]).
 
 -export([make_card/1, make_card/2, print_bin/1, 
          print_rep/1, describe/1, hand/1, card_to_string/1]).
@@ -15,6 +15,7 @@
 
 -record(data, {
 	  id, 
+          pid,
 	  cards = [], 
 	  rank = none,
 	  score = 0,
@@ -33,6 +34,9 @@ new(Id, Cards) ->
 set(Hand, Id) ->
     Hand#data{ id = Id }.
 
+set_pid(Hand, PID) ->
+    Hand#data{ pid = PID }.
+
 id(Hand = #data{}) ->
     Hand#data.id.
 
@@ -45,7 +49,8 @@ rank(Hand = #data{}) ->
     Value = NewHand#data.rank,
     High = NewHand#data.high,
     Score = NewHand#data.score,
-    {Id, Value, High, Score}.
+    PID = NewHand#data.pid,
+    {Id, Value, High, Score, PID}.
 
 add(Hand, Card) ->
     Hand#data{ cards = [Card|Hand#data.cards] }.
@@ -410,19 +415,19 @@ describe(H = #hand{ combo = ?HC_HIGH_CARD }) ->
 
 %%% Description for the poker client
 
-hand({_, ?HC_STRAIGHT_FLUSH, High, _Score}) ->
+hand({_, ?HC_STRAIGHT_FLUSH, High, _Score, _PID}) ->
     _ = #hand{
       combo = ?HC_STRAIGHT_FLUSH,
       high_face1 = face_from_mask(High)
      };
 
-hand({_, ?HC_FOUR_KIND, High, _Score}) ->
+hand({_, ?HC_FOUR_KIND, High, _Score, _PID}) ->
     _ = #hand{
       combo = ?HC_FOUR_KIND,
       high_face1 = face_from_mask(High)
      };
 	
-hand({_, ?HC_FULL_HOUSE, High, _Score}) ->
+hand({_, ?HC_FULL_HOUSE, High, _Score, _PID}) ->
     High3 = High bsr 16,
     High2 = High band 16#ffff,
     _ = #hand{
@@ -431,25 +436,25 @@ hand({_, ?HC_FULL_HOUSE, High, _Score}) ->
       high_face2 = face_from_mask(High2)
      };
 
-hand({_, ?HC_FLUSH, High, _Score}) ->
+hand({_, ?HC_FLUSH, High, _Score, _PID}) ->
     _ = #hand{
       combo = ?HC_FLUSH,
       high_face1 = face_from_mask(High)
      };
 	
-hand({_, ?HC_STRAIGHT, High, _Score}) ->
+hand({_, ?HC_STRAIGHT, High, _Score, _PID}) ->
     _ = #hand{
       combo = ?HC_STRAIGHT,
       high_face1 = face_from_mask(High)
      };
 	
-hand({_, ?HC_THREE_KIND, High, _Score}) ->
+hand({_, ?HC_THREE_KIND, High, _Score, _PID}) ->
     _ = #hand{
       combo = ?HC_THREE_KIND,
       high_face1 = face_from_mask(High)
      };
 	
-hand({_, ?HC_TWO_PAIR, High, _Score}) ->
+hand({_, ?HC_TWO_PAIR, High, _Score, _PID}) ->
     High1 = face_from_mask(High),
     High2 = face_from_mask(High band (bnot High1)),
     _ = #hand{
@@ -458,13 +463,13 @@ hand({_, ?HC_TWO_PAIR, High, _Score}) ->
       high_face2 = face_from_mask(High2)
      };
 	
-hand({_, ?HC_PAIR, High, _Score}) ->
+hand({_, ?HC_PAIR, High, _Score, _PID}) ->
     _ = #hand{
       combo = ?HC_PAIR,
       high_face1 = face_from_mask(High)
      };
 	
-hand({_, ?HC_HIGH_CARD, High, _Score}) ->
+hand({_, ?HC_HIGH_CARD, High, _Score, _PID}) ->
     _ = #hand{
       combo = ?HC_HIGH_CARD,
       high_face1 = face_from_mask(High)

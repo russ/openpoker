@@ -20,15 +20,17 @@
 -record(delayed, {
           fsm,
 	  game,
+          gid,
 	  context,
 	  delay,
           timer
 	 }).
 
-init([FSM, Game, Delay]) ->
+init([FSM, Game, GID, Delay]) ->
     Data = #delayed {
       fsm = FSM,
       game = Game,
+      gid = GID,
       delay = Delay
      },
     {ok, delayed_start, Data}.

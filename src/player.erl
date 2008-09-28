@@ -67,56 +67,51 @@ handle_cast({'NOTIFY JOIN', R}, Data) ->
 handle_cast({'NOTIFY LEAVE', R}, Data) ->
     handle_cast_notify_leave(R, Data);
 
-handle_cast(R = #watch{}, Data) ->
+handle_cast(R = #watch{}, Data) 
+  when is_pid(R#watch.game) ->
     handle_cast_watch(R, Data);
 
-handle_cast(R = #unwatch{}, Data) ->
+handle_cast(R = #unwatch{}, Data)
+  when is_pid(R#unwatch.game) ->
     handle_cast_unwatch(R, Data);
 
-handle_cast(R = #wait_bb{}, Data) ->
+handle_cast(R = #wait_bb{}, Data)
+  when is_pid(R#wait_bb.game) ->
     handle_cast_wait_bb(R, Data);
 
 handle_cast(R = #call{}, Data)
-  when R#call.player == Data#player_data.self;
-       R#call.player == undefined ->
+  when is_pid(R#call.game) ->
     handle_cast_call(R, Data);
 
 handle_cast(R = #raise{}, Data)
-  when R#raise.player == Data#player_data.self;
-       R#raise.player == undefined ->
+  when is_pid(R#raise.game) ->
     handle_cast_raise(R, Data);
 
 handle_cast(R = #logout{}, Data) ->
     handle_cast_logout(R, Data);
 
 handle_cast(R = #join{}, Data)
-  when R#join.player == Data#player_data.self;
-       R#join.player == undefined ->
+  when is_pid(R#join.game) ->
     handle_cast_join(R, Data);
 
 handle_cast(R = #leave{}, Data)
-  when R#leave.player == Data#player_data.self;
-       R#leave.player == undefined ->
+  when is_pid(R#leave.game) ->
     handle_cast_leave(R, Data);
 
 handle_cast(R = #chat{}, Data)
-  when R#chat.player == Data#player_data.self;
-       R#chat.player == undefined ->
+  when is_pid(R#chat.game) ->
     handle_cast_chat(R, Data);
 
 handle_cast(R = #fold{}, Data)
-  when R#fold.player == Data#player_data.self;
-       R#fold.player == undefined ->
+  when is_pid(R#fold.game) ->
     handle_cast_fold(R, Data);
 
 handle_cast(R = #sit_out{}, Data)
-  when R#sit_out.player == Data#player_data.self;
-       R#sit_out.player == undefined ->
+  when is_pid(R#sit_out.game) ->
     handle_cast_sit_out(R, Data);
 
 handle_cast(R = #come_back{}, Data)
-  when R#come_back.player == Data#player_data.self;
-       R#come_back.player == undefined ->
+  when is_pid(R#come_back.game) ->
     handle_cast_come_back(R, Data);
 
 handle_cast(R = #seat_query{}, Data) ->
@@ -142,9 +137,6 @@ handle_cast(Event, Data) ->
 
 handle_call('ID', _From, Data) ->
     handle_call_id(Data);
-
-handle_call('INPLAY', _From, Data) ->
-    handle_call_inplay(Data);
 
 handle_call('SOCKET', _From, Data) ->
     handle_call_socket(Data);
@@ -178,19 +170,28 @@ handle_cast_watch(R, Data) ->
     {noreply, Data}.
 
 handle_cast_unwatch(R, Data) ->
-    cardgame:cast(R#watch.game, R#watch{ player = self() }),
+    cardgame:cast(R#unwatch.game, R#unwatch{ player = self() }),
     {noreply, Data}.
 
 handle_cast_fold(R, Data) ->
-    cardgame:send_event(R#fold.game, R#fold{ player = self() }),
+    cardgame:send_event(R#fold.game, R#fold{ 
+                                       player = self(), 
+                                       pid = Data#player_data.pid
+                                      }),
     {noreply, Data}.
 
 handle_cast_sit_out(R, Data) ->
-    cardgame:send_event(R#sit_out.game, R#sit_out{ player = self() }),
+    cardgame:send_event(R#sit_out.game, R#sit_out{ 
+                                          player = self(),
+                                          pid = Data#player_data.pid
+                                         }),
     {noreply, Data}.
 
 handle_cast_come_back(R, Data) ->
-    cardgame:send_event(R#come_back.game, R#come_back{ player = self() }),
+    cardgame:send_event(R#come_back.game, R#come_back{ 
+                                            player = self(),
+                                            pid = Data#player_data.pid
+                                           }),
     {noreply, Data}.
 
 handle_cast_logout(_R, Data) ->
@@ -215,15 +216,24 @@ handle_cast_socket(Socket, Data) when is_pid(Socket) ->
     {noreply, Data1}.
 
 handle_cast_call(R, Data) ->
-    cardgame:send_event(R#call.game, R#call{ player = self() }),
+    cardgame:send_event(R#call.game, R#call{ 
+                                       player = self(),
+                                       pid = Data#player_data.pid
+                                      }),
     {noreply, Data}.
 
 handle_cast_wait_bb(R, Data) ->
-    cardgame:send_event(R#call.game, R#wait_bb{ player = self() }),
+    cardgame:send_event(R#call.game, R#wait_bb{ 
+                                       player = self(),
+                                       pid = Data#player_data.pid
+                                      }),
     {noreply, Data}.
 
 handle_cast_raise(R, Data) ->
-    cardgame:send_event(R#raise.game, R#raise{ player = self() }),
+    cardgame:send_event(R#raise.game, R#raise{ 
+                                        player = self(), 
+                                        pid = Data#player_data.pid
+                                       }),
     {noreply, Data}.
 
 handle_cast_join(R, Data) ->
@@ -234,11 +244,18 @@ handle_cast_join(R, Data) ->
     {noreply, Data}.
 
 handle_cast_leave(R, Data) ->
-    cardgame:send_event(R#leave.game, R#leave{ player = self(), state = ?PS_CAN_LEAVE }),
+    cardgame:send_event(R#leave.game, R#leave{ 
+                                        player = self(), 
+                                        state = ?PS_CAN_LEAVE,
+                                        pid = Data#player_data.pid
+                                       }),
     {noreply, Data}.
 
 handle_cast_chat(R, Data) ->
-    cardgame:cast(R#chat.game, R),
+    cardgame:cast(R#chat.game, R#chat{
+                                 player = self(),
+                                 pid = Data#player_data.pid
+                                }),
     {noreply, Data}.
 
 handle_cast_seat_query(#seat_query{ game = Game }, Data) ->
@@ -267,7 +284,8 @@ handle_cast_new_game_req(R, Data) ->
               CC#tab_cluster_config.enable_dynamic_games ->
                   case cardgame:start(R#start_game{ rigged_deck = [] }) of
                       {ok, Pid} ->
-                          #your_game{ game = Pid };
+                          GID = cardgame:call(Pid, 'ID'),
+                          #your_game{ game = GID };
                       _ ->
                           #bad{ cmd = ?CMD_START_GAME, error = ?ERR_UNKNOWN}
                   end;
@@ -289,12 +307,11 @@ handle_cast_balance_req(Data) ->
     {noreply, Data}.
 
 handle_cast_notify_join(R, Data) ->
-    Self = self(),
+    Game = pp:id_to_game(R#join.game),
     Data1 = if 
-                Self == R#join.player ->
+                Data#player_data.pid == R#join.player ->
                     Games = Data#player_data.games,
-                    Games1 = gb_trees:enter(R#join.game, R#join.seat_num, 
-                                            Games),
+                    Games1 = gb_trees:enter(Game, R#join.seat_num, Games),
                     Data#player_data{ games = Games1 };
                 true ->
                     Data
@@ -304,12 +321,13 @@ handle_cast_notify_join(R, Data) ->
 
 handle_cast_notify_leave(R, Data) ->
     Self = self(),
+    Game = pp:id_to_game(R#leave.game),
     Data1 = if 
-                Self == R#leave.player ->
+                Data#player_data.pid == R#leave.player ->
                     Games = Data#player_data.games,
                     LastGame = gb_trees:size(Games) == 1,
                     Zombie = Data#player_data.zombie == 1,
-                    Games1 = gb_trees:delete(R#leave.game, Games),
+                    Games1 = gb_trees:delete(Game, Games),
                     if
                         LastGame and Zombie ->
                             %% player requested logout previously
@@ -340,9 +358,6 @@ handle_cast_other(Event, Data) ->
 
 handle_call_id(Data) ->
     {reply, Data#player_data.pid, Data}.
-
-handle_call_inplay(Data) ->
-    {reply, inplay(Data), Data}.
 
 handle_call_socket(Data) ->
     {reply, Data#player_data.socket, Data}.
@@ -434,9 +449,13 @@ inplay([Game|Rest], Total) ->
 leave_games(_, []) ->
     ok;
 
-leave_games(Player, [Game|Rest]) ->
-    cardgame:send_event(Game, #leave{ game = Game, player = self() }),
-    leave_games(Player, Rest).
+leave_games(Data, [Game|Rest]) ->
+    cardgame:send_event(Game, _ = #leave{ 
+                                game = Game, 
+                                player = self(), 
+                                pid = Data#player_data.pid
+                               }),
+    leave_games(Data, Rest).
 
 delete_balance(PID) ->
     mnesia:dirty_delete(tab_balance, PID).

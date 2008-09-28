@@ -12,8 +12,9 @@
 -record(bot, {
 	  nick,
 	  player,
-          watch,
+          pid,
 	  game,
+          gid,
 	  socket,
 	  actions,
           filters,

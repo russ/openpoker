@@ -19,14 +19,16 @@
 -record(deal, {
           fsm,
 	  game,
+          gid,
 	  n,
 	  type
 	 }).
 
-init([FSM, Game, N, Type]) ->
+init([FSM, Game, GID, N, Type]) ->
     Data = #deal {
       fsm = FSM,
       game = Game,
+      gid = GID,
       n = N,
       type = Type
      },

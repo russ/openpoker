@@ -81,19 +81,21 @@ simple_seat_query_test() ->
     flush(),
     Players = [{Player, _, _}] = make_players(1),
     Game = make_game(2, Players),
+    GID = cardgame:call(Game, 'ID'),
+    PID = gen_server:call(Player, 'ID'),
     X = cardgame:call(Game, 'SEAT QUERY'),
     S1 = #seat_state{ 
-      game = Game, 
+      game = GID, 
       seat_num = 1, 
       state = ?PS_PLAY, 
-      player = Player,
+      player = PID,
       inplay = 1000.0 
      },
     S2 = #seat_state{
-      game = Game,
+      game = GID,
       seat_num = 2,
       state = ?PS_EMPTY,
-      player = none
+      inplay = 0.0
      },
     cardgame:cast(Game, {'NOTE', simple_seat_query}),
     ?assertEqual([S1, S2], X),
@@ -112,31 +114,27 @@ complex_seat_query_test() ->
     gen_server:cast(Player, {'SOCKET', self()}),
     Game = make_game(Players),
     cardgame:cast(Game, {'NOTE', complex_seat_query}),
+    GID = cardgame:call(Game, 'ID'),
     PID = gen_server:call(Player, 'ID'),
-    {packet, Packet} = receive
-                           Any ->
-                               Any
-                       after 100 ->
-                               none
-                       end,
+    X1 = wait_for_msg(100, [chat, notify_cancel_game]),
     Cmd = #join{ 
-      game = Game, 
-      player = Player, 
+      game = GID, 
+      player = PID, 
       pid = PID,
       seat_num = N, 
       amount = 1000.0
      },
-    ?assertEqual(Cmd, Packet),
+    ?assertEqual(Cmd, X1),
     player:cast(PID, #seat_query{ game = Game }),
-    X = wait_for_msg(100, [chat, notify_cancel_game]),
+    X2 = wait_for_msg(100, [chat, notify_cancel_game]),
     SeatState = #seat_state{
-      game = Game,
+      game = GID,
       seat_num = 1,
       state = ?PS_PLAY,
-      player = Player,
+      player = PID,
       inplay = 1000.0
      },
-    ?assertEqual(SeatState, X),
+    ?assertEqual(SeatState, X2),
     ?assertNot(none == pp:write(SeatState)),
     cleanup_players(Players),
     ?assertEqual(ok, stop_game(Game)),
@@ -152,7 +150,7 @@ delayed_start_test() ->
 			  [{delayed_start, [0]}]),
     cardgame:cast(Game, {'NOTE', delayed_start}),
     cardgame:cast(Game, {'TIMEOUT', 0}),
-    ?assertMatch({'CARDGAME EXIT', Game, #test{}}, wait_for_msg(1000, [])), 
+    ?assertEqual({'CARDGAME EXIT', Game, #test{}}, wait_for_msg(1000, [])), 
     cleanup_players(Players),
     ?assertEqual(ok, stop_game(Game)),
     ok.
@@ -221,7 +219,7 @@ login_logout_test() ->
     ?assertEqual(true, util:is_process_alive(Pid)),
     ?assertEqual(ok, stop_player(Pid, ID)),
     ?assertEqual(false, util:is_process_alive(Pid)),
-    ?assertMatch([], mnesia:dirty_read(tab_player, ID)),
+    ?assertEqual([], mnesia:dirty_read(tab_player, ID)),
     ok = mnesia:dirty_delete(tab_player, ID),
     ok.
     
@@ -247,7 +245,7 @@ player_online_not_playing_test() ->
     ?assertEqual(false, util:is_process_alive(Pid)),
     ?assertNot(Pid == Pid1),
     ?assertEqual(ok, stop_player(Pid1, ID)),
-    ?assertMatch([], mnesia:dirty_read(tab_player, ID)),
+    ?assertEqual([], mnesia:dirty_read(tab_player, ID)),
     flush(),
     ok.
 
@@ -263,6 +261,7 @@ player_online_playing_test() ->
     %% set up a busy player
     Game = make_game(2, [{Pid, 1, fun() -> stop_player(Pid, ID) end}]),
     GID = cardgame:call(Game, 'ID'),
+    PID = gen_server:call(Pid, 'ID'),
     cardgame:cast(Game, {'NOTE', player_online_playing}),
     timer:sleep(200),
     ?assertMatch([_], mnesia:dirty_read(tab_inplay, {GID, ID})),
@@ -273,16 +272,15 @@ player_online_playing_test() ->
     ?assertEqual(Socket, P#tab_player.socket),
     %% check inplay
     ?assertEqual(true, is_process_alive(Pid)),
-    Inplay2 = gen_server:call(Pid, 'INPLAY'),
-    ?assertEqual(1000.0, Inplay2),
     Inplay3 = cardgame:call(Game, {'INPLAY', Pid}),
     ?assertEqual(1000.0, Inplay3),
     %% look for notify join
-    ?assertMatch(#join{ 
-                 game = Game,
-                 player = Pid,
+    ?assertEqual(#join{ 
+                 game = GID,
+                 player = PID,
                  seat_num = 1,
-                 amount = 1000.00
+                 amount = 1000.00,
+                 pid = PID
                 }, wait_for_msg(100, [chat, notify_cancel_game])),
     ?assertEqual(ok, stop_player(Pid, ID)),
     ?assertEqual(ok, stop_game(Game)),
@@ -320,15 +318,15 @@ network_login_logout_test() ->
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket, #login{ nick = Nick, pass = <<"@#%^@#">> }),
     X = wait_for_msg(2000, [leave, chat]),
-    ?assertMatch(#bad{ cmd = ?CMD_LOGIN, error = ?ERR_BAD_LOGIN }, X),
+    ?assertEqual(#bad{ cmd = ?CMD_LOGIN, error = ?ERR_BAD_LOGIN }, X),
     ?tcpsend(Socket, #ping{}),
     X1 = wait_for_msg(2000, []),
-    ?assertMatch(#pong{}, X1),
+    ?assertEqual(#pong{}, X1),
     ?tcpsend(Socket, #login{ nick = Nick, pass = Nick }),
     X2 = wait_for_msg(2000, []),
     [TP] = mnesia:dirty_read(tab_player, ID),
     Player = TP#tab_player.process,
-    ?assertMatch(#you_are{ player = Player }, X2),
+    ?assertEqual(#you_are{ player = Player }, X2),
     %% disconnect without logging out
     gen_tcp:close(Socket),
     timer:sleep(100),
@@ -336,7 +334,7 @@ network_login_logout_test() ->
     {ok, Socket1} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend(Socket1, #login{ nick = Nick, pass = Nick }),
     X3 = wait_for_msg(2000, []),
-    ?assertMatch(#you_are{ player = Player }, X3),
+    ?assertEqual(#you_are{ player = Player }, X3),
     ?tcpsend(Socket1, #logout{}),
     gen_tcp:close(Socket1),
     %% clean up
@@ -378,10 +376,10 @@ simple_game_simulation_test() ->
 		       {nick(), 2, ['BLIND']}]),
     timer:sleep(1000),
     %% make sure game is started
-    ?assertMatch({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
+    ?assertEqual({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
     %% wait for game to end
     Winners = gb_trees:insert(2, 15.0, gb_trees:empty()),
-    ?assertMatch({'END', Game, Winners}, wait_for_msg(?PLAYER_TIMEOUT, [])),
+    ?assertEqual({'END', GID, Winners}, wait_for_msg(?PLAYER_TIMEOUT, [])),
     timer:sleep(1000),
     %% check balances
     [B1] = mnesia:dirty_read(tab_balance, ID1),
@@ -405,14 +403,15 @@ leave_after_sb_posted_test() ->
     {ok, Server} = server:start(Host, Port, true),
     timer:sleep(1000),
     {ok, Game} = start_basic_game(),
+    GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'NOTE', leave_after_sb_posted}),
     %% create dummy players
     Data = setup_game(Host, Port, Game,
 		      [{nick(), 1, ['BLIND']},
 		       {nick(), 2, ['LEAVE']}]),
     %% make sure game is started
-    ?assertMatch({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
-    ?assertMatch({'CANCEL', Game}, wait_for_msg(?START_DELAY * 2, [])),
+    ?assertEqual({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
+    ?assertEqual({'CANCEL', GID}, wait_for_msg(?START_DELAY * 2, [])),
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),
@@ -435,7 +434,7 @@ dynamic_game_start_test() ->
     X1 = wait_for_msg(2000, []),
     [TP] = mnesia:dirty_read(tab_player, ID),
     Player = TP#tab_player.process,
-    ?assertMatch(#you_are{ player = Player }, X1),
+    ?assertEqual(#you_are{ player = Player }, X1),
     Cmd = #start_game{ 
       type = ?GT_IRC_TEXAS,
       seat_count = 1,
@@ -447,7 +446,7 @@ dynamic_game_start_test() ->
                               enable_dynamic_games = false 
                              }),
     ?tcpsend(Socket, Cmd),
-    ?assertMatch(#bad{ cmd = ?CMD_START_GAME, error = ?ERR_START_DISABLED }, 
+    ?assertEqual(#bad{ cmd = ?CMD_START_GAME, error = ?ERR_START_DISABLED }, 
                  wait_for_msg(2000, [])),
     %% enable dynamic games
     ok = mnesia:dirty_write(CC#tab_cluster_config{ 
@@ -478,10 +477,10 @@ query_own_balance_test() ->
     X = wait_for_msg(2000, []),
     [TP] = mnesia:dirty_read(tab_player, ID),
     Player = TP#tab_player.process,
-    ?assertMatch(#you_are{ player = Player }, X),
+    ?assertEqual(#you_are{ player = Player }, X),
     %% balance check 
     ?tcpsend(Socket, #balance_query{}),
-    ?assertMatch(#balance{ amount = 10000000, inplay = 0}, 
+    ?assertEqual(#balance{ amount = 10000000, inplay = 0}, 
                  wait_for_msg(2000, [])),
     [P1] = mnesia:dirty_read(tab_balance, ID),
     ?assertEqual(10000000, P1#tab_balance.amount),
@@ -489,7 +488,7 @@ query_own_balance_test() ->
     player:update_balance(ID, -150.00),
     %% another balance check 
     ?tcpsend(Socket, #balance_query{}),
-    ?assertMatch(#balance{ amount = 8500000, inplay = 0}, 
+    ?assertEqual(#balance{ amount = 8500000, inplay = 0}, 
                  wait_for_msg(2000, [])),
     [P2] = mnesia:dirty_read(tab_balance, ID),
     ?assertEqual(8500000, P2#tab_balance.amount),
@@ -526,7 +525,7 @@ test190(Host, Port, [Info|Rest])
     X = wait_for_msg(2000, []),
     [TP] = mnesia:dirty_read(tab_player, ID),
     Player = TP#tab_player.process,
-    ?assertMatch(#you_are{ player = Player }, X),
+    ?assertEqual(#you_are{ player = Player }, X),
     ?tcpsend(Socket, #logout{}),
     gen_tcp:close(Socket),
     timer:sleep(100),
@@ -541,26 +540,27 @@ two_games_in_a_row_test() ->
     {ok, Server} = server:start(Host, Port, true),
     timer:sleep(100),
     {ok, Game} = start_basic_game(),
+    GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'NOTE', two_games_in_a_row}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 2, % games to play
                       [{nick("test200"), 1, ['BLIND', 'FOLD', 'BLIND', 'FOLD']},
                        {nick("test200"), 2, ['BLIND', 'BLIND', 'FOLD']}]),
     %% make sure game is started
-    ?assertMatch({'START', Game}, 
+    ?assertEqual({'START', Game}, 
                  wait_for_msg(?START_DELAY * 2, 
                           [chat, notify_cancel_game])),
     %% wait for game to end
-    ?assertMatch({'END', Game, _}, 
+    ?assertMatch({'END', GID, _}, 
                  wait_for_msg(?PLAYER_TIMEOUT, 
                           [chat, notify_cancel_game])),
     %% and start another round
-    ?assertMatch({'START', Game}, 
+    ?assertEqual({'START', Game}, 
                  wait_for_msg(?START_DELAY * 2, 
                           [chat, notify_cancel_game])),
-    ?assertMatch({'END', Game, _}, 
+    ?assertMatch({'END', GID, _}, 
                  wait_for_msg(?PLAYER_TIMEOUT, 
-                          [chat, notify_cancel_game])),
+                              [chat, notify_cancel_game])),
     flush(),
     %% clean up
     cleanup_players(Data),
@@ -579,6 +579,7 @@ two_games_with_leave_test() ->
     timer:sleep(100),
     %% find an empty game
     {ok, Game} = start_basic_game(3),
+    GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'NOTE', two_games_with_leave}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 1, % games to play
@@ -587,9 +588,9 @@ two_games_with_leave_test() ->
                        {nick(), 3, ['RAISE', 'CALL', 'CALL', 'CHECK', 'CHECK']}
                       ]),
     %% make sure game is started
-    ?assertMatch({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
+    ?assertEqual({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
     %% wait for game to end
-    ?assertMatch({'END', Game, _}, wait_for_msg(?PLAYER_TIMEOUT, [])),
+    ?assertMatch({'END', GID, _}, wait_for_msg(?PLAYER_TIMEOUT, [])),
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),
@@ -624,6 +625,7 @@ split_pot_test() ->
     timer:sleep(100),
     %% find an empty game
     {ok, Game} = start_basic_game(),
+    GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'NOTE', split_pot}),
     %% create dummy players
     Actions1 = ['BLIND', 'CHECK', 'RAISE', 'CHECK', 'CHECK'],
@@ -634,10 +636,10 @@ split_pot_test() ->
                       {<<"split-pot-bot2">>, 2, []}
                      ]),
     %% make sure game is started
-    wait_for_split_pot(Game, Obs, {P1, Actions1}, {P2, Actions2}, 0),
+    wait_for_split_pot(Game, GID, Obs, {P1, Actions1}, {P2, Actions2}, 0),
     N = 3,
     set_games_to_play(N, [P1, P2, Obs]),
-    check_pot(Game, Obs, {P1, Actions1}, {P2, Actions2}, N),
+    check_pot(Game, GID, Obs, {P1, Actions1}, {P2, Actions2}, N),
     flush(),
     %% clean up
     timer:sleep(2000),
@@ -646,37 +648,37 @@ split_pot_test() ->
     server:stop(Server),
     ok.
 
-wait_for_split_pot(_, _, _, _, 2) ->
+wait_for_split_pot(_, _, _, _, _, 2) ->
     ok;
 
-wait_for_split_pot(Game, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, _) ->
+wait_for_split_pot(Game, GID, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, _) ->
     gen_server:cast(P1, {'SET ACTIONS', Actions1}),
     gen_server:cast(P2, {'SET ACTIONS', Actions2}),
     set_games_to_play(3, [P1, P2, Obs]),
-    ?assertMatch({'START', Game}, 
+    ?assertEqual({'START', Game}, 
                  wait_for_msg(?START_DELAY * 2, 
-                          [chat, notify_cancel_game])),
+                              [chat, notify_cancel_game])),
     %% wait for game to end
     Winners = receive
-                  {'END', Game, Tree} ->
+                  {'END', GID, Tree} ->
                       Tree;
                   _ ->
                       ?assertEqual(0, 1)
               after ?PLAYER_TIMEOUT ->
                       ?assertEqual(0, 2)
               end,
-    wait_for_split_pot(Game, Obs, X, Y, gb_trees:size(Winners)).
+    wait_for_split_pot(Game, GID, Obs, X, Y, gb_trees:size(Winners)).
 
-check_pot(_, _, _, _, 0) ->
+check_pot(_, _, _, _, _, 0) ->
     ok;
 
-check_pot(Game, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, N) ->
+check_pot(Game, GID, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, N) ->
     gen_server:cast(P1, {'SET ACTIONS', Actions1}),
     gen_server:cast(P2, {'SET ACTIONS', Actions2}),
-    ?assertMatch({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
+    ?assertEqual({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
     %% wait for game to end
     Winners = receive
-                  {'END', Game, Tree} ->
+                  {'END', GID, Tree} ->
                       Tree;
                   _ ->
                       ?assertEqual(0, 1)
@@ -684,14 +686,14 @@ check_pot(Game, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, N) ->
                       ?assertEqual(0, 2)
               end,
     io:format("--- Winners: ~w, ~w~n", [gb_trees:size(Winners), Winners]),
-    check_pot(Game, Obs, X, Y, N - 1).
+    check_pot(Game, GID, Obs, X, Y, N - 1).
 
 %%% Leave out of turn
 
 leave_filter(#game_stage{ stage = ?GS_RIVER }, Bot) ->
     ok = ?tcpsend(Bot#bot.socket, #leave{ 
-                            player = Bot#bot.player,
-                            game = Bot#bot.game 
+                            player = Bot#bot.pid,
+                            game = Bot#bot.gid
                            }),
     ok = ?tcpsend(Bot#bot.socket, #logout{}),
     {done, Bot#bot{ done = true }};
@@ -707,6 +709,7 @@ leave_out_of_turn_test() ->
     timer:sleep(100),
     %% find an empty game
     {ok, Game} = start_basic_game(3),
+    GID = cardgame:call(Game, 'ID'),
     cardgame:cast(Game, {'NOTE', leave_out_of_turn}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 1, % games to play
@@ -729,9 +732,9 @@ leave_out_of_turn_test() ->
                                    ]}
                       ]),
     %% make sure game is started
-    ?assertMatch({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
+    ?assertEqual({'START', Game}, wait_for_msg(?START_DELAY * 2, [])),
     %% wait for game to end
-    ?assertMatch({'END', Game, _}, wait_for_msg(?PLAYER_TIMEOUT, [])),
+    ?assertMatch({'END', GID, _}, wait_for_msg(?PLAYER_TIMEOUT, [])),
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),
@@ -886,7 +889,8 @@ connect_observer(Host, Port, Game, GamesToWatch, Trace) ->
     gen_server:cast(Obs, {'TRACE', Trace}),
     gen_server:cast(Obs, {'GAMES TO PLAY', GamesToWatch}),
     ok = gen_server:call(Obs, {'CONNECT', Host, Port}, 15000),
-    gen_server:cast(Obs, #watch{ game = Game }),
+    GID = cardgame:call(Game, 'ID'),
+    gen_server:cast(Obs, #watch{ game = GID }),
     F = fun() -> stop_proc(Obs, fun observer:stop/1) end,
     {Obs, 0, F}.
 
@@ -895,7 +899,8 @@ connect_player(Nick, Host, Port, Game, SeatNum, GamesToPlay, Actions) ->
     {ok, Bot} = bot:start(Nick, SeatNum, SeatNum, 1000.0),
     gen_server:cast(Bot, {'SET ACTIONS', Actions}),
     gen_server:cast(Bot, {'GAMES TO PLAY', GamesToPlay}),
-    gen_server:cast(Bot, {'WATCH', Game}),
+    GID = cardgame:call(Game, 'ID'),
+    gen_server:cast(Bot, {'WATCH', GID}),
     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, 15000),
     gen_server:cast(Bot, #login{ nick = Nick, pass = Nick }),
     F = fun() -> stop_proc(Bot, fun bot:stop/1) end,

@@ -197,7 +197,8 @@
           game,
           player,
           amount,
-          expected % internal
+          expected, % internal
+          pid % internal
          }).
 
 -define(CMD_RAISE, 6).
@@ -209,14 +210,16 @@
           total = 0.0, % notification only
           call, % internal
           min, % internal
-          max % internal
+          max, % internal
+          pid % internal
          }).
 
 -define(CMD_FOLD, 7).
 
 -record(fold, {
           game,
-          player
+          player,
+          pid % internal
          }).
 
 -define(CMD_JOIN, 8).
@@ -235,21 +238,24 @@
 -record(leave, {
           game,
           player,
-          state % internal
+          state, % internal
+          pid % internal
          }).
 
 -define(CMD_SIT_OUT, 10).
 
 -record(sit_out, {
           game,
-          player
+          player,
+          pid % internal
          }).
 
 -define(CMD_COME_BACK, 11).
 
 -record(come_back, {
           game,
-          player
+          player,
+          pid % internal
          }).
 
 -define(CMD_CHAT, 12).
@@ -257,7 +263,8 @@
 -record(chat, {
           game,
           player,
-          message
+          message,
+          pid % internal
          }).
 
 -define(CMD_GAME_QUERY, 13).
@@ -385,7 +392,8 @@
 
 -record(muck, {
           game,
-          player
+          player,
+          pid % internal
          }).
 
 -define(CMD_GAME_STAGE, 29).
@@ -460,7 +468,7 @@
 -record(wait_bb, {
           game, 
           player,
-          notify % internal
+          pid % internal
          }).
 
 -define(CMD_YOUR_GAME, 39).

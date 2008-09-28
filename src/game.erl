@@ -364,20 +364,16 @@ handle_cast_broadcast(Game, Event, Except) ->
 handle_cast_notify_start_game(R, Game) ->
     Msg = lang:msg(?GAME_STARTING),
     Game1 = reset(Game),
-    Game2 = broadcast(Game1, #chat{ 
-                        game = Game#game.fsm, 
-                        message = Msg 
-                       }),
-    Game3 = broadcast(Game2, R),
+    GID = Game1#game.gid,
+    Game2 = broadcast(Game1, #chat{ game = GID, message = Msg }),
+    Game3 = broadcast(Game2, R#notify_start_game{ game = GID }),
     {noreply, Game3}.
     
 handle_cast_notify_cancel_game(R, Game) ->
     Msg = lang:msg(?GAME_CANCELLED),
-    Game1 = broadcast(Game, #chat{ 
-                        game = Game#game.fsm,
-                        message = Msg 
-                       }),
-    Game2 = broadcast(Game1, R),
+    GID = Game#game.gid,
+    Game1 = broadcast(Game, #chat{ game = GID, message = Msg }),
+    Game2 = broadcast(Game1, R#notify_cancel_game{ game = GID }),
     {noreply, Game2}.
 
 handle_cast_watch(R, Game) ->
@@ -413,18 +409,18 @@ handle_cast_chat(R, Game) ->
 	or lists:member(Player, Game#game.observers),
     Game1 = if 
 		OurPlayer ->
-		    broadcast(Game, R#chat{ game = Game#game.fsm }, Player);
+		    broadcast(Game, R#chat{ game = Game#game.gid }, Player);
 		true ->
 		    Game
 	    end,
     {noreply, Game1}.
 
 handle_cast_notify_sb(R, Game) ->
-    Game1 = broadcast(Game, R#notify_sb{ game = Game#game.fsm }),
+    Game1 = broadcast(Game, R#notify_sb{ game = Game#game.gid }),
     {noreply, Game1}.
     
 handle_cast_notify_bb(R, Game) ->
-    Game1 = broadcast(Game, R#notify_bb{ game = Game#game.fsm }),
+    Game1 = broadcast(Game, R#notify_bb{ game = Game#game.gid }),
     {noreply, Game1}.
 
 handle_cast_join(R, Game) ->
@@ -433,6 +429,8 @@ handle_cast_join(R, Game) ->
     Seat = element(R#join.seat_num, Seats),
     Player = R#join.player,
     OurPlayer = gb_trees:is_defined(Player, XRef),
+    GID = Game#game.gid,
+    PID = R#join.pid,
     if
 	%% seat is taken
 	Seat#seat.state /= ?PS_EMPTY ->
@@ -443,13 +441,19 @@ handle_cast_join(R, Game) ->
 	true ->
 	    %% try to move the buy-in amount 
 	    %% from balance to inplay
-            case do_buy_in(Game#game.gid, R#join.pid, R#join.amount) of
+            case do_buy_in(GID, PID, R#join.amount) of
 		ok ->
                     %% tell player
-                    gen_server:cast(Player, {'NOTIFY JOIN', R}),
+                    gen_server:cast(Player, {'NOTIFY JOIN', R#join{
+                                                              game = GID,
+                                                              player = PID
+                                                             }}),
 		    %% take seat and broadcast the fact
 		    Game1 = join_player(R, Game),
-		    Game2 = broadcast(Game1, R, Player),
+		    Game2 = broadcast(Game1, R#join{ 
+                                               game = GID,
+                                               player = PID
+                                              }, Player),
 		    {noreply, Game2};
 		_Any ->
                     %% no money or other error
@@ -463,17 +467,25 @@ handle_cast_leave(R, Game) ->
     Seats = Game#game.seats,
     Player = R#leave.player,
     OurPlayer = gb_trees:is_defined(Player, XRef),
+    GID = Game#game.gid,
     if
 	OurPlayer ->
 	    SeatNum = gb_trees:get(Player, XRef),
 	    Seat = element(SeatNum, Seats),
+            PID = Seat#seat.pid,
             if 
                 %% can leave, unless playing
                 Seat#seat.state band R#leave.state > 0 ->
                     %% tell player
-                    gen_server:cast(Player, {'NOTIFY LEAVE', R}),
+                    gen_server:cast(Player, {'NOTIFY LEAVE', R#leave{
+                                                               game = GID,
+                                                               player = PID
+                                                              }}),
                     %% notify players
-                    Game1 = broadcast(Game, R, Player),
+                    Game1 = broadcast(Game, R#leave{
+                                              game = GID,
+                                              player = PID
+                                             }, Player),
                     XRef1 = gb_trees:delete(Player, XRef),
                     Game2 = Game1#game {
                               xref = XRef1,
@@ -487,16 +499,14 @@ handle_cast_leave(R, Game) ->
                              },
                     %% update inplay balance
                     Inplay = Seat#seat.inplay,
-                    GID = Game#game.gid,
-                    PID = Seat#seat.pid,
                     mnesia:dirty_update_counter(tab_balance, PID, 
                                                 trunc(Inplay * 10000)),
                     ok = mnesia:dirty_delete(tab_inplay, {GID, PID}),
                     {noreply, Game2};
                 %% cannot leave now, use auto-play
                 true ->
-                    Fold = #fold{ game = Game#game.fsm, player = Player },
-                    Leave = #leave{ game = Game#game.fsm, player = Player },
+                    Fold = #fold{ game = Game#game.fsm, player = Player, pid = PID },
+                    Leave = #leave{ game = Game#game.fsm, player = Player, pid = PID },
                     Seat1 = Seat#seat{ cmd_que = [[Fold, Leave]] },
                     Game1 = Game#game {
                               seats = setelement(SeatNum, Seats, Seat1)
@@ -510,16 +520,17 @@ handle_cast_leave(R, Game) ->
 
 handle_cast_fold(R, Game) ->
     Player = R#fold.player,
-    FSM = Game#game.fsm,
+    GID = Game#game.gid,
     Game1 = set_state(Game, Player, ?PS_FOLD),
     case gb_trees:lookup(Player, Game1#game.xref) of
         {value, SeatNum} ->
             Seat = element(SeatNum, Game1#game.seats),
+            PID = Seat#seat.pid,
             if 
                 Seat#seat.muck ->
                     Event = #show_cards{ 
-                      game = FSM,
-                      player = Player,
+                      game = GID,
+                      player = PID,
                       cards = hand:cards(Seat#seat.hand)
                      },
                     Game2 = broadcast(Game1, Event, Player);
@@ -527,7 +538,10 @@ handle_cast_fold(R, Game) ->
                     Game2 = Game1
             end,
             %% notify fold
-            Game3 = broadcast(Game2, R#fold{ game = FSM }, Player),
+            Game3 = broadcast(Game2, R#fold{ 
+                                       game = GID, 
+                                       player = PID 
+                                      }, Player),
             {noreply, Game3};
         _ ->
             {noreply, Game1}
@@ -555,9 +569,13 @@ handle_cast_draw(Player, Game) ->
     Seat = element(SeatNum, Game#game.seats),
     Hand = hand:add(Seat#seat.hand, Card),
     Seats = setelement(SeatNum, Game#game.seats, Seat#seat{ hand = Hand }),
-    Draw = #notify_draw{ game = Game#game.fsm, player = Player, card = Card },
+    Draw = #notify_draw{ game = Game#game.gid, player = Seat#seat.pid, card = Card },
     gen_server:cast(Player, Draw),
-    Game1 = broadcast(Game, Draw#notify_draw{ card = 0 }),
+    Game1 = broadcast(Game, Draw#notify_draw{ 
+                              game = Game#game.gid, 
+                              player = Seat#seat.pid,
+                              card = 0 
+                             }),
     Game2 = Game1#game{ seats = Seats, deck = Deck },
     {noreply, Game2}.
 
@@ -567,7 +585,7 @@ handle_cast_draw_shared(Game) ->
               deck = Deck,
 	      board = [Card|Game#game.board]
 	     },
-    Shared = #notify_shared{ game = Game#game.fsm, card = Card },
+    Shared = #notify_shared{ game = Game#game.gid, card = Card },
     Game2 = broadcast(Game1, Shared),
     {noreply, Game2}.
 
@@ -646,8 +664,8 @@ handle_cast_request_bet(SeatNum, Call, RaiseMin, RaiseMax, Game) ->
                 %% regular bet request
                 true ->
                     BetReq = #bet_req{
-                      game = Game#game.fsm,
-                      player = Seat#seat.player,
+                      game = Game#game.gid,
+                      player = Seat#seat.pid,
                       call = Call,
                       raise_min = RaiseMin,
                       raise_max = RaiseMax
@@ -807,7 +825,7 @@ set_state(Game, Player, State) ->
 rank_hands(Game, Seats) ->
     F = fun(SeatNum) ->
 		Seat = element(SeatNum, Game#game.seats),
-		Seat#seat.hand
+                hand:set_pid(Seat#seat.hand, Seat#seat.pid)
 	end,
     Hands = lists:map(F, Seats),
     Cards = Game#game.board,
@@ -816,7 +834,8 @@ rank_hands(Game, Seats) ->
 		 lists:map(F2, Acc)
 	 end,
     Hands1 = lists:foldl(F1, Hands, Cards),
-    lists:map(fun hand:rank/1, Hands1).
+    F2 = fun(Hand) -> hand:rank(Hand) end,
+    lists:map(F2, Hands1).
 
 %% Initialize seats
 
@@ -1001,10 +1020,10 @@ seat_query(_Game, 0, Acc) ->
 seat_query(Game, SeatNum, Acc) ->
     Seat = element(SeatNum, Game#game.seats),
     SeatState = #seat_state{
-      game = Game#game.fsm,
+      game = Game#game.gid,
       seat_num = SeatNum,
       state = Seat#seat.state,
-      player = Seat#seat.player,
+      player = Seat#seat.pid,
       inplay = Seat#seat.inplay
      },
     Acc1 = [SeatState|Acc],
@@ -1072,10 +1091,11 @@ find_1(GameType, LimitType) ->
     L = qlc:e(Q),
     lists:map(fun(R) ->
                       Game = R#tab_game_xref.process,
+                      GID = R#tab_game_xref.gid,
 		      Joined = cardgame:call(Game, 'JOINED'),
 		      Waiting = 0, % not implemented
                       _ = #game_info{
-                        game = Game,
+                        game = GID,
                         table_name = R#tab_game_xref.table_name,
                         type = R#tab_game_xref.type,
                         limit = R#tab_game_xref.limit,
@@ -1134,8 +1154,8 @@ broadcast_inplay(Game, Seats, SeatNum) ->
             ok;
         _ ->
             broadcast(Game, _ = #game_inplay {
-                              game = Game#game.fsm,
-                              player = Player, 
+                              game = Game#game.gid,
+                              player = Seat#seat.pid, 
                               seat_num = SeatNum,
                               amount = Seat#seat.inplay
                              })
@@ -1178,8 +1198,8 @@ force_player_leave(Game, Seats, N) ->
                     XRef = Game#game.xref,
                     %% notify others
                     Game1 = broadcast(Game, #leave{
-                                        game = Game#game.fsm,
-                                        player = Player
+                                        game = Game#game.gid,
+                                        player = Seat#seat.pid
                                        }),
                     XRef1 = gb_trees:delete(Player, XRef),
                     Game1#game {
@@ -1218,8 +1238,8 @@ show_cards(Game, [H|T]) ->
         Seat#seat.muck == false ->
             Player = Seat#seat.player,
             Event = #show_cards{
-              game = Game#game.fsm,
-              player = Player,
+              game = Game#game.gid,
+              player = Seat#seat.pid,
               cards = hand:cards(Seat#seat.hand)
              },
             broadcast(Game, Event, Player);

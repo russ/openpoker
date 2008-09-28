@@ -119,9 +119,10 @@ handle_info({'START', _GID}, Data) ->
     {noreply, Data};
 
 handle_info({'END', GID, Winners}, Data) ->
+    GID1 = pp:id_to_game(GID),
     %% score it
     Games = Data#data.games,
-    Game = gb_trees:get(GID, Games),
+    Game = gb_trees:get(GID1, Games),
     Winners1 = fixup_winners(Game, Winners),
     Success = match_winners(Game#test_game.winners, Winners1),
     if
@@ -148,7 +149,7 @@ handle_info({'END', GID, Winners}, Data) ->
 		     }
 	    end,
     %% clean up
-    Games1 = gb_trees:delete(GID, Games),
+    Games1 = gb_trees:delete(GID1, Games),
     Data2 = Data1#data {
 	      finished = Data1#data.finished + 1,
 	      games = Games1
@@ -311,6 +312,11 @@ test(DB, Key, Mb, Max, Host, Port, Trace, Delay) ->
     %%spawn(F),
     Key1 = dets:next(DB, Key),
     test(DB, Key1, Mb, Max - 1, Host, Port, Trace, Delay).
+
+setup_players(Game, GID, Host, Port) 
+  when is_pid(GID) ->
+    GID1 = cardgame:call(GID, 'ID'),
+    setup_players(Game, GID1, Host, Port);
 
 setup_players(Game, GID, Host, Port) ->
     Players = lists:reverse(tuple_to_list(Game#irc_game.players)),
@@ -511,6 +517,11 @@ fetch_prop(Prop, [{Key, Value}|T]) ->
 	    fetch_prop(Prop, T)
     end.
 
+setup_observer(Parent, GID, Host, Port, Trace) 
+  when is_pid(GID) ->
+    GID1 = cardgame:call(GID, 'ID'),
+    setup_observer(Parent, GID1, Host, Port, Trace);
+    
 setup_observer(Parent, GID, Host, Port, Trace) ->
     %% setup observer bot
     {ok, Observer} = observer:start(Parent),

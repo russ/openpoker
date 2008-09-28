@@ -199,7 +199,8 @@ process_login(Client, Socket, Nick, Pass) ->
                 true ->
                     ok
             end,
-            ok = ?tcpsend(Socket, #you_are{ player = Player }),
+            PID = gen_server:call(Player, 'ID'),
+            ok = ?tcpsend(Socket, #you_are{ player = PID }),
             Client#client{ player = Player }
     end.
 
@@ -275,7 +276,6 @@ parse_packet(Socket, Client) ->
         {tcp_closed, Socket} ->
 	    gen_server:cast(Client#client.player, 'DISCONNECT');
 	{packet, Packet} ->
-	    %%io:format("<-- ~w~n", [Packet]),
 	    ok = ?tcpsend(Socket, Packet),
 	    parse_packet(Socket, Client)
     end.
@@ -342,8 +342,9 @@ kill_games([H|T]) ->
     kill_games(T).
 
 start_test_game(R) ->
-    {ok, Pid} = cardgame:start(R),
-    #your_game{ game = Pid }.
+    {ok, Game} = cardgame:start(R),
+    GID = cardgame:call(Game, 'ID'),
+    #your_game{ game = GID }.
 	    
 %%
 %% Test suite

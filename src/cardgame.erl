@@ -44,6 +44,7 @@ behaviour_info(Other) ->
 
 -record(cardgame, {
 	  game,
+          gid,
 	  modules,
 	  stack,
 	  state,
@@ -165,15 +166,17 @@ init([Parent, R, Context, Modules])
     process_flag(trap_exit, true),
     {Module, Args} = hd(Modules),
     {ok, Game} = game:start(self(), R),
+    GID = gen_server:call(Game, 'ID'),
     Ctx = #cardgame {
       parent = Parent,
       game = Game,
+      gid = GID,
       modules = Modules,
       stack = Modules,
       context = Context,
       original_context = Context
      },
-    case Module:init([self(), Game|Args]) of
+    case Module:init([self(), Game, GID|Args]) of
 	{ok, State, Data} ->
 	    Ctx1 = Ctx#cardgame {
 	      state = State,
@@ -512,7 +515,7 @@ start_next_module(Ctx, []) ->
 
 start_next_module(Ctx, Modules) ->
     {Module, Args} = hd(Modules),
-    case Module:init([self(), Ctx#cardgame.game|Args]) of
+    case Module:init([self(), Ctx#cardgame.game, Ctx#cardgame.gid|Args]) of
 	{ok, State, Data} ->
 	    NewCtx = Ctx#cardgame {
 		       stack = Modules,

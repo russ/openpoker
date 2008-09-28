@@ -17,8 +17,8 @@ new(Nick, IRC_ID, SeatNum, Balance)
     Bot = #bot {
       nick = Nick,
       player = none,
-      watch = none,
       game = none,
+      pid = none,
       balance = Balance,
       socket = none,
       actions = [],
@@ -177,8 +177,9 @@ handle_tcp_data(Bin, Bot) ->
     end.
 
 handle_you_are(R, Bot) ->
-    handle_cast(#watch{ game = Bot#bot.watch }, Bot),
-    {noreply, Bot#bot{ player = R#you_are.player }}.
+    handle_cast(#watch{ game = Bot#bot.gid }, Bot),
+    PID = gen_server:call(R#you_are.player, 'ID'),
+    {noreply, Bot#bot{ player = R#you_are.player, pid = PID }}.
 
 handle_notify_game_inplay(R, Bot) ->
     Bot1 = if
@@ -190,7 +191,8 @@ handle_notify_game_inplay(R, Bot) ->
     {noreply, Bot1}.
 
 handle_bet_req(R, Bot) ->
-    GID = R#bet_req.game,
+    GID = Bot#bot.gid,
+    PID = Bot#bot.pid,
     Amount = R#bet_req.call,
     %%io:format("~w: BLIND_REQ: ~w/~w, ~.2. f~n", 
     %%	      [GID, Bot#bot.player, Bot#bot.seat_num, Amount]),
@@ -198,28 +200,28 @@ handle_bet_req(R, Bot) ->
     Bot1 = Bot#bot{ actions = Rest },
     case Action of
 	'MUCK' ->
-	    handle_cast(#muck{ game = GID }, Bot1),
+	    handle_cast(#muck{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1};
 	'SIT OUT' ->
-	    handle_cast(#sit_out{ game = GID }, Bot1),
+	    handle_cast(#sit_out{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1};
 	'BLIND' ->
-	    handle_cast(#call{ game = GID, amount = Amount }, Bot1),
+	    handle_cast(#call{ game = GID, player = PID, amount = Amount }, Bot1),
             Bot2 = Bot1#bot{ balance = Bot1#bot.balance - Amount },
 	    {noreply, Bot2};
 	{'BLIND', allin} ->
-            handle_cast(#call{ game = GID, amount = Bot1#bot.balance }, Bot1),
+            handle_cast(#call{ game = GID, player = PID, amount = Bot1#bot.balance }, Bot1),
 	    Bot2 = Bot1#bot{ balance = 0 },
 	    {noreply, Bot2};
 	'FOLD' ->
-	    handle_cast(#fold{ game = GID }, Bot1),
+	    handle_cast(#fold{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1};
 	'LEAVE' ->
-	    handle_cast(#leave{ game = GID }, Bot1),
+	    handle_cast(#leave{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1};
 	'QUIT' ->
-	    handle_cast(#fold{ game = GID }, Bot1),
-	    handle_cast(#leave{ game = GID }, Bot1),
+	    handle_cast(#fold{ game = GID, player = PID }, Bot1),
+	    handle_cast(#leave{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1#bot{ done = true }};
 	_ ->
 	    error_logger:error_report([{message, "Unexpected blind request, folding!"},
@@ -233,7 +235,8 @@ handle_bet_req(R, Bot) ->
     end.
 
 handle_bet_req_min_max(R, Bot) ->
-    GID = R#bet_req.game,
+    GID = Bot#bot.gid,
+    PID = Bot#bot.pid,
     Call = R#bet_req.call,
     RaiseMin = R#bet_req.raise_min,
     RaiseMax = R#bet_req.raise_max,
@@ -247,55 +250,55 @@ handle_bet_req_min_max(R, Bot) ->
     %%	      [Bot#bot.player, Bot#bot.seat_num, Bot#bot.balance * 1.0]),
     case Action of
 	'MUCK' ->
-	    handle_cast(#muck{ game = GID }, Bot1),
+	    handle_cast(#muck{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1};
 	'SIT OUT' ->
-	    handle_cast(#sit_out{ game = GID }, Bot1),
+	    handle_cast(#sit_out{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1};
 	'BLIND' ->
-	    handle_cast(#call{ game = GID, amount = Call }, Bot1),
+	    handle_cast(#call{ game = GID, player = PID, amount = Call }, Bot1),
 	    Bot2 = Bot1#bot{ balance = Bot1#bot.balance - Call },
 	    {noreply, Bot2};
 	{'BLIND', allin} ->
-	    handle_cast(#call{ game = GID, amount = Bot1#bot.balance }, Bot1),
+	    handle_cast(#call{ game = GID, player = PID, amount = Bot1#bot.balance }, Bot1),
 	    Bot2 = Bot1#bot{ balance = 0 },
 	    {noreply, Bot2};
 	'CHECK' ->
-	    handle_cast(#call{ game = GID, amount = 0 }, Bot1),
+	    handle_cast(#call{ game = GID, player = PID, amount = 0 }, Bot1),
 	    {noreply, Bot1};
 	'CALL' ->
-	    handle_cast(#call{ game = GID, amount = Call }, Bot1),
+	    handle_cast(#call{ game = GID, player = PID, amount = Call }, Bot1),
 	    Bot2 = Bot1#bot{ balance = Bot1#bot.balance - Call },
 	    {noreply, Bot2};
 	{'CALL', allin} ->
-	    handle_cast(#call{ game = GID, amount = Bot1#bot.balance }, Bot1),
+	    handle_cast(#call{ game = GID, player = PID, amount = Bot1#bot.balance }, Bot1),
 	    Bot2 = Bot1#bot{ balance = 0 },
 	    {noreply, Bot2};
 	'RAISE' ->
-	    handle_cast(#raise{ game = GID, raise = RaiseMin }, Bot1),
+	    handle_cast(#raise{ game = GID, player = PID, raise = RaiseMin }, Bot1),
 	    Bot2 = Bot1#bot{ balance = Bot1#bot.balance - Call - RaiseMin },
 	    {noreply, Bot2};
 	{'RAISE', allin} ->
-	    handle_cast(#raise{ game = GID, raise = Bot1#bot.balance - Call }, Bot1),
+	    handle_cast(#raise{ game = GID, player = PID, raise = Bot1#bot.balance - Call }, Bot1),
 	    Bot2 = Bot1#bot{ balance = 0 },
 	    {noreply, Bot2};
 	'BET' ->
-	    handle_cast(#raise{ game = GID, raise = RaiseMin}, Bot1),
+	    handle_cast(#raise{ game = GID, player = PID, raise = RaiseMin}, Bot1),
 	    Bot2 = Bot1#bot{ balance = Bot1#bot.balance - RaiseMin },
 	    {noreply, Bot2};
 	{'BET', allin} ->
-	    handle_cast(#raise{ game = GID, raise = Bot1#bot.balance - Call }, Bot1),
+	    handle_cast(#raise{ game = GID, player = PID, raise = Bot1#bot.balance - Call }, Bot1),
 	    Bot2 = Bot1#bot{ balance = 0 },
 	    {noreply, Bot2};
 	'FOLD' ->
-	    handle_cast(#fold{ game = GID }, Bot1),
+	    handle_cast(#fold{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1};
 	'LEAVE' ->
-	    handle_cast(#leave{ game = GID }, Bot1),
+	    handle_cast(#leave{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1};
 	'QUIT' ->
-	    handle_cast(#fold{ game = GID }, Bot1),
-	    handle_cast(#leave{ game = GID }, Bot1),
+	    handle_cast(#fold{ game = GID, player = PID }, Bot1),
+	    handle_cast(#leave{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1#bot{ done = true}};
 	_ ->
 	    error_logger:error_report([{message, "Unexpected bet request, folding!"},
@@ -318,15 +321,15 @@ handle_notify_leave(_R, Bot) ->
     {stop, normal, Bot}.
 
 handle_notify_end_last_game(GID, Bot) ->
-    ok = ?tcpsend(Bot#bot.socket, #leave{ game = GID }),
+    ok = ?tcpsend(Bot#bot.socket, #leave{ game = Bot#bot.gid }),
     ok = ?tcpsend(Bot#bot.socket, #logout{}),
     Bot1 = Bot#bot{ done = true },
     {stop, normal, Bot1}.
 
-handle_notify_cancel_game(GID, Bot) ->
+handle_notify_cancel_game(_Game, Bot) ->
     ok = ?tcpsend(Bot#bot.socket, _ = #join{ 
-                                    game = GID,
-                                    player = Bot#bot.player,
+                                    game = Bot#bot.gid,
+                                    player = Bot#bot.pid,
                                     pid = none,
                                     seat_num = Bot#bot.seat_num,
                                     amount = Bot#bot.balance,
@@ -335,7 +338,7 @@ handle_notify_cancel_game(GID, Bot) ->
     {noreply, Bot}.
 
 handle_watch(Game, Bot) ->
-    {noreply, Bot#bot{ watch = Game }}.
+    {noreply, Bot#bot{ gid = Game }}.
 
 %%% 
 %%% Utility

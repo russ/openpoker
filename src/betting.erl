@@ -20,6 +20,7 @@
 -record(betting, {
           fsm,
 	  game,
+          gid,
 	  context,
 	  have_blinds,
 	  max_raises,
@@ -30,13 +31,14 @@
 	  timer
 	 }).
 
-init([FSM, Game, MaxRaises, Stage]) ->
-    init([FSM, Game, MaxRaises, Stage, false]);
+init([FSM, Game, GID, MaxRaises, Stage]) ->
+    init([FSM, Game, GID, MaxRaises, Stage, false]);
 
-init([FSM, Game, MaxRaises, Stage, HaveBlinds]) ->
+init([FSM, Game, GID, MaxRaises, Stage, HaveBlinds]) ->
     Data = #betting {
       fsm = FSM,
       game = Game,
+      gid = GID,
       have_blinds = HaveBlinds,
       max_raises = MaxRaises,
       stage = Stage
@@ -125,7 +127,7 @@ betting_handle_start(Context, Data) ->
 	true ->
 	    _Total = gen_server:call(Game, 'POT TOTAL'),
             Stage = #game_stage{ 
-              game = Data#betting.fsm, 
+              game = Data#betting.gid, 
               stage = Data#betting.stage
              },
 	    gen_server:cast(Game, {'BROADCAST', Stage}),
@@ -150,6 +152,8 @@ betting_handle_start(Context, Data) ->
 
 betting_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
     Game = Data#betting.game,
+    GID = Data#betting.gid,
+    PID = R#call.pid,
     {Expected, Call, _Min, _Max} = Data#betting.expected,
     if 
 	Expected /= Player ->
@@ -160,26 +164,34 @@ betting_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
             GameInplay = gen_server:call(Game, {'INPLAY', Player}),
 	    if 
 		Amount > GameInplay  ->
-		    betting(#fold{ player = Player }, Data);
+		    betting(#fold{ player = PID }, Data);
 		Amount > Call ->
-		    betting(#fold{ player = Player }, Data);
+		    betting(#fold{ player = PID }, Data);
 		Amount == GameInplay  ->
 		    %% all-in
                     gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
 		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
-                    gen_server:cast(Game, {'BROADCAST', R, Player}),
+                    gen_server:cast(Game, {'BROADCAST', R#call{
+                                                          game = GID,
+                                                          player = PID
+                                                          }, Player}),
 		    next_turn(Data, Player);
 		true ->
 		    %% proper bet
 		    gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
 		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
-		    gen_server:cast(Game, {'BROADCAST', R, Player}),
+		    gen_server:cast(Game, {'BROADCAST', R#call{
+                                                          game = GID,
+                                                          player = PID
+                                                         }, Player}),
 		    next_turn(Data, Player)
 	    end
     end.
 
 betting_handle_raise(R, Data) ->
     Game = Data#betting.game,
+    GID = Data#betting.gid,
+    PID = R#raise.pid,
     Player = R#raise.player,
     Amount = R#raise.raise,
     RaiseCount = Data#betting.raise_count,
@@ -215,6 +227,8 @@ betting_handle_raise(R, Data) ->
 					    {'SET STATE', Player, ?PS_BET})
 		    end,
 		    gen_server:cast(Game, {'BROADCAST', R#raise{
+                                                          game = GID,
+                                                          player = PID,
                                                           total = Amount + Call
                                                          }, Player}),
 		    Data1 = Data#betting {

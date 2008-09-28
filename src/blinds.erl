@@ -21,6 +21,7 @@
 -record(blinds, {
           fsm,
 	  game,
+          gid,
 	  context,
 	  small_blind_seat,
 	  big_blind_seat,
@@ -34,14 +35,15 @@
 	  type
 	 }).
 
-init([FSM, Game]) ->
-    init([FSM, Game, normal]);
+init([FSM, Game, GID]) ->
+    init([FSM, Game, GID, normal]);
 
-init([FSM, Game, Type]) ->
+init([FSM, Game, GID, Type]) ->
     {Small, Big} = gen_server:call(Game, 'BLINDS'),
     Data = #blinds {
       fsm = FSM,
       game = Game,
+      gid = GID,
       small_blind_amount = Small,
       big_blind_amount = Big,
       small_blind_bet = 0,
@@ -201,10 +203,10 @@ small_blind_handle_start(Context, Data) ->
     Game = Data1#blinds.game,
     %% advance button and broadcast position
     {Button1, Bust} = advance_button(Data1),
-    gen_server:cast(Game, {'BROADCAST', #notify_button{
-                             game = Data1#blinds.fsm,
-                             button = Button1
-                            }}), 
+    gen_server:cast(Game, {'BROADCAST', _ = #notify_button{
+                                          game = Data1#blinds.gid,
+                                          button = Button1
+                                         }}), 
     %% collect blinds
     SBPlayers = gen_server:call(Game, {'SEATS', Button1, ?PS_ACTIVE}),
     BBPlayers = gen_server:call(Game, {'SEATS', Button1, ?PS_BB_ACTIVE}),
@@ -245,6 +247,8 @@ small_blind_handle_start(Context, Data) ->
 	
 small_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
     Game = Data#blinds.game,
+    GID = Data#blinds.gid,
+    PID = R#call.pid,
     {ExpPlayer, Seat, ExpAmount} = Data#blinds.expected,
     if
 	ExpPlayer /= Player ->
@@ -262,7 +266,10 @@ small_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
 			      small_blind_bet = Amount
 			     },
                     gen_server:cast(Game, {'ADD BET', Player, Amount}),
-                    gen_server:cast(Game, {'BROADCAST', R, Player}),
+                    gen_server:cast(Game, {'BROADCAST', R#call{
+                                                          game = GID,
+                                                          player = PID
+                                                         }, Player}),
 		    BBPlayers = gen_server:call(Game, 
 						{'SEATS', Seat, ?PS_BB_ACTIVE}),
 		    Data2 = ask_for_blind(Data1, 
@@ -316,6 +323,8 @@ small_blind_other(Event, Data) ->
 
 big_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
     Game = Data#blinds.game,
+    GID = Data#blinds.gid,
+    PID = R#call.pid,
     {ExpPlayer, Seat, ExpAmount} = Data#blinds.expected,
     if
 	ExpPlayer /= Player ->
@@ -336,7 +345,10 @@ big_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
 		    gen_server:cast(Game, {'SET STATE', BBPlayer, ?PS_PLAY}),
 		    %% record blind bets
 		    gen_server:cast(Game, {'ADD BET', BBPlayer, Amount}),
-                    gen_server:cast(Game, {'BROADCAST', R, Player}),
+                    gen_server:cast(Game, {'BROADCAST', R#call{
+                                                          game = GID,
+                                                          player = PID
+                                                         }, Player}),
                     %% adjust button if a heads-up game
 		    Seats = gen_server:call(Game, {'SEATS', ?PS_ACTIVE}),
 		    if
@@ -351,14 +363,14 @@ big_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
 			      expected = {none, none, 0}
 			     },
 		    %% notify players
-		    gen_server:cast(Game, {'BROADCAST', #notify_sb{
-                                             game = Data1#blinds.fsm, 
-                                             sb = SB
-                                            }}),
-		    gen_server:cast(Game, {'BROADCAST', #notify_bb{
-                                             game = Data1#blinds.fsm, 
-                                             bb = BB
-                                            }}),
+		    gen_server:cast(Game, {'BROADCAST', _ = #notify_sb{
+                                                          game = GID, 
+                                                          sb = SB
+                                                         }}),
+		    gen_server:cast(Game, {'BROADCAST', _ = #notify_bb{
+                                                          game = GID, 
+                                                          bb = BB
+                                                         }}),
                     Ctx = Data#blinds.context,
 		    Ctx1 = Ctx#texas {
 			     call = Amount,
@@ -574,10 +586,10 @@ bust_trigger(Game, Event, Pid) ->
         
 %% Both blinds are posted
 
-post_blinds_trigger(Game, Event, Pid) ->
+post_blinds_trigger({Game, GID}, Event, Pid) ->
     case Event of 
 	{in, {'$gen_cast', #bet_req{ 
-                game = Game, 
+                game = GID, 
                 call = Amount, 
                 raise_min = 0, 
                 raise_max = 0
@@ -586,13 +598,14 @@ post_blinds_trigger(Game, Event, Pid) ->
 	    cardgame:send_event(Game, #call{ player = Pid, amount = Amount }),
             done;
 	_ ->
-	    Game
+	    {Game, GID}
     end.
 
 headsup_test() ->
     {Game, Players} = make_game_heads_up(),
+    GID = cardgame:call(Game, 'ID'),
     [A, B] = Players,
-    test:install_trigger(fun post_blinds_trigger/3, Game, [A, B]),
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [A, B]),
     Ctx = #texas {
       button_seat = element(2, A),
       small_blind_seat = element(2, A), 
@@ -612,8 +625,9 @@ headsup_test() ->
 
 three_players_button_bust_test() ->
     {Game, Players} = make_game_3_bust(),
+    GID = cardgame:call(Game, 'ID'),
     [A, B, C] = Players,
-    test:install_trigger(fun post_blinds_trigger/3, Game, [A, B, C]),
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [A, B, C]),
     test:install_trigger(fun bust_trigger/3, Game, element(1, A)),
     Ctx = #texas {
       button_seat = element(2, C),
@@ -632,8 +646,9 @@ three_players_button_bust_test() ->
 
 three_players_sb_bust_test() ->
     {Game, Players} = make_game_3_bust(),
+    GID = cardgame:call(Game, 'ID'),
     [A, B, C] = Players,
-    test:install_trigger(fun post_blinds_trigger/3, Game, [A, B, C]),
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [A, B, C]),
     test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
     Ctx = #texas {
       button_seat = element(2, C),
@@ -652,8 +667,9 @@ three_players_sb_bust_test() ->
 
 three_players_bb_bust_test() ->
     {Game, Players} = make_game_3_bust(),
+    GID = cardgame:call(Game, 'ID'),
     [A, B, C] = Players,
-    test:install_trigger(fun post_blinds_trigger/3, Game, [A, B, C]),
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [A, B, C]),
     test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
     Ctx = #texas {
       button_seat = element(2, B),
@@ -672,8 +688,9 @@ three_players_bb_bust_test() ->
 
 five_players_sb_bust_test() ->
     {Game, Players} = make_game_5_bust(),
+    GID = cardgame:call(Game, 'ID'),
     [_, B, C, D, E] = Players,
-    test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
     test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
     Ctx = #texas {
       button_seat = element(2, B),
@@ -690,8 +707,9 @@ five_players_sb_bust_test() ->
 
 five_players_bust_test() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
+    GID = cardgame:call(Game, 'ID'),
     [_, B, C, D, E] = Players,
-    test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
     test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
     Ctx = #texas {
       button_seat = element(2, C),
@@ -710,8 +728,9 @@ five_players_bust_test() ->
 
 five_players_bb_bust_test() ->
     {Game, Players} = make_game_5_bust(),
+    GID = cardgame:call(Game, 'ID'),
     [_, B, C, D, E] = Players,
-    test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
     test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
     Ctx = #texas {
       button_seat = element(2, B),
@@ -728,8 +747,9 @@ five_players_bb_bust_test() ->
 
 five_players_bust1_test() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
+    GID = cardgame:call(Game, 'ID'),
     [_, B, C, D, E] = Players,
-    test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
     test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
     Ctx = #texas {
       button_seat = element(2, C),
@@ -748,8 +768,9 @@ five_players_bust1_test() ->
 
 five_players_blinds_bust_test() ->
     {Game, Players} = make_game_5_bust(),
+    GID = cardgame:call(Game, 'ID'),
     [_, B, C, D, E] = Players,
-    test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
     test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
     test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
     Ctx = #texas {
@@ -767,8 +788,9 @@ five_players_blinds_bust_test() ->
 
 five_players_blinds_bust1_test() ->
     {Game, Players} = make_game_5_bust(2, 3, 4),
+    GID = cardgame:call(Game, 'ID'),
     [_, B, C, D, E] = Players,
-    test:install_trigger(fun post_blinds_trigger/3, Game, [B, C, D, E]),
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
     test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
     test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
     Ctx = #texas {

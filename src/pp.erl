@@ -2,7 +2,7 @@
 
 -module(pp).
 
--export([read/1, write/1, test/0]).
+-export([read/1, write/1, test/0, id_to_game/1]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -137,9 +137,16 @@ query_op() ->
              byte()
             }).
 
-game_to_id(Game) ->
-    cardgame:call(Game, 'ID').
-    
+game_to_id(G) when is_pid(G) ->
+    error_logger:info_report([{module, ?MODULE}, 
+			      {line, ?LINE},
+			      {self, self()}, 
+                              {backtrace, erlang:process_info(self(), backtrace)}
+                             ]);
+game_to_id(GID) 
+  when is_integer(GID) ->
+    GID.
+
 id_to_game(GID) ->
     case db:find_game(GID) of
         Pid when is_pid(Pid) ->
@@ -155,8 +162,9 @@ player_to_id(undefined) ->
     0;
 player_to_id(none) ->
     0;
-player_to_id(Player) ->
-    gen_server:call(Player, 'ID').
+player_to_id(PID) 
+  when is_integer(PID) ->
+    PID.
     
 id_to_player(0) ->
     undefined;
@@ -231,6 +239,7 @@ call() ->
              game(),
              player(),
              amount(),
+             internal(),
              internal()
             }).
 
@@ -242,13 +251,15 @@ raise() ->
              total_amount(), % do set to 0
              internal(),
              internal(),
+             internal(),
              internal()
             }).
 
 fold() ->
     record(fold, {
              game(),
-             player()
+             player(),
+             internal() % internal
             }).
 
 join() ->
@@ -265,26 +276,30 @@ leave() ->
     record(leave, {
              game(),
              player(),
+             internal(),
              internal()
             }).
 
 sit_out() ->
     record(sit_out, {
              game(),
-             player()
+             player(),
+             internal()
             }).
 
 come_back() ->
     record(come_back, {
              game(),
-             player()
+             player(),
+             internal()
             }).
 
 chat() ->
     record(chat, {
              game(),
              player(),
-             message()
+             message(),
+             internal()
             }).
 
 game_query() ->
@@ -414,7 +429,8 @@ notify_hand() ->
 muck() ->
     record(muck, {
              game(),
-             player()
+             player(),
+             internal()
             }).
 
 game_stage() ->
