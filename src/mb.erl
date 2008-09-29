@@ -413,7 +413,7 @@ print(GameId) ->
     {ok, Dets} = dets:open_file(ircdb, [{file, "ircdb.dat"},
 					{keypos, 2}]),
     [Game] = dets:lookup(Dets, GameId),
-    io:format("~w~n", [Game]),
+    io:format("~p~n", [Game]),
     dets:close(Dets).
 
 filter() ->
@@ -586,6 +586,9 @@ find_server(Sock) ->
 %% dump_cards(Cards) ->
 %%     [hand:card_to_string(Card) || Card <- Cards].
 
+%% dump_game(ID) 
+%%   when is_integer(ID) ->
+    
 %% dump_game(Game = #irc_game{}) ->
 %%     io:format("Board: ~p~n", [Game#irc_game.board]),
 %%     dump_game(Game, tuple_to_list(Game#irc_game.players)).

@@ -223,11 +223,12 @@ handle_bet_req(R, Bot) ->
 	    handle_cast(#fold{ game = GID, player = PID }, Bot1),
 	    handle_cast(#leave{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1#bot{ done = true }};
-	_ ->
+	Any ->
 	    error_logger:error_report([{message, "Unexpected blind request, folding!"},
 				       {module, ?MODULE}, 
 				       {line, ?LINE},
 				       {bot, Bot1},
+                                       {request, Any},
 				       {amount, Amount},
 				       {now, now()}]),
 	    handle_cast(#fold{ game = GID}, Bot1),
@@ -300,11 +301,12 @@ handle_bet_req_min_max(R, Bot) ->
 	    handle_cast(#fold{ game = GID, player = PID }, Bot1),
 	    handle_cast(#leave{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1#bot{ done = true}};
-	_ ->
+	Any ->
 	    error_logger:error_report([{message, "Unexpected bet request, folding!"},
 				       {module, ?MODULE}, 
 				       {line, ?LINE},
 				       {bot, Bot1},
+                                       {request, Any},
 				       {call, Call},
 				       {raise_min, RaiseMin},
 				       {raise_max, RaiseMax},
