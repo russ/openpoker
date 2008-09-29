@@ -28,9 +28,9 @@
 
 -export([call/2, cast/2, test/0]).
 
--include("pp.hrl").
 -include("texas.hrl").
 -include("common.hrl").
+-include("pp.hrl").
 
 %% define what callbacks users must export
 

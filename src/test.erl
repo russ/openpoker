@@ -10,9 +10,9 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
+-include("common.hrl").
 -include("pp.hrl").
 -include("texas.hrl").
--include("common.hrl").
 -include("schema.hrl").
 -include("test.hrl").
 

@@ -11,6 +11,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 -include("test.hrl").
+-include("common.hrl").
 -include("pp.hrl").
 
 -record(data, {
