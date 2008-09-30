@@ -173,15 +173,16 @@ handle_info({'END', GID, Winners}, Data) ->
     end;
     
 handle_info({'CANCEL', GID}, Data) ->
+    GID1 = pp:id_to_game(GID),
     Games = Data#data.games,
-    Game = gb_trees:get(GID, Games),
+    Game = gb_trees:get(GID1, Games),
     if
 	Data#data.trace ->
 	    io:format("CANCEL: ~w~n", [GID]);
 	true ->
 	    ok
     end,
-    Games1 = gb_trees:delete(GID, Games),
+    Games1 = gb_trees:delete(GID1, Games),
     Data1 = Data#data {
               failed = [Game#test_game.irc_id|Data#data.failed],
 	      finished = Data#data.finished + 1,
