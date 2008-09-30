@@ -231,7 +231,7 @@ handle_bet_req(R, Bot) ->
                                        {request, Any},
 				       {amount, Amount},
 				       {now, now()}]),
-	    handle_cast(#fold{ game = GID}, Bot1),
+	    handle_cast(#fold{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1}
     end.
 
@@ -311,7 +311,7 @@ handle_bet_req_min_max(R, Bot) ->
 				       {raise_min, RaiseMin},
 				       {raise_max, RaiseMax},
 				       {now, now()}]),
-	    handle_cast(#fold{ game = Bot1#bot.game }, Bot1),
+	    handle_cast(#fold{ game = GID, player = PID }, Bot1),
 	    {noreply, Bot1}
     end.
 
@@ -322,7 +322,7 @@ handle_notify_leave(_R, Bot) ->
     ok = ?tcpsend(Bot#bot.socket, #logout{}),
     {stop, normal, Bot}.
 
-handle_notify_end_last_game(GID, Bot) ->
+handle_notify_end_last_game(_GID, Bot) ->
     ok = ?tcpsend(Bot#bot.socket, #leave{ game = Bot#bot.gid }),
     ok = ?tcpsend(Bot#bot.socket, #logout{}),
     Bot1 = Bot#bot{ done = true },
