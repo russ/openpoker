@@ -6,10 +6,12 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 
--export([start/1, stop/1, setup/1, setup/0, setup/2, cleanup/0]).
+-export([start/1, stop/1, run/1, run/2, run/0, 
+         setup/0, cleanup/0]).
 
--export([remove/1, print/1, filter/0, create_players/0,
-	 test/0, test/1, test/3, test/4, test/5, count/0]).
+-export([remove/1, print/1, filter/0, create_players/0, 
+         test1/3, test/0, test/1, test/3, test/4, test/5, 
+         count/0]).
 
 -export([profile/0, profile/1]).
 
@@ -264,6 +266,26 @@ update_players(Game)
   when is_record(Game, irc_game) ->
     create_players(tuple_to_list(Game#irc_game.players)).
 
+test1(Host, Port, GameID) 
+  when is_list(Host), is_number(Port);
+       is_atom(Host), is_number(Port) ->
+    DB = opendb(),
+    {ok, Mb} = start(true),
+    erlang:monitor(process, Mb),
+    T1 = erlang:now(),
+    spawn(fun() -> test(DB, GameID, Mb, 1, 
+			Host, Port, true, 1000) end),
+    io:format("Waiting for games to end...~n"),
+    receive
+	{'DOWN', _, _, Mb, normal} ->
+	    T2 = erlang:now(),
+	    Elapsed = timer:now_diff(T2, T1) / 1000 / 1000,
+	    io:format("Mb exited successfully, ~w seconds elapsed~n", 
+		      [Elapsed]);
+	Other ->
+	    erlang:display(Other)
+    end.
+
 test(Host, Port, MaxGames) ->
     test(Host, Port, MaxGames, ?START_DELAY, false).
 
@@ -438,16 +460,28 @@ count() ->
     dets:close(Dets).
 
 filter(Game) ->
-    Match1 = match1(Game),
-    Match2 = match2(Game),
-    Match3 = match3(Game),
-    if 
-	Match1 or Match2 or Match3 ->
-	    remove(Game#irc_game.id);
-	true ->
-	    ok
-    end,
-    continue.
+    filter(Game, [fun match0/1,
+                  fun match1/1,
+                  fun match2/1,
+                  fun match3/1
+                 ], false).
+
+filter(_, [], _) ->
+    continue;
+
+filter(Game, _, true) ->
+    remove(Game#irc_game.id),
+    continue;
+
+filter(Game, [H|T], false) ->
+    filter(Game, T, H(Game)).
+
+%% 
+
+match0(Game) ->
+    Player1 = element(1, Game#irc_game.players),
+    Player2 = element(2, Game#irc_game.players),
+    (Player1 == none) or (Player2 == none).
 
 %% 531 removed from 199504
 
@@ -658,25 +692,27 @@ make_card(Face, Suit) ->
             end,
     hand:make_card(Face1, Suit1).
 
-setup(Host) ->
-    setup(Host, true).
-
-setup(Host, TestMode) 
-  when is_atom(Host) ->
-    setup(atom_to_list(Host), TestMode);
-
-setup(Host, TestMode) ->
+setup() ->
     schema:install(),
     create_players(),
-    timer:sleep(1000),
+    timer:sleep(1000).
+
+run(Host) ->
+    run(Host, true).
+
+run(Host, TestMode) 
+  when is_atom(Host) ->
+    run(atom_to_list(Host), TestMode);
+
+run(Host, TestMode) ->
     %% start server in test mode 
     %% to enable starting of test games
     server:start(Host, 6000, TestMode),
     gateway:start(node(), 3000, 500000),
     ok.
 
-setup() ->
-    setup(localhost, true).
+run() ->
+    run(localhost, true).
 
 test() ->
     test(10).
