@@ -169,7 +169,7 @@ betting_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
 		    betting(#fold{ player = PID }, Data);
 		Amount == GameInplay  ->
 		    %% all-in
-                    gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
+                    gen_server:cast(Game, {'SET STATE', Player, ?PS_ALL_IN}),
 		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
                     gen_server:cast(Game, {'BROADCAST', R#call{
                                                           game = GID,

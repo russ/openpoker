@@ -27,6 +27,7 @@
 	  big_blind_seat,
 	  button_seat,
 	  no_small_blind,
+          small_blind_all_in,
 	  small_blind_amount,
 	  small_blind_bet,
 	  big_blind_amount,
@@ -48,6 +49,7 @@ init([FSM, Game, GID, Type]) ->
       big_blind_amount = Big,
       small_blind_bet = 0,
       no_small_blind = false,
+      small_blind_all_in = false,
       timer = none,
       expected = {none, 0},
       type = Type
@@ -244,12 +246,9 @@ small_blind_handle_start(Context, Data) ->
 	    Data3 = ask_for_blind(Data2, hd(SBPlayers), Amount),
 	    {next_state, small_blind, Data3}
     end.
-	
+
 small_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
-    Game = Data#blinds.game,
-    GID = Data#blinds.gid,
-    PID = R#call.pid,
-    {ExpPlayer, Seat, ExpAmount} = Data#blinds.expected,
+    {ExpPlayer, _Seat, ExpAmount} = Data#blinds.expected,
     if
 	ExpPlayer /= Player ->
 	    {next_state, small_blind, Data};
@@ -259,25 +258,40 @@ small_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
 	    if 
 		(ExpAmount /= Amount) ->
 		    timeout(Data, Player, small_blind);
-		true ->
-		    %% small blind posted
-		    Data1 = Data#blinds {
-			      small_blind_seat = Seat,
-			      small_blind_bet = Amount
-			     },
-                    gen_server:cast(Game, {'ADD BET', Player, Amount}),
-                    gen_server:cast(Game, {'BROADCAST', R#call{
-                                                          game = GID,
-                                                          player = PID
-                                                         }, Player}),
-		    BBPlayers = gen_server:call(Game, 
-						{'SEATS', Seat, ?PS_BB_ACTIVE}),
-		    Data2 = ask_for_blind(Data1, 
-					  hd(BBPlayers), 
-					  Data1#blinds.big_blind_amount),
-		    {next_state, big_blind, Data2}
-	    end
+                true ->
+                    post_small_blind(R, Data)
+            end
     end.
+
+post_small_blind(R = #call{ player = Player, amount = Amount }, Data) ->
+    Game = Data#blinds.game,
+    GID = Data#blinds.gid,
+    PID = R#call.pid,
+    {_ExpPlayer, Seat, _ExpAmount} = Data#blinds.expected,
+    GameInplay = gen_server:call(Game, {'INPLAY', Player}),
+    Data1 = if
+                Amount == GameInplay ->
+                    gen_server:cast(Game, {'SET STATE', Player, ?PS_ALL_IN}),
+                    Data#blinds{ small_blind_all_in = true };
+                true ->
+                    Data
+            end,
+    %% process small blind
+    Data2 = Data1#blinds {
+              small_blind_seat = Seat,
+              small_blind_bet = Amount
+             },
+    gen_server:cast(Game, {'ADD BET', Player, Amount}),
+    gen_server:cast(Game, {'BROADCAST', R#call{
+                                          game = GID,
+                                          player = PID
+                                         }, Player}),
+    BBPlayers = gen_server:call(Game, 
+                                {'SEATS', Seat, ?PS_BB_ACTIVE}),
+    Data3 = ask_for_blind(Data2, 
+                          hd(BBPlayers), 
+                          Data2#blinds.big_blind_amount),
+    {next_state, big_blind, Data3}.
 
 small_blind_handle_fold(R, Data) ->
     {ExpPlayer, _Seat, _ExpAmount} = Data#blinds.expected,
@@ -322,10 +336,7 @@ small_blind_other(Event, Data) ->
     handle_event(Event, small_blind, Data).
 
 big_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
-    Game = Data#blinds.game,
-    GID = Data#blinds.gid,
-    PID = R#call.pid,
-    {ExpPlayer, Seat, ExpAmount} = Data#blinds.expected,
+    {ExpPlayer, _Seat, ExpAmount} = Data#blinds.expected,
     if
 	ExpPlayer /= Player ->
 	    {next_state, big_blind, Data};
@@ -336,51 +347,68 @@ big_blind_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
 		(ExpAmount /= Amount) ->
 		    timeout(Data, Player, big_blind);
 		true ->
-		    %% big blind posted
-		    SB = Data#blinds.small_blind_seat,
-		    BB = Seat,
-		    SBPlayer = gen_server:call(Game, {'PLAYER AT', SB}),
-		    BBPlayer = Player,
-		    gen_server:cast(Game, {'SET STATE', SBPlayer, ?PS_PLAY}),
-		    gen_server:cast(Game, {'SET STATE', BBPlayer, ?PS_PLAY}),
-		    %% record blind bets
-		    gen_server:cast(Game, {'ADD BET', BBPlayer, Amount}),
-                    gen_server:cast(Game, {'BROADCAST', R#call{
-                                                          game = GID,
-                                                          player = PID
-                                                         }, Player}),
-                    %% adjust button if a heads-up game
-		    Seats = gen_server:call(Game, {'SEATS', ?PS_ACTIVE}),
-		    if
-			(length(Seats) == 2) and (Data#blinds.type /= irc) ->
-			    Button = SB;
-			true ->
-			    Button = Data#blinds.button_seat
-		    end,
-		    Data1 = Data#blinds {
-			      big_blind_seat = BB,
-			      button_seat = Button,
-			      expected = {none, none, 0}
-			     },
-		    %% notify players
-		    gen_server:cast(Game, {'BROADCAST', _ = #notify_sb{
-                                                          game = GID, 
-                                                          sb = SB
-                                                         }}),
-		    gen_server:cast(Game, {'BROADCAST', _ = #notify_bb{
-                                                          game = GID, 
-                                                          bb = BB
-                                                         }}),
-                    Ctx = Data#blinds.context,
-		    Ctx1 = Ctx#texas {
-			     call = Amount,
-			     small_blind_seat = SB,
-			     big_blind_seat = BB,
-			     button_seat = Button
-			    },
-		    {stop, {normal, Ctx1}, Data1}
-	    end
+                    post_big_blind(R, Data)
+            end
     end.
+
+post_big_blind(R = #call{ player = Player, amount = Amount }, Data) ->
+    Game = Data#blinds.game,
+    GID = Data#blinds.gid,
+    PID = R#call.pid,
+    {_ExpPlayer, Seat, _ExpAmount} = Data#blinds.expected,
+    SB = Data#blinds.small_blind_seat,
+    BB = Seat,
+    SBPlayer = gen_server:call(Game, {'PLAYER AT', SB}),
+    BBPlayer = Player,
+    GameInplay = gen_server:call(Game, {'INPLAY', BBPlayer}),
+    if
+        Amount == GameInplay ->
+            gen_server:cast(Game, {'SET STATE', BBPlayer, ?PS_ALL_IN});
+        true ->
+            gen_server:cast(Game, {'SET STATE', BBPlayer, ?PS_PLAY})
+    end,
+    if 
+        not Data#blinds.small_blind_all_in ->
+            gen_server:cast(Game, {'SET STATE', SBPlayer, ?PS_PLAY});
+        true ->
+            ok
+    end,
+    %% record blind bets
+    gen_server:cast(Game, {'ADD BET', BBPlayer, Amount}),
+    gen_server:cast(Game, {'BROADCAST', R#call{
+                                          game = GID,
+                                          player = PID
+                                         }, Player}),
+    %% adjust button if a heads-up game
+    Seats = gen_server:call(Game, {'SEATS', ?PS_ACTIVE}),
+    if
+        (length(Seats) == 2) and (Data#blinds.type /= irc) ->
+            Button = SB;
+        true ->
+            Button = Data#blinds.button_seat
+    end,
+    Data1 = Data#blinds {
+              big_blind_seat = BB,
+              button_seat = Button,
+              expected = {none, none, 0}
+             },
+    %% notify players
+    gen_server:cast(Game, {'BROADCAST', _ = #notify_sb{
+                                          game = GID, 
+                                          sb = SB
+                                         }}),
+    gen_server:cast(Game, {'BROADCAST', _ = #notify_bb{
+                                          game = GID, 
+                                          bb = BB
+                                         }}),
+    Ctx = Data#blinds.context,
+    Ctx1 = Ctx#texas {
+             call = Amount,
+             small_blind_seat = SB,
+             big_blind_seat = BB,
+             button_seat = Button
+            },
+    {stop, {normal, Ctx1}, Data1}.
 
 big_blind_handle_fold(R, Data) ->
     {ExpPlayer, _Seat, _ExpAmount} = Data#blinds.expected,
