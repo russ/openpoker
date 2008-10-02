@@ -35,18 +35,8 @@ start(Node, Port, MaxPlayers) ->
 		      [Node])
     end.
 
-%%% Grab a random member of the process group
-
-get_random_pid(Name) ->
-    {_,_,X} = erlang:now(),
-    case pg2:get_members(Name) of
-        [] -> {error, {no_process, Name}};
-        Members ->
-            lists:nth((X rem length(Members))+1, Members)
-    end.
-
 find_server(MaxPlayers) ->
-    case get_random_pid(?GAME_SERVERS) of 
+    case util:get_random_pid(?GAME_SERVERS) of 
 	Pid when is_pid(Pid) ->
 	    {_Time, {Host, Port}} = timer:tc(gen_server, call, [Pid, 'WHERE']),
 	    Count = gen_server:call(Pid, 'USER COUNT'),

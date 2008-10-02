@@ -3,7 +3,8 @@
 -module(util).
 
 -export([is_process_alive/1,
-         init_db_slave/1
+         init_db_slave/1,
+         get_random_pid/1
          ]).
 
 is_process_alive(Pid) 
@@ -17,13 +18,13 @@ init_db_slave(MasterNode) ->
     Tabs = mnesia:system_info(tables) -- [schema],
     [mnesia:add_table_copy(Tab,node(), disc_copies) || Tab <- Tabs].
 
-    
+%%% Grab a random member of the process group
 
+get_random_pid(Name) ->
+    {_,_,X} = erlang:now(),
+    case pg2:get_members(Name) of
+        [] -> {error, {no_process, Name}};
+        Members ->
+            lists:nth((X rem length(Members))+1, Members)
+    end.
 
-
-
-
-
-
-
-              
