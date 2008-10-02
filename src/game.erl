@@ -1170,7 +1170,7 @@ do_buy_in(GID, PID, Amt)
     case mnesia:dirty_read(tab_balance, PID) of
         [] ->
             {error, no_balance_found};
-        [B] when BuyIn > B#balance.amount ->
+        [B] when BuyIn > B#tab_balance.amount ->
             {error, not_enough_money};
         [_] ->
             %% may need to perform these two in a transaction!

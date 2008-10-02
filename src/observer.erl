@@ -286,7 +286,7 @@ handle(R = #notify_shared{}, Data) ->
     if
 	Data#obs.trace ->
 	    catch io:format("~w: BOARD: ~w~n",
-                            [R#notify_draw.game, R#notify_draw.card]);
+                            [R#notify_shared.game, R#notify_shared.card]);
 	true ->
 	    ok
     end,
