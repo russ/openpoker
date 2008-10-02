@@ -223,10 +223,10 @@ handle_cast_call(R, Data) ->
     {noreply, Data}.
 
 handle_cast_wait_bb(R, Data) ->
-    cardgame:send_event(R#call.game, R#wait_bb{ 
-                                       player = self(),
-                                       pid = Data#player_data.pid
-                                      }),
+    cardgame:send_event(R#wait_bb.game, R#wait_bb{ 
+                                          player = self(),
+                                          pid = Data#player_data.pid
+                                         }),
     {noreply, Data}.
 
 handle_cast_raise(R, Data) ->
