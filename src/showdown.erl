@@ -9,7 +9,7 @@
 -export([handle_event/3, handle_info/3, 
 	 handle_sync_event/4, code_change/4]).
 
--export([showdown/2, dump_pot/2]).
+-export([showdown/2]).
 
 -include("common.hrl").
 -include("schema.hrl").
@@ -199,15 +199,6 @@ update_counter(Key, Amount, Tree) ->
 	none ->
 	    gb_trees:insert(Key, Amount, Tree)
     end.
-
-dump_pot(Total, Members) ->
-    io:format("Pot Total=~w~n", [Total]),
-    F = fun({Player, Rank, High, Score}) ->
-		Nick = gen_server:call(Player, 'NICK'),
-		Desc = hand:describe({Rank, High, Score}),
-		io:format("~s has a ~s~n", [Nick, Desc])
-	end,
-    lists:foreach(F, Members).
 
 %%
 %% Test suite
