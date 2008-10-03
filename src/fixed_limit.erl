@@ -75,8 +75,7 @@ handle_info(Info, Limit) ->
 code_change(_OldVsn, Limit, _Extra) ->
     {ok, Limit}.
 
-raise_size(Limit, Stage) when ?GS_PREFLOP =:= Stage; 
-			      ?GS_FLOP =:= Stage ->
+raise_size(Limit, Stage) when ?GS_PREFLOP =:= Stage ->
     {Limit#fixed_limit.low, Limit#fixed_limit.low};
 
 raise_size(Limit, _Stage) ->
