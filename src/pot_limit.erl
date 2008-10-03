@@ -101,7 +101,8 @@ handle_call_other(Event, From, Limit) ->
 			      {from, From}]),
     {noreply, Limit}.
 
-raise_size(Limit, PotSize, Stage) when ?GS_PREFLOP =:= Stage ->
+raise_size(Limit, PotSize, Stage)
+  when ?GS_PREFLOP =:= Stage ->
     {Limit#pot_limit.low, PotSize};
 
 raise_size(Limit, PotSize, _Stage) ->
