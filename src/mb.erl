@@ -76,8 +76,11 @@ handle_cast({'RUN', Game, Barrier, Delay, Trace}, Data)
 	    ok
     end,
     {ok, GID} = start_game(Game1, Delay),
-    Observer = setup_observer(self(), GID, Host, Port, Trace),
-    Players = setup_players(Game1, GID, Host, Port),
+
+    {ok, Bb} = util:get_random_pid(?LAUNCHERS),
+    {ok, Observer, Players} = gen_server:call(Bb, {'LAUNCH', self(), 
+                                                   GID, Game1, 
+                                                   Host, Port, Trace}),
     TestGame = #test_game {
       irc_id = Game1#irc_game.id,
       players = Players,

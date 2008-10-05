@@ -9,6 +9,7 @@
 
 -define(GAME_SERVERS, 'GAME SERVERS').
 -define(MULTIBOTS, 'MULTIBOTS').
+-define(LAUNCHERS, 'LAUNCHERS').
 
 -record(test_game, {
 	  irc_id,
