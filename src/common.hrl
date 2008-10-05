@@ -8,6 +8,16 @@
 %%%
 
 -define(GAME_SERVERS, 'GAME SERVERS').
+-define(MULTIBOTS, 'MULTIBOTS').
+
+-record(test_game, {
+	  irc_id,
+	  observer,
+	  players,
+	  winners,
+	  nicks,
+	  trace
+	 }).
 
 -record(bot, {
 	  nick,

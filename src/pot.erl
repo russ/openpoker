@@ -36,7 +36,7 @@ new_side_pot() ->
     new_side_pot(0, gb_trees:empty()).
 
 new() ->
-    #pot {}.
+    #pot{}.
 
 reset(Pot) 
   when is_record(Pot, pot) ->
@@ -249,13 +249,13 @@ pot_not_split_test() ->
 
 pot_split_test() ->
     Pot = new_side_pot(),
-    Pot1 = Pot#side_pot { 
+    Pot1 = Pot#side_pot{ 
 	     members = gb_trees:insert('A', 10, Pot#side_pot.members) 
 	    },
-    Pot2 = Pot1#side_pot { 
+    Pot2 = Pot1#side_pot{ 
 	     members = gb_trees:insert('B', 30, Pot1#side_pot.members) 
 	    },
-    Pot3 = Pot2#side_pot { 
+    Pot3 = Pot2#side_pot{ 
 	     members = gb_trees:insert('C', 40, Pot2#side_pot.members) 
 	    },
     {NewPot, SidePot} = split(Pot3, 'A', 10),

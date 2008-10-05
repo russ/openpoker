@@ -116,19 +116,7 @@ delayed_start_start(Context, Data) ->
 delayed_start_check(Data) ->
     Game = Data#delayed.game,
     FSM = Data#delayed.fsm,
-    Ready = case catch gen_server:call(Game, {'SEATS', ?PS_READY}) of
-                {'EXIT', X} ->
-                    error_logger:info_report([{module, ?MODULE},
-                                              {line, ?LINE},
-                                              {self, self()},
-                                              {target, Game},
-                                              {error, X},
-                                              {process_info, process_info(Game)}
-                                             ]),
-                    1 / 0;
-                Any ->
-                    Any
-            end,
+    Ready = gen_server:call(Game, {'SEATS', ?PS_READY}),
     ReqCount = gen_server:call(Game, 'REQUIRED'),
     Start = (length(Ready) >= ReqCount),
     Empty = gen_server:call(Game, 'IS EMPTY'),

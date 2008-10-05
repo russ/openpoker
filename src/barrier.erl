@@ -1,3 +1,5 @@
+%%% Copyright (C) 2005-2008 Wager Labs, SA
+
 -module(barrier).
 -behaviour(gen_server).
 
@@ -57,12 +59,15 @@ terminate(_Reason, _Data) ->
     ok.
 
 handle_cast('BUMP', Data) 
-  when Data#barrier.counter + 1 == Data#barrier.target ->
+  when Data#barrier.counter + 1 >= Data#barrier.target ->
     {stop, normal, Data};
 
 handle_cast('BUMP', Data) ->
     N = Data#barrier.counter,
-    {stop, normal, Data#barrier{ counter = N + 1}};
+    {noreply, Data#barrier{ counter = N + 1}};
+
+handle_cast({'TARGET', N}, Data) ->
+    {noreply, Data#barrier{ target = N }};
 
 handle_cast({stop, _Pid}, Data) ->
     {stop, normal, Data};
@@ -76,6 +81,11 @@ handle_cast(Event, Data) ->
                              ]),
     {noreply, Data}.
 
+handle_call('COUNTER', _From, Data) ->
+    {reply, Data#barrier.counter, Data};
+
+handle_call('TARGET', _From, Data) ->
+    {reply, Data#barrier.target, Data};
 
 handle_call(Event, From, Data) ->
     error_logger:info_report([{module, ?MODULE}, 

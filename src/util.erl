@@ -21,10 +21,18 @@ init_db_slave(MasterNode) ->
 %%% Grab a random member of the process group
 
 get_random_pid(Name) ->
-    {_,_,X} = erlang:now(),
-    case pg2:get_members(Name) of
-        [] -> {error, {no_process, Name}};
-        Members ->
-            lists:nth((X rem length(Members))+1, Members)
+    L = case pg2:get_members(Name) of
+            {error, _} ->
+                timer:sleep(100),
+                pg2:get_members(Name);
+            Other when is_list(Other) ->
+                Other
+        end,
+    if 
+        L == [] ->
+            {error, {no_process, Name}};
+        true ->
+            {_,_,X} = erlang:now(),
+            {ok, lists:nth((X rem length(L)) + 1, L)}
     end.
 

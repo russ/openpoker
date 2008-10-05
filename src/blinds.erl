@@ -116,7 +116,7 @@ handle_event(stop, _State, Data) ->
 handle_event(Event, State, Data) ->
     error_logger:error_report([{module, ?MODULE}, 
 			       {line, ?LINE},
-			       {where, handle_event},
+			       {state, State},
 			       {message, Event}, 
 			       {self, self()},
 			       {game, Data#blinds.game},

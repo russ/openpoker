@@ -9,7 +9,7 @@
 -export([handle_event/3, handle_info/3, 
 	 handle_sync_event/4, code_change/4]).
 
--export([barrier_start/2]).
+-export([barrier_start/2, test/0]).
 
 -include_lib("eunit/include/eunit.hrl").
 -include("common.hrl").

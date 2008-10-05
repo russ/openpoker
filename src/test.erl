@@ -37,6 +37,7 @@ all() ->
     deck:test(),
     fixed_limit:test(),
     delayed_start:test(),
+    barrier_start:test(),
     blinds:test(),
     betting:test(),
     showdown:test(),
