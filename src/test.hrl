@@ -20,6 +20,30 @@
 		end
 	end()).
 
+-define(tcpsend1(Socket, Data),
+	fun() ->
+		XXX = pp:write(Data),
+		case catch gen_tcp:send(Socket, XXX) of
+		    ok ->
+			ok;
+		    {error, closed} ->
+			ok;
+		    {error,econnaborted} ->
+			ok;
+		    Any ->
+			error_logger:error_report([
+						   {message, "gen_tcp:send error"},
+						   {module, ?MODULE}, 
+						   {line, ?LINE},
+						   {socket, Socket}, 
+						   {port_info, erlang:port_info(Socket, connected)},
+						   {data, Data},
+						   {bin, XXX},
+						   {error, Any}])
+		end
+	end()).
+                
+
 -define(tcpsend(Socket, Data),
 	fun() ->
 		XXX = pp:write(Data),
@@ -40,6 +64,24 @@
 						   {data, Data},
 						   {bin, XXX},
 						   {error, Any}])
+		end,
+		YYY = pp:write(#ping{}),
+		case catch gen_tcp:send(Socket, YYY) of
+		    ok ->
+			ok;
+		    {error, closed} ->
+			ok;
+		    {error,econnaborted} ->
+			ok;
+		    Any1 ->
+			error_logger:error_report([
+						   {message, "gen_tcp:ping error"},
+						   {module, ?MODULE}, 
+						   {line, ?LINE},
+						   {socket, Socket}, 
+						   {port_info, erlang:port_info(Socket, connected)},
+						   {bin, YYY},
+						   {error, Any1}])
 		end
 	end()).
 

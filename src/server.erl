@@ -14,7 +14,7 @@
 -include("schema.hrl").
 -include("test.hrl").
 
--define(STATS_TIMEOUT, 30000).
+-define(STATS_TIMEOUT, 5000).
 
 -record(server, {
 	  port,
@@ -23,7 +23,9 @@
 	  test_mode,
           start,
           count,
-          size
+          size,
+          time_to_client,
+          time_to_server
 	 }).
 
 -record(client, {
@@ -92,6 +94,8 @@ init([Host, Port, TestMode]) ->
       host = Host,
       port = Port,
       avg = 0,
+      time_to_client = 0,
+      time_to_server = 0,
       count = 0,
       size = 0,
       start = now(),
@@ -112,6 +116,18 @@ handle_cast({'BUMP', Size}, Server) ->
     N = Server#server.count,
     Total = Server#server.size,
     {noreply, Server#server{ count = N + 1, size = Total + Size }};
+  
+handle_cast({'PONG', R = #pong{}}, Server) ->
+    TC = Server#server.time_to_client,
+    TS = Server#server.time_to_server,
+    DeltaTC = timer:now_diff(R#pong.send_time, R#pong.orig_send_time),
+    DeltaTS = timer:now_diff(R#pong.recv_time, R#pong.send_time),
+    AvgTC = (TC + DeltaTC) / 2,
+    AvgTS = (TS + DeltaTS) / 2,
+    {noreply, Server#server{ 
+                time_to_client = AvgTC,
+                time_to_server = AvgTS
+               }};
   
 handle_cast(stop, Server) ->
     {stop, normal, Server};
@@ -157,12 +173,16 @@ handle_info('STATS', Server) ->
     Size = Server#server.size,
     RPS = trunc(Count / Elapsed),
     BPS = trunc(Size / Elapsed),
+    TC = Server#server.time_to_client,
+    TS = Server#server.time_to_server,
     error_logger:info_report([{module, ?MODULE}, 
                               {elapsed, Elapsed},
                               {requests, Count},
                               {bytes, Size},
                               {requests_per_second, RPS},
-                              {bytes_per_second, BPS}
+                              {bytes_per_second, BPS},
+                              {avg_time_to_client, TC / 1000},
+                              {avg_time_to_server, TS / 1000}
                              ]),
     Server1 = Server#server{ 
                 start = End,
@@ -210,8 +230,13 @@ process_logout(Client, _Socket) ->
     {ok, Visitor} = visitor:start(self()),
     Client#client{ player = Visitor }.
 
-process_ping(Client, Socket) ->
-    ok = ?tcpsend(Socket, #pong{}),
+process_ping(Client, Socket, R) ->
+    ok = ?tcpsend(Socket, #pong{ orig_send_time = R#ping.send_time }),
+    Client.
+
+process_pong(Client, _Socket, R) ->
+    R1 = R#pong{ recv_time = now() },
+    gen_server:cast(Client#client.server, {'PONG', R1}),
     Client.
 
 process_test_start_game(Client, Socket, R) ->
@@ -263,8 +288,10 @@ parse_packet(Socket, Client) ->
                               process_login(Client, Socket, Nick, Pass);
                           #logout{} ->
                               process_logout(Client, Socket);
-                          #ping{} ->
-                              process_ping(Client, Socket);
+                          R = #ping{} ->
+                              process_ping(Client, Socket, R);
+                          R = #pong{} ->
+                              process_pong(Client, Socket, R);
                           R = #start_game{ rigged_deck = [_|_] } ->
                               process_test_start_game(Client, Socket, R);
                           R when is_record(R, game_query) ->

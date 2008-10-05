@@ -338,11 +338,15 @@
 -define(CMD_PING, 253).
 
 -record(ping, {
+          send_time = now()
          }).
 
 -define(CMD_PONG, 254).
 
 -record(pong, {
+          orig_send_time,
+          send_time = now(),
+          recv_time
          }).
 
 %%% Internal game packets

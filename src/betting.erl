@@ -260,6 +260,7 @@ betting_handle_timeout(Player, Data) ->
 				 {player, Player},
 				 {game, GID},
 				 {seat, Seat}]),
+    erlang:halt("betting: " ++ pid_to_list(Player)),
     %%
     %%io:format("~w timed out, folding~n", [Player]),
     betting(#fold{ player = Player }, Data).

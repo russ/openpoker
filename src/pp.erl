@@ -18,6 +18,9 @@
 
 -define(PP_VER, 1).
 
+timestamp() ->
+    tuple({int(), int(), int()}).
+
 nick() ->
     string().
 
@@ -487,10 +490,14 @@ show_cards() ->
 
 ping() ->
     record(ping, {
+             timestamp()
             }).
 
 pong() ->
     record(pong, {
+             timestamp(),
+             timestamp(),
+             internal()
             }).
 
 %%% Pickle

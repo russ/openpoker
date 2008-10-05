@@ -125,7 +125,7 @@ handle_stop(Bot) ->
     {stop, normal, Bot}.
 
 handle_other(Event, Bot) ->
-    ok = ?tcpsend(Bot#bot.socket, Event),
+    ok = ?tcpsend1(Bot#bot.socket, Event),
     {noreply, Bot}.
 
 handle_connect(Host, Port, Bot) ->
@@ -175,6 +175,13 @@ handle_tcp_data(Bin, Bot) ->
             Bot1 = process_filters(Event, Bot),
 	    handle(Event, Bot1)
     end.
+
+handle_ping(R, Bot) ->
+    handle_cast(#pong{ orig_send_time = R#ping.send_time }, Bot),
+    {noreply, Bot}.
+
+handle_pong(_R, Bot) ->
+    {noreply, Bot}.
 
 handle_you_are(R, Bot) ->
     handle_cast(#watch{ game = Bot#bot.gid }, Bot),
@@ -319,17 +326,17 @@ handle_notify_join(R, Bot) ->
     {noreply, Bot#bot{ game = R#join.game }}.
 
 handle_notify_leave(_R, Bot) ->
-    ok = ?tcpsend(Bot#bot.socket, #logout{}),
+    ok = ?tcpsend1(Bot#bot.socket, #logout{}),
     {stop, normal, Bot}.
 
 handle_notify_end_last_game(_GID, Bot) ->
-    ok = ?tcpsend(Bot#bot.socket, #leave{ game = Bot#bot.gid }),
-    ok = ?tcpsend(Bot#bot.socket, #logout{}),
+    ok = ?tcpsend1(Bot#bot.socket, #leave{ game = Bot#bot.gid }),
+    ok = ?tcpsend1(Bot#bot.socket, #logout{}),
     Bot1 = Bot#bot{ done = true },
     {stop, normal, Bot1}.
 
 handle_notify_cancel_game(_Game, Bot) ->
-    ok = ?tcpsend(Bot#bot.socket, _ = #join{ 
+    ok = ?tcpsend1(Bot#bot.socket, _ = #join{ 
                                     game = Bot#bot.gid,
                                     player = Bot#bot.pid,
                                     pid = none,
@@ -345,7 +352,13 @@ handle_watch(Game, Bot) ->
 %%% 
 %%% Utility
 %%%
-	    
+
+handle(R = #ping{}, Bot) ->
+    handle_ping(R, Bot);
+
+handle(R = #pong{}, Bot) ->
+    handle_pong(R, Bot);
+
 handle(R = #you_are{}, Bot) ->
     handle_you_are(R, Bot);
 

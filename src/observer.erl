@@ -67,7 +67,7 @@ handle_cast(stop, Data) ->
     {stop, normal, Data};
 
 handle_cast(Event, Data) ->
-    ok = ?tcpsend(Data#obs.socket, Event),
+    ok = ?tcpsend1(Data#obs.socket, Event),
     {noreply, Data}.
 
 handle_call(X = {'CONNECT', Host, Port}, From, Data) ->
@@ -125,6 +125,14 @@ handle_info(Info, Data) ->
 
 code_change(_OldVsn, Data, _Extra) ->
     {ok, Data}.
+
+handle(#pong{}, Data) ->
+    {noreply, Data};
+
+handle(R = #ping{}, Data) ->
+    Pong = #pong{ orig_send_time = R#ping.send_time },
+    ok = ?tcpsend1(Data#obs.socket, Pong),
+    {noreply, Data};
 
 handle(R = #game_info{}, Data) ->
     if 
@@ -342,7 +350,7 @@ handle(#notify_cancel_game{ game = Game }, Data) ->
     if
         N == Data#obs.games_to_watch ->
             Data#obs.parent ! {'CANCEL', GID},
-            ok = ?tcpsend(Data#obs.socket, #unwatch{ game = GID }),
+            ok = ?tcpsend1(Data#obs.socket, #unwatch{ game = GID }),
             {stop, normal, Data};
         true ->
             {noreply, Data#obs{ cancel_count = N + 1}}
@@ -359,7 +367,7 @@ handle(#notify_end_game{ game = Game }, Data) ->
     Data#obs.parent ! {'END', GID, Data#obs.winners},
     if 
         Data#obs.games_to_watch == 1 ->
-            ok = ?tcpsend(Data#obs.socket, #unwatch{ game = GID }),
+            ok = ?tcpsend1(Data#obs.socket, #unwatch{ game = GID }),
             {stop, normal, Data};
         true ->
             N = Data#obs.games_to_watch,
