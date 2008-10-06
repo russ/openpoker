@@ -105,7 +105,6 @@ handle_cast({'RUN', Game, Barrier, Delay, Trace}, Data)
     stats:avg(game_launch_time, timer:now_diff(T5, T1)),
     stats:avg(game_prep_time, timer:now_diff(T2, T1)),
     stats:avg(game_start_time, timer:now_diff(T3, T2)),
-    stats:avg(launcher_lookup_time, timer:now_diff(T4, T3)),
     stats:avg(player_connect_time, timer:now_diff(T5, T4)),
     barrier:bump(Barrier),
     {noreply, Data1};
