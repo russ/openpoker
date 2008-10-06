@@ -82,6 +82,7 @@ handle_cast({'RUN', Game, Barrier, Delay, Trace}, Data)
                                                    GID, Game1, 
                                                    Host, Port, Trace},
                                               infinity),
+    catch gen_server:cast(?STATS, {'SUM', games_launched, 1}),
     TestGame = #test_game {
       irc_id = Game1#irc_game.id,
       players = Players,
@@ -118,9 +119,11 @@ handle_call(Event, From, Data) ->
     {noreply, Data}.
 
 handle_info({'START', _GID}, Data) ->
+    catch gen_server:cast(?STATS, {'SUM', games_started, 1}),
     {noreply, Data};
 
 handle_info({'END', GID, Winners}, Data) ->
+    catch gen_server:cast(?STATS, {'SUM', games_ended, 1}),
     %% score it
     Games = Data#mb.games,
     Game = gb_trees:get(GID, Games),

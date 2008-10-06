@@ -70,6 +70,7 @@ test(DB, '$end_of_table', _, Data) ->
     Data;
 
 test(DB, _, 0, Data) ->
+    io:format("dmb: firing the starter pistol!~n"),
     go(Data#dmb.barrier),
     mbu:closedb(DB),
     Data;
