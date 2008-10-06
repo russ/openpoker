@@ -94,7 +94,6 @@ test(DB, Key, N, Data) ->
 	    ok
     end,
     link(Mb),
-    barrier:bump(Data1#dmb.barrier),
     Key1 = dets:next(DB, Key),
     test(DB, Key1, N - 1, Data1).
 
