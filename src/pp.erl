@@ -2,7 +2,7 @@
 
 -module(pp).
 
--export([read/1, write/1, test/0, id_to_game/1]).
+-export([read/1, write/1, test/0, id_to_game/1, send/3]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -768,6 +768,55 @@ read(<<?CMD_PING, Bin/binary>>) ->
 
 read(<<?CMD_PONG, Bin/binary>>) ->
     unpickle(pong(), Bin).
+
+send(Socket, Data, Ping) ->
+    Bin = list_to_binary(write(Data)),
+    case catch gen_tcp:send(Socket, Bin) of
+        ok ->
+            ok;
+        {error, closed} ->
+            ok;
+        {error,econnaborted} ->
+            ok;
+        Any ->
+            error_logger:error_report([
+                                       {message, "gen_tcp:send error"},
+                                       {module, ?MODULE}, 
+                                       {line, ?LINE},
+                                       {socket, Socket}, 
+                                       {port_info, erlang:port_info(Socket, connected)},
+                                       {data, Data},
+                                       {bin, Bin},
+                                       {error, Any}
+                                      ])
+    end,
+    ping(Socket, size(Bin), Ping).
+
+ping(_, _, false) ->
+    ok;
+
+ping(Socket, Size, true) ->
+    Bin = list_to_binary(write(#ping{})),
+    case catch gen_tcp:send(Socket, Bin) of
+        ok ->
+            ok;
+        {error, closed} ->
+            ok;
+        {error,econnaborted} ->
+            ok;
+        Any ->
+            error_logger:error_report([
+                                       {message, "gen_tcp:ping error"},
+                                       {module, ?MODULE}, 
+                                       {line, ?LINE},
+                                       {socket, Socket}, 
+                                       {port_info, erlang:port_info(Socket, connected)},
+                                       {bin, Bin},
+                                       {error, Any}
+                                      ])
+    end,
+    stats:sum(packets_out, 2),
+    stats:sum(bytes_out, Size + size(Bin)).
 
 test() ->
     ok.
