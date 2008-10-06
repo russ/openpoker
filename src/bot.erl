@@ -132,7 +132,8 @@ handle_connect(Host, Port, Bot) ->
     case tcp_server:start_client(Host, Port, 1024) of
         {ok, Sock} ->
             {reply, ok, Bot#bot{ socket = Sock }};
-        {error, eaddrnotavail} ->
+        {error, E} when E == eaddrnotavail; 
+                        E == econnrefused ->
             N = Bot#bot.connect_attempts,
             timer:sleep(random:uniform(2000) + 
                         random:uniform(10000) * N),
