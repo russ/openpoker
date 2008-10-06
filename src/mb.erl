@@ -80,7 +80,8 @@ handle_cast({'RUN', Game, Barrier, Delay, Trace}, Data)
     {ok, Bb} = util:get_random_pid(?LAUNCHERS),
     {ok, Observer, Players} = gen_server:call(Bb, {'LAUNCH', self(), 
                                                    GID, Game1, 
-                                                   Host, Port, Trace}),
+                                                   Host, Port, Trace},
+                                              infinity),
     TestGame = #test_game {
       irc_id = Game1#irc_game.id,
       players = Players,
