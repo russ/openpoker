@@ -63,6 +63,7 @@ handle_cast(stop, Data) ->
 handle_cast({'RUN', Game, Barrier, Delay, Trace}, Data) 
   when is_record(Game, irc_game),
        is_pid(Barrier) ->
+    T1 = now(),
     Game1 = mbu:fix_nicks(Game),
     mbu:update_players(Game1),
     %% start test game
@@ -75,14 +76,15 @@ handle_cast({'RUN', Game, Barrier, Delay, Trace}, Data)
 	true ->
 	    ok
     end,
+    T2 = now(),
     {ok, GID} = start_game(Game1, Delay),
-
+    T3 = now(),
     {ok, Bb} = util:get_random_pid(?LAUNCHERS),
+    T4 = now(),
     {ok, Observer, Players} = gen_server:call(Bb, {'LAUNCH', self(), 
                                                    GID, Game1, 
                                                    Host, Port, Trace},
                                               infinity),
-    catch gen_server:cast(?STATS, {'SUM', games_launched, 1}),
     TestGame = #test_game {
       irc_id = Game1#irc_game.id,
       players = Players,
@@ -97,6 +99,14 @@ handle_cast({'RUN', Game, Barrier, Delay, Trace}, Data)
               games = Games1, 
               started = Data#mb.started + 1 
              },
+    T5 = now(),
+    stats:sum(games_launched, 1),
+    stats:max(game_launch_time, timer:now_diff(T5, T1)),
+    stats:avg(game_launch_time, timer:now_diff(T5, T1)),
+    stats:avg(game_prep_time, timer:now_diff(T2, T1)),
+    stats:avg(game_start_time, timer:now_diff(T3, T2)),
+    stats:avg(launcher_lookup_time, timer:now_diff(T4, T3)),
+    stats:avg(player_connect_time, timer:now_diff(T5, T4)),
     {noreply, Data1};
 
 handle_cast(Event, Data) ->
@@ -119,11 +129,11 @@ handle_call(Event, From, Data) ->
     {noreply, Data}.
 
 handle_info({'START', _GID}, Data) ->
-    catch gen_server:cast(?STATS, {'SUM', games_started, 1}),
+    stats:sum(games_started, 1),
     {noreply, Data};
 
 handle_info({'END', GID, Winners}, Data) ->
-    catch gen_server:cast(?STATS, {'SUM', games_ended, 1}),
+    stats:sum(games_ended, 1),
     %% score it
     Games = Data#mb.games,
     Game = gb_trees:get(GID, Games),

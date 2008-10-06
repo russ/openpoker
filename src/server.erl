@@ -98,19 +98,17 @@ terminate(normal, Server) ->
     ok.
 
 handle_cast({'BUMP', Size}, Server) ->
-    catch gen_server:cast(?STATS, {'SUM', packets_in, 1}),
-    catch gen_server:cast(?STATS, {'SUM', bytes_in, Size}),
+    stats:sum(packets_in, 1),
+    stats:sum(bytes_in, Size),
     {noreply, Server};
   
 handle_cast({'PONG', R = #pong{}}, Server) ->
     TC = timer:now_diff(R#pong.send_time, R#pong.orig_send_time),
     TS = timer:now_diff(R#pong.recv_time, R#pong.send_time),
-    catch gen_server:cast(?STATS, {'AVG', time_to_client, TC}),
-    catch gen_server:cast(?STATS, {'AVG', time_to_server, TS}),
-    catch gen_server:cast(?STATS, {'MAX', time_to_client, TC}),
-    catch gen_server:cast(?STATS, {'MAX', time_to_server, TS}),
-    catch gen_server:cast(?STATS, {'MIN', time_to_client, TC}),
-    catch gen_server:cast(?STATS, {'MIN', time_to_server, TS}),
+    stats:avg(time_to_client, TC),
+    stats:avg(time_to_server, TS),
+    stats:max(time_to_client, TC),
+    stats:max(time_to_server, TS),
     {noreply, Server};
   
 handle_cast(stop, Server) ->

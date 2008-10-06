@@ -83,8 +83,9 @@
 						   {bin, YYY},
 						   {error, Any1}])
 		end,
-                catch gen_server:cast(?STATS, {'SUM', packets_out, 2}),
-                catch gen_server:cast(?STATS, {'SUM', bytes_out, size(list_to_binary(XXX)) + size(list_to_binary(YYY))})
+                stats:sum(packets_out, 2),
+                stats:sum(bytes_out, size(list_to_binary(XXX)) 
+                          + size(list_to_binary(YYY)))
 	end()).
 
 

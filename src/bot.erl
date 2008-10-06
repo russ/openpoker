@@ -134,6 +134,7 @@ handle_connect(Host, Port, Bot) ->
             {reply, ok, Bot#bot{ socket = Sock }};
         {error, E} when E == eaddrnotavail; 
                         E == econnrefused ->
+            stats:sum(bot_connect_error, 1),
             N = Bot#bot.connect_attempts,
             timer:sleep(random:uniform(2000) + 
                         random:uniform(10000) * N),

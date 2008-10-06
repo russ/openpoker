@@ -9,6 +9,7 @@
 	 handle_info/2, terminate/2, code_change/3]).
 
 -export([start/0, start/1, start/2, stop/1]).
+-export([avg/2, sum/2, min/2, max/2]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -43,6 +44,18 @@ start(Interval, Trace)
   when is_integer(Interval),
        is_atom(Trace) ->
     gen_server:start(?STATS, stats, [Interval, Trace], []).
+
+avg(Id, Value) ->
+    gen_server:cast(?STATS, {'AVG', Id, Value}).
+
+sum(Id, Value) ->
+    gen_server:cast(?STATS, {'SUM', Id, Value}).
+
+min(Id, Value) ->
+    gen_server:cast(?STATS, {'MIN', Id, Value}).
+
+max(Id, Value) ->
+    gen_server:cast(?STATS, {'MAX', Id, Value}).
 
 init([Time, Trace]) ->
     process_flag(trap_exit, true),
