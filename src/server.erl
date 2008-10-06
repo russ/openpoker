@@ -14,18 +14,10 @@
 -include("schema.hrl").
 -include("test.hrl").
 
--define(STATS_TIMEOUT, 5000).
-
 -record(server, {
 	  port,
 	  host,
-	  avg,
-	  test_mode,
-          start,
-          count,
-          size,
-          time_to_client,
-          time_to_server
+	  test_mode
 	 }).
 
 -record(client, {
@@ -93,15 +85,8 @@ init([Host, Port, TestMode]) ->
     Server = #server{
       host = Host,
       port = Port,
-      avg = 0,
-      time_to_client = 0,
-      time_to_server = 0,
-      count = 0,
-      size = 0,
-      start = now(),
       test_mode = TestMode
      },
-    erlang:send_after(?STATS_TIMEOUT, self(), 'STATS'),
     {ok, Server}.
 
 stop(Server) ->
@@ -113,21 +98,20 @@ terminate(normal, Server) ->
     ok.
 
 handle_cast({'BUMP', Size}, Server) ->
-    N = Server#server.count,
-    Total = Server#server.size,
-    {noreply, Server#server{ count = N + 1, size = Total + Size }};
+    catch gen_server:cast(?STATS, {'SUM', packets_in, 1}),
+    catch gen_server:cast(?STATS, {'SUM', bytes_in, Size}),
+    {noreply, Server};
   
 handle_cast({'PONG', R = #pong{}}, Server) ->
-    TC = Server#server.time_to_client,
-    TS = Server#server.time_to_server,
-    DeltaTC = timer:now_diff(R#pong.send_time, R#pong.orig_send_time),
-    DeltaTS = timer:now_diff(R#pong.recv_time, R#pong.send_time),
-    AvgTC = (TC + DeltaTC) / 2,
-    AvgTS = (TS + DeltaTS) / 2,
-    {noreply, Server#server{ 
-                time_to_client = AvgTC,
-                time_to_server = AvgTS
-               }};
+    TC = timer:now_diff(R#pong.send_time, R#pong.orig_send_time),
+    TS = timer:now_diff(R#pong.recv_time, R#pong.send_time),
+    catch gen_server:cast(?STATS, {'AVG', time_to_client, TC}),
+    catch gen_server:cast(?STATS, {'AVG', time_to_server, TS}),
+    catch gen_server:cast(?STATS, {'MAX', time_to_client, TC}),
+    catch gen_server:cast(?STATS, {'MAX', time_to_server, TS}),
+    catch gen_server:cast(?STATS, {'MIN', time_to_client, TC}),
+    catch gen_server:cast(?STATS, {'MIN', time_to_server, TS}),
+    {noreply, Server};
   
 handle_cast(stop, Server) ->
     {stop, normal, Server};
@@ -165,32 +149,6 @@ handle_call(Event, From, Server) ->
 			      {message, Event}, 
 			      {from, From}]),
     {noreply, Server}.
-
-handle_info('STATS', Server) ->
-    End = now(),
-    Elapsed = timer:now_diff(End, Server#server.start) / 1000000,
-    Count = Server#server.count,
-    Size = Server#server.size,
-    RPS = trunc(Count / Elapsed),
-    BPS = trunc(Size / Elapsed),
-    TC = Server#server.time_to_client,
-    TS = Server#server.time_to_server,
-    error_logger:info_report([{module, ?MODULE}, 
-                              {elapsed, Elapsed},
-                              {requests, Count},
-                              {bytes, Size},
-                              {requests_per_second, RPS},
-                              {bytes_per_second, BPS},
-                              {avg_time_to_client, TC / 1000},
-                              {avg_time_to_server, TS / 1000}
-                             ]),
-    Server1 = Server#server{ 
-                start = End,
-                count = 0,
-                size = 0
-               },
-    erlang:send_after(?STATS_TIMEOUT, self(), 'STATS'),
-    {noreply, Server1};
 
 handle_info({'EXIT', _Pid, _Reason}, Server) ->
     %% child exit?

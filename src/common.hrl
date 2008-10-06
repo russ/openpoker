@@ -11,6 +11,10 @@
 -define(MULTIBOTS, 'MULTIBOTS').
 -define(LAUNCHERS, 'LAUNCHERS').
 
+%%% Global stats server
+
+-define(STATS, {global, stats}).
+
 -record(test_game, {
 	  irc_id,
 	  observer,

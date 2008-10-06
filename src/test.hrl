@@ -82,7 +82,9 @@
 						   {port_info, erlang:port_info(Socket, connected)},
 						   {bin, YYY},
 						   {error, Any1}])
-		end
+		end,
+                catch gen_server:cast(?STATS, {'SUM', packets_out, 2}),
+                catch gen_server:cast(?STATS, {'SUM', bytes_out, size(list_to_binary(XXX)) + size(list_to_binary(YYY))})
 	end()).
 
 
