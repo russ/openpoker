@@ -58,9 +58,8 @@ test(MaxGames, Delay, Trace)
     wait_for_games(Data1).
 
 go(Barrier, N) ->
-    io:format("dmb: ~p games launching simultaneously~n", [N]),
-    gen_server:cast(Barrier, {'TARGET', N}),
-    barrier:bump(Barrier).
+    io:format("dmb: ~p games will be launching simultaneously~n", [N]),
+    gen_server:cast(Barrier, {'TARGET', N}).
 
 test(DB, '$end_of_table', _, N, Data) ->
     io:format("dmb: End of database reached. No more games to launch!~n"),
@@ -69,7 +68,6 @@ test(DB, '$end_of_table', _, N, Data) ->
     Data;
 
 test(DB, _, 0, N, Data) ->
-    io:format("dmb: firing the starter pistol!~n"),
     go(Data#dmb.barrier, N),
     mbu:closedb(DB),
     Data;

@@ -220,6 +220,9 @@ handle_info({'CANCEL', GID}, Data) ->
 	    {noreply, Data1}
     end;
 
+handle_info({'CARDGAME EXIT', _, _}, Data) ->
+    {noreply, Data};
+
 handle_info(Info, Data) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},

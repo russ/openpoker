@@ -340,8 +340,7 @@ handle(#notify_start_game{ game = GID }, Data) ->
     Data#obs.parent ! {'START', GID},
     {noreply, Data#obs{ winners = gb_trees:empty()}};
 
-handle(#notify_cancel_game{ game = Game }, Data) ->
-    GID = cardgame:call(Game, 'ID'),
+handle(#notify_cancel_game{ game = GID }, Data) ->
     if
 	Data#obs.trace ->
 	    catch io:format("~w: CANCEL~n", [GID]);

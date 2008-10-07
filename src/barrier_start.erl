@@ -149,8 +149,6 @@ barrier_final_check(Data) ->
     {stop, {normal, Data#barrier_start.context}, Data}.
 	    
 barrier_start_join(R, Data) ->
-    io:format("Joining: Game: ~p, Game1: ~p, Player: ~p~n",
-              [Data#barrier_start.game, R#join.game, R#join.player]),
     gen_server:cast(Data#barrier_start.game, R#join{ state = ?PS_PLAY }),
     {next_state, barrier_start, Data}.
 
