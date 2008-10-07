@@ -43,7 +43,8 @@ stop(Ref) ->
     gen_server:cast(Ref, stop).
 
 terminate(_Reason, Bot) ->
-    stats:add(bots_disconnected, 1),
+    stats:sum(bots_disconnected, 1),
+    stats:add(total_bots_disconnected, 1),
     case Bot#bot.socket of
 	none ->
 	    ignore;
@@ -187,7 +188,8 @@ handle_pong(_R, Bot) ->
     {noreply, Bot}.
 
 handle_you_are(R, Bot) ->
-    stats:add(bots_connected, 1),
+    stats:sum(bots_connected, 1),
+    stats:add(total_bots_connected, 1),
     handle_cast(#watch{ game = Bot#bot.gid }, Bot),
     PID = gen_server:call(R#you_are.player, 'ID'),
     {noreply, Bot#bot{ player = R#you_are.player, pid = PID }}.

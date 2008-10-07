@@ -129,11 +129,13 @@ handle_call(Event, From, Data) ->
     {noreply, Data}.
 
 handle_info({'START', _GID}, Data) ->
-    stats:add(games_started, 1),
+    stats:sum(games_started, 1),
+    stats:add(total_games_started, 1),
     {noreply, Data};
 
 handle_info({'END', GID, Winners}, Data) ->
-    stats:add(games_ended, 1),
+    stats:sum(games_ended, 1),
+    stats:add(total_games_ended, 1),
     %% score it
     Games = Data#mb.games,
     Game = gb_trees:get(GID, Games),
