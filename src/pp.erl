@@ -337,7 +337,8 @@ start_game() ->
              required_players(),
              start_delay(),
              player_timeout(),
-             rigged_deck()
+             rigged_deck(),
+             internal()
             }).
 
 game_info() ->

@@ -77,7 +77,7 @@ handle_cast({'RUN', Game, Barrier, Delay, Trace}, Data)
 	    ok
     end,
     T2 = now(),
-    {ok, GID} = start_game(Game1, Delay),
+    {ok, GID} = start_game(Game1, Delay, Barrier),
     T3 = now(),
     {ok, Bb} = util:get_random_pid(?LAUNCHERS),
     T4 = now(),
@@ -370,7 +370,7 @@ next_port(Host, [Pid|Rest], Max) ->
            end,
     next_port(Host, Rest, Max1).
 
-start_game(G, Delay)
+start_game(G, Delay, Barrier)
   when is_record(G, irc_game) ->
     Cmd = #start_game{
       table_name = <<"test game">>,
@@ -379,7 +379,8 @@ start_game(G, Delay)
       seat_count = G#irc_game.player_count,
       required = G#irc_game.player_count,
       start_delay = Delay,
-      rigged_deck = rig_deck(G)
+      rigged_deck = rig_deck(G),
+      barrier = Barrier
      },
     {ok, Game} = cardgame:start(Cmd),
     {ok, cardgame:call(Game, 'ID')}.

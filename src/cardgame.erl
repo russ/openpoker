@@ -64,8 +64,14 @@ start(R = #start_game{}) ->
 	    %% irc texas differs slightly in application of button 
 	    %% rules as well as the number of raises allowed
 	    Modules = [
-		       %% start delay
-		       {delayed_start, [R#start_game.start_delay]}, 
+                       if 
+                           is_pid(R#start_game.barrier) ->
+                               %% all games run together
+                               {barrier_start, [R#start_game.barrier]};
+                           true ->
+                               %% start delay
+                               {delayed_start, [R#start_game.start_delay]}
+                       end,
 		       %% irc blind rules
 		       {blinds, [irc]},
 		       %% deal 2 cards to each player

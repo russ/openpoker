@@ -154,7 +154,8 @@
           required = 2,
           start_delay = ?START_DELAY,
           player_timeout = ?PLAYER_TIMEOUT,
-          rigged_deck = []
+          rigged_deck = [],
+          barrier
          }).
 
 -define(CMD_GAME_INFO, 18).
