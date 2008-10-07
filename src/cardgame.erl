@@ -63,36 +63,37 @@ start(R = #start_game{}) ->
 	?GT_IRC_TEXAS ->
 	    %% irc texas differs slightly in application of button 
 	    %% rules as well as the number of raises allowed
-	    Modules = [
-                       if 
-                           is_pid(R#start_game.barrier) ->
-                               %% all games run together
-                               {barrier_start, [R#start_game.barrier]};
-                           true ->
-                               %% start delay
-                               {delayed_start, [R#start_game.start_delay]}
-                       end,
-		       %% irc blind rules
-		       {blinds, [irc]},
-		       %% deal 2 cards to each player
-		       {deal_cards, [2, private]}, 
-		       %% start after BB, 100 raises
-		       {betting, [100, ?GS_PREFLOP, true]}, 
-		       %% show 3 shared cards
-		       {deal_cards, [3, shared]}, 
-		       %% flop
-		       {betting, [100, ?GS_FLOP]}, 
-		       %% show 1 more shared card
-		       {deal_cards, [1, shared]}, 
-		       %% turn
-		       {betting, [100, ?GS_TURN]}, 
-		       %% show 1 more shared card
-		       {deal_cards, [1, shared]}, 
-		       %% river
-		       {betting, [100, ?GS_RIVER]}, 
-		       %% showdown
-		       {showdown, []}
-		      ],
+	    Mods = [
+                    %% irc blind rules
+                    {blinds, [irc]},
+                    %% deal 2 cards to each player
+                    {deal_cards, [2, private]}, 
+                    %% start after BB, 100 raises
+                    {betting, [100, ?GS_PREFLOP, true]}, 
+                    %% show 3 shared cards
+                    {deal_cards, [3, shared]}, 
+                    %% flop
+                    {betting, [100, ?GS_FLOP]}, 
+                    %% show 1 more shared card
+                    {deal_cards, [1, shared]}, 
+                    %% turn
+                    {betting, [100, ?GS_TURN]}, 
+                    %% show 1 more shared card
+                    {deal_cards, [1, shared]}, 
+                    %% river
+                    {betting, [100, ?GS_RIVER]}, 
+                    %% showdown
+                    {showdown, []}
+                   ],
+            Modules = if 
+                          is_pid(R#start_game.barrier) ->
+                              %% all games run together
+                              [{barrier_start, [R#start_game.barrier]}|Mods];
+                          true ->
+                              %% start delay
+                              [{delayed_start, [R#start_game.start_delay]}|Mods]
+                                  ++ [{restart, []}]
+                      end,
 	    Context = #texas{};
 	?GT_TEXAS_HOLDEM ->
 	    Modules = [
@@ -117,7 +118,8 @@ start(R = #start_game{}) ->
 		       %% river
 		       {betting, [?MAX_RAISES, ?GS_RIVER]}, 
 		       %% showdown
-		       {showdown, []}
+		       {showdown, []},
+                       {restart, []}
 		      ],
 	    Context = #texas{}
     end,
@@ -173,7 +175,7 @@ init([Parent, R, Context, Modules])
     {Module, Args} = hd(Modules),
     {ok, Game} = game:start(self(), R),
     GID = gen_server:call(Game, 'ID'),
-    Ctx = #cardgame {
+    Ctx = #cardgame{
       parent = Parent,
       game = Game,
       gid = GID,
@@ -184,23 +186,16 @@ init([Parent, R, Context, Modules])
      },
     case Module:init([self(), Game, GID|Args]) of
 	{ok, State, Data} ->
-	    Ctx1 = Ctx#cardgame {
-	      state = State,
-	      statedata = Data
-	     },
+	    Ctx1 = Ctx#cardgame{ state = State, statedata = Data },
 	    send_event_after(0, {'START', Context}),
 	    {ok, dispatch, Ctx1};
 
 	{ok, State, Data, Timeout} ->
-	    Ctx1 = Ctx#cardgame {
-	      state = State,
-	      statedata = Data
-	     },
+	    Ctx1 = Ctx#cardgame{ state = State, statedata = Data },
 	    send_event_after(0, {'START', Context}),
 	    {ok, dispatch, Ctx1, Timeout};
 
 	{stop, Reason} ->
-            io:format("Init: Stopping game: ~w~n", [Game]),
 	    game:stop(Game),
 	    {stop, Reason};
 
@@ -219,17 +214,11 @@ dispatch(Event, Ctx) ->
     State = Ctx#cardgame.state,
     case Module:State(Event, Ctx#cardgame.statedata) of
 	{next_state, NextState, NewData} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState,
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {next_state, dispatch, NewCtx};
 
 	{next_state, NextState, NewData, Timeout} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState,
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {next_state, dispatch, NewCtx, Timeout};
 
 	{stop, Reason, NewData} ->
@@ -244,37 +233,23 @@ dispatch(Event, From, Ctx) ->
     State = Ctx#cardgame.state,
     case Module:State(Event, From, Ctx#cardgame.statedata) of
 	{reply, Reply, NextState, NewData} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState,
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {reply, Reply, dispatch, NewCtx};
 
 	{reply, Reply, NextState, NewData, Timeout} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState,
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {reply, Reply, dispatch, NewCtx, Timeout};
 
 	{next_state, NextState, NewData} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState,
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {next_state, dispatch, NewCtx};
 
 	{next_state, NextState, NewData, Timeout} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState,
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {next_state, dispatch, NewCtx, Timeout};
 
 	{stop, Reason, Reply, NewData} ->
-	    NewCtx = Ctx#cardgame {
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ statedata = NewData },
 	    {stop, Reason, Reply, NewCtx};
 
 	{stop, Reason, NewData} ->
@@ -313,16 +288,11 @@ handle_info(Event, dispatch, Ctx) ->
     State = Ctx#cardgame.state,
     case Module:handle_info(Event, State, Ctx#cardgame.statedata) of
 	{next_state, NextState, NewData} ->
-	    NewCtx = Ctx#cardgame { 
-		       state = NextState, 
-		       statedata = NewData},
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {next_state, dispatch, NewCtx};
 
 	{next_state, NextState, NewData, Timeout} ->
-	    NewCtx = Ctx#cardgame { 
-		       state = NextState, 
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {next_state, dispatch, NewCtx, Timeout};
 
 	{stop, Reason, NewData} ->
@@ -350,10 +320,7 @@ code_change(OldVersion, dispatch, Ctx, Extra) ->
     Data = Ctx#cardgame.statedata,
     case Module:code_change(OldVersion, State, Data, Extra) of
 	{ok, NextState, NewData} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState, 
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {ok, dispatch, NewCtx};
 
 	Other ->
@@ -388,10 +355,10 @@ stop(Ctx, {normal, Result}, Data) ->
     stop_normal_result(Ctx, Result, Data);
 
 %% terminate current module 
-%% and start the very last one
+%% and switch to another one
 
-stop(Ctx, {endgame, Result}, Data) ->    
-    stop_endgame(Ctx, Result, Data);
+stop(Ctx, {goto, Target, Result}, Data) ->    
+    stop_goto(Ctx, Target, Result, Data);
 
 %% stop cardgame
 
@@ -426,9 +393,7 @@ handle_event_restart(Ctx) ->
 %% starts from seat #1.
 
 handle_event_cast_rigged(Event, Ctx) ->
-    Ctx1 = Ctx#cardgame {
-	     context = Ctx#cardgame.original_context
-	    },
+    Ctx1 = Ctx#cardgame{ context = Ctx#cardgame.original_context },
     gen_server:cast(Ctx1#cardgame.game, Event),
     {next_state, dispatch, Ctx1}.
 
@@ -442,17 +407,11 @@ handle_event_other(Event, Ctx) ->
     Data = Ctx#cardgame.statedata,
     case Module:handle_event(Event, State, Data) of
 	{next_state, NextState, NewData} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState,
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {next_state, dispatch, NewCtx};
 
 	{next_state, NextState, NewData, Timeout} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState,
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {next_state, dispatch, NewCtx, Timeout};
 
 	{stop, Reason, NewData} ->
@@ -471,37 +430,23 @@ handle_sync_other(Event, From, Ctx) ->
     State = Ctx#cardgame.state,
     case Module:handle_sync_event(Event, From, State, Ctx#cardgame.statedata) of
 	{reply, Reply, NextState, NewData} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState,
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {reply, Reply, dispatch, NewCtx};
 	
 	{reply, Reply, NextState, NewData, Timeout} ->
-	    NewCtx = Ctx#cardgame {
-		       state = NextState,
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {reply, Reply, dispatch, NewCtx, Timeout};
 	
 	{next_state, NextState, NewData} ->
-	    NewCtx = Ctx#cardgame { 
-		       state = NextState, 
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {next_state, dispatch, NewCtx};
 	
 	{next_state, NextState, NewData, Timeout} ->
-	    NewCtx = Ctx#cardgame{ 
-		       state = NextState, 
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ state = NextState, statedata = NewData },
 	    {next_state, dispatch, NewCtx, Timeout};
 	
 	{stop, Reason, Reply, NewData} ->
-	    NewCtx = Ctx#cardgame {
-		       statedata = NewData
-		      },
+	    NewCtx = Ctx#cardgame{ statedata = NewData },
 	    {stop, Reason, Reply, NewCtx};
 	
 	{stop, Reason, NewData} ->
@@ -523,7 +468,7 @@ start_next_module(Ctx, Modules) ->
     {Module, Args} = hd(Modules),
     case Module:init([self(), Ctx#cardgame.game, Ctx#cardgame.gid|Args]) of
 	{ok, State, Data} ->
-	    NewCtx = Ctx#cardgame {
+	    NewCtx = Ctx#cardgame{ 
 		       stack = Modules,
 		       state = State,
 		       statedata = Data
@@ -532,7 +477,7 @@ start_next_module(Ctx, Modules) ->
 	    {next_state, dispatch, NewCtx};
 
 	{ok, State, Data, Timeout} ->
-	    NewCtx = Ctx#cardgame {
+	    NewCtx = Ctx#cardgame{
 	      stack = Modules,
 	      state = State,
 	      statedata = Data
@@ -571,9 +516,7 @@ stop_normal_restart_result(Ctx, Result, Data) ->
     {Module, _} = hd(Ctx#cardgame.stack),
     State = Ctx#cardgame.state,
     Module:terminate({normal, restart}, State, Data),
-    Ctx1 = Ctx#cardgame {
-	     context = Result
-	    },
+    Ctx1 = Ctx#cardgame{ context = Result },
     start_next_module(Ctx1, Ctx#cardgame.modules).
 
 stop_normal_result(Ctx, Result, Data) ->
@@ -581,26 +524,27 @@ stop_normal_result(Ctx, Result, Data) ->
     State = Ctx#cardgame.state,
     Module:terminate({normal, Result}, State, Data),
     [_|Stack] = Ctx#cardgame.stack,
-    Ctx1 = Ctx#cardgame {
-	     context = Result
-	    },
+    Ctx1 = Ctx#cardgame{ context = Result },
     start_next_module(Ctx1, Stack).
 
-stop_endgame(Ctx, Result, Data) ->
+stop_goto(Ctx, Target, Result, Data) ->
     {Module, _} = hd(Ctx#cardgame.stack),
     State = Ctx#cardgame.state,
     Module:terminate({normal, Result}, State, Data),
-    Stack = [lists:last(Ctx#cardgame.stack)],
-    Ctx1 = Ctx#cardgame {
-	     context = Result
-	    },
+    Stack = trim_stack(Target, Ctx#cardgame.modules),
+    Ctx1 = Ctx#cardgame{ context = Result },
     start_next_module(Ctx1, Stack).
 
 stop_other(Ctx, Reason, Data) ->
-    NewCtx = Ctx#cardgame {
-	       statedata = Data
-	      },
+    NewCtx = Ctx#cardgame{ statedata = Data },
     {stop, Reason, NewCtx}.
+
+trim_stack(Mod, L = [{H, _}|_]) 
+  when Mod == H ->
+    L;
+
+trim_stack(Mod, [_|T]) ->
+    trim_stack(Mod, T).
 
 test() ->
     ok.

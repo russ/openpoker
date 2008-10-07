@@ -129,7 +129,7 @@ showdown_handle_start(Context, Data) ->
     end,
     gen_server:cast(Game, {'BROADCAST', #notify_end_game{ game = GID }}),
     _Ctx = setelement(4, Context, Winners),
-    {stop, {normal, restart, Context}, Data}.
+    {stop, {normal, Context}, Data}.
 
 showdown_handle_join(R, Data) ->
     gen_server:cast(Data#showdown.game, R#join{ state = ?PS_FOLD }),
