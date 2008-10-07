@@ -143,8 +143,10 @@ query_op() ->
 game_to_id(G) when is_pid(G) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},
-			      {self, self()}, 
-                              {backtrace, erlang:process_info(self(), backtrace)}
+                              {game, erlang:process_info(G)},
+                              {self, erlang:process_info(self())},
+                              {backtrace, erlang:process_display(self(), 
+                                                                 backtrace)}
                              ]);
 game_to_id(GID) 
   when is_integer(GID) ->
