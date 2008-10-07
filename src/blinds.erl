@@ -318,7 +318,6 @@ small_blind_handle_timeout(Player, Data) ->
        {note, gen_server:call(Game, 'NOTE')},
        {seat, Seat},
        {now, now()}]),
-    erlang:halt("small_blind: " ++ pid_to_list(Player)),
     timeout(Data, Player, small_blind).
 
 small_blind_handle_join(R, Data) ->
@@ -436,7 +435,6 @@ big_blind_handle_timeout(Player, Data) ->
        {note, gen_server:call(Game, 'NOTE')},
        {seat, Seat},
        {now, now()}]),
-    erlang:halt("big_blind: " ++ pid_to_list(Player)),
     timeout(Data, Player, big_blind).
 
 big_blind_handle_join(R, Data) ->
