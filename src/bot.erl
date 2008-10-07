@@ -413,8 +413,12 @@ handle(#notify_end_game{ game = GID }, Bot)
 handle(#notify_end_game{}, Bot) ->
     {noreply, Bot#bot{ games_to_play = Bot#bot.games_to_play - 1 }};
 
-handle(#notify_cancel_game{ game = GID }, Bot) ->
+handle(#notify_cancel_game{ game = GID }, Bot)
+  when Bot#bot.game == none ->
     handle_notify_cancel_game(GID, Bot);
+
+handle(#notify_cancel_game{}, Bot) ->
+    {noreply, Bot};
 
 handle(#notify_win{}, Bot) ->
     {noreply, Bot};

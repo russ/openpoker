@@ -287,7 +287,7 @@ next_turn(Data, Player) ->
     if 
 	StandingCount < 2 ->
 	    %% last man standing wins
-	    {stop, {endgame, Data#betting.context}, Data};
+	    {stop, {goto, showdown, Data#betting.context}, Data};
  	ActiveCount == 0 ->
  	    %% we are done with this stage
  	    gen_server:cast(Game, {'RESET STATE', ?PS_BET, ?PS_PLAY}),

@@ -18,17 +18,20 @@
 -include("pp.hrl").
 -include("schema.hrl").
 
--record(barrier_delayed, {
+-define(DELAY, 15000).
+
+-record(barrier_start, {
           fsm,
 	  game,
           gid,
 	  context,
+          timer,
 	  barrier
 	 }).
 
 init([FSM, Game, GID, Barrier]) ->
     process_flag(trap_exit, true),
-    Data = #barrier_delayed {
+    Data = #barrier_start {
       fsm = FSM,
       game = Game,
       gid = GID,
@@ -39,6 +42,12 @@ init([FSM, Game, GID, Barrier]) ->
 
 stop(Ref) ->
     cardgame:send_all_state_event(Ref, stop).
+
+barrier_start({'START', Context}, Data) ->
+    barrier_start_start(Context, Data);
+
+barrier_start('CHECK', Data) ->
+    barrier_start_check(Data);
 
 barrier_start(R, Data) 
   when is_record(R, join) ->
@@ -67,7 +76,7 @@ handle_event(Event, State, Data) ->
  			       {line, ?LINE},
  			       {message, Event}, 
  			       {self, self()},
- 			       {game, Data#barrier_delayed.game}]),
+ 			       {game, Data#barrier_start.game}]),
     {next_state, State, Data}.
         
 handle_sync_event(Event, From, State, Data) ->
@@ -76,19 +85,19 @@ handle_sync_event(Event, From, State, Data) ->
  			       {from, From},
  			       {message, Event}, 
  			       {self, self()},
- 			       {game, Data#barrier_delayed.game}]),
+ 			       {game, Data#barrier_start.game}]),
     {next_state, State, Data}.
 
-handle_info({'EXIT', B, normal}, _, Data)
-  when B == Data#barrier_delayed.barrier ->
-    barrier_start_check(Data);
+handle_info({'EXIT', B, _}, _, Data)
+  when B == Data#barrier_start.barrier ->
+    barrier_final_check(Data);
 
 handle_info(Info, State, Data) ->
     error_logger:error_report([{module, ?MODULE}, 
  			       {line, ?LINE},
  			       {message, Info}, 
  			       {self, self()},
- 			       {game, Data#barrier_delayed.game}]),
+ 			       {game, Data#barrier_start.game}]),
     {next_state, State, Data}.
 
 terminate(_Reason, _State, _Data) -> 
@@ -101,40 +110,60 @@ code_change(_OldVsn, State, Data, _Extra) ->
 %%% Handlers
 %%%
 
+barrier_start_start(Context, Data) ->
+    Timer = cardgame:send_event_after(?DELAY, 'CHECK'),
+    %% reset call amount
+    Context1 = setelement(3, Context, 0),
+    Data1 = Data#barrier_start{
+	      context = Context1,
+              timer = Timer
+	     },
+    {next_state, barrier_start, Data1}.
+
 barrier_start_check(Data) ->
-    Game = Data#barrier_delayed.game,
-    FSM = Data#barrier_delayed.fsm,
+    Game = Data#barrier_start.game,
+    FSM = Data#barrier_start.fsm,
+    Barrier = Data#barrier_start.barrier,
     Ready = gen_server:call(Game, {'SEATS', ?PS_READY}),
     ReqCount = gen_server:call(Game, 'REQUIRED'),
     Start = (length(Ready) >= ReqCount),
-    Empty = gen_server:call(Game, 'IS EMPTY'),
-    if
-	Start ->
-            R = #notify_start_game{ game = FSM },
-            gen_server:cast(Game, R),
-	    {stop, {normal, Data#barrier_delayed.context}, Data};
-	Empty ->
-	    {stop, normal, Data};
-	true ->
-            R = #notify_cancel_game{ game = FSM },
-            gen_server:cast(Game, R),
-	    {stop, normal, Data}
-    end.
+    Data1 = if
+                Start ->
+                    barrier:bump(Barrier),
+                    catch cardgame:cancel_timer(Data#barrier_start.timer),
+                    Data#barrier_start{ timer = none };
+                true ->
+                    R = #notify_cancel_game{ game = FSM },
+                    gen_server:cast(Game, R),
+                    Data#barrier_start{
+                      timer = cardgame:send_event_after(?DELAY, 'CHECK')
+                     }
+            end,
+    {next_state, barrier_start, Data1}.
+
+barrier_final_check(Data) ->
+    Game = Data#barrier_start.game,
+    FSM = Data#barrier_start.fsm,
+    R = #notify_start_game{ game = FSM },
+    gen_server:cast(Game, R),
+    {stop, {normal, Data#barrier_start.context}, Data}.
 	    
 barrier_start_join(R, Data) ->
-    gen_server:cast(Data#barrier_delayed.game, R#join{ state = ?PS_PLAY }),
+    io:format("Joining: Game: ~p, Game1: ~p, Player: ~p~n",
+              [Data#barrier_start.game, R#join.game, R#join.player]),
+    gen_server:cast(Data#barrier_start.game, R#join{ state = ?PS_PLAY }),
     {next_state, barrier_start, Data}.
 
 barrier_start_leave(R, Data) ->
-    gen_server:cast(Data#barrier_delayed.game, R#leave{ state = ?PS_ANY }),
+    gen_server:cast(Data#barrier_start.game, R#leave{ state = ?PS_ANY }),
     {next_state, barrier_start, Data}.
 
 barrier_start_sit_out(R, Data) ->
-    gen_server:cast(Data#barrier_delayed.game, R),
+    gen_server:cast(Data#barrier_start.game, R),
     {next_state, barrier_start, Data}.
 
 barrier_start_come_back(R, Data) ->
-    gen_server:cast(Data#barrier_delayed.game, R),
+    gen_server:cast(Data#barrier_start.game, R),
     {next_state, barrier_start, Data}.
 
 barrier_start_other(Event, Data) ->
