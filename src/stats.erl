@@ -21,6 +21,7 @@
           interval,
           trace,
           start,
+          add,
           sum,
           avg,
           min,
@@ -51,6 +52,9 @@ avg(Id, Value) ->
 sum(Id, Value) ->
     gen_server:cast(?STATS, {'SUM', Id, Value}).
 
+add(Id, Value) ->
+    gen_server:cast(?STATS, {'ADD', Id, Value}).
+
 min(Id, Value) ->
     gen_server:cast(?STATS, {'MIN', Id, Value}).
 
@@ -65,6 +69,7 @@ init([Time, Trace]) ->
       trace = Trace, 
       avg = gb_trees:empty(),
       sum = gb_trees:empty(),
+      add = gb_trees:empty(),
       max = gb_trees:empty(),
       min = gb_trees:empty(),
       start = now()
@@ -99,6 +104,16 @@ handle_cast({'SUM', Id, New}, Data) ->
           end,
     Sum1 = gb_trees:enter(Id, Old + New, Data#stats.sum),
     {noreply, Data#stats{ sum = Sum1 }};
+
+handle_cast({'ADD', Id, New}, Data) ->
+    Old = case gb_trees:lookup(Id, Data#stats.add) of
+              {value, Val} ->
+                  Val;
+              none ->
+                  0
+          end,
+    Add1 = gb_trees:enter(Id, Old + New, Data#stats.add),
+    {noreply, Data#stats{ add = Add1 }};
 
 handle_cast({'MAX', Id, New}, Data) ->
     Old = case gb_trees:lookup(Id, Data#stats.max) of
@@ -157,6 +172,7 @@ handle_info('DUMP STATS', Data) ->
     F1 = fun({Key, Avg}) -> {{Key, avg}, Avg / 1000} end,
     Avg = lists:map(F1, gb_trees:to_list(Data#stats.avg)),
     F2 = fun({Key, Sum}) -> {{Key, per_sec}, trunc(Sum / Elapsed)} end,
+    Add = gb_trees:to_list(Data#stats.add),
     Sum = gb_trees:to_list(Data#stats.sum),
     SumPS = lists:map(F2, Sum),
     F3 = fun({Key, Max}) -> {{Key, max}, Max / 1000} end,
@@ -165,7 +181,7 @@ handle_info('DUMP STATS', Data) ->
     Min = lists:map(F4, gb_trees:to_list(Data#stats.min)),
     error_logger:info_report([{module, ?MODULE}, 
                               {elapsed, Elapsed} ]
-                             ++ Sum ++ SumPS 
+                             ++ Add ++ Sum ++ SumPS 
                              ++ Min ++ Max ++ Avg
                             ),
     Data1 = Data#stats{
