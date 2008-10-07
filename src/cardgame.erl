@@ -88,7 +88,8 @@ start(R = #start_game{}) ->
             Modules = if 
                           is_pid(R#start_game.barrier) ->
                               %% all games run together
-                              [{barrier_start, [R#start_game.barrier]}|Mods];
+                              [{barrier_start, [R#start_game.barrier]}|Mods]
+                                  ++ [{delayed_exit, []}];
                           true ->
                               %% start delay
                               [{delayed_start, [R#start_game.start_delay]}|Mods]
