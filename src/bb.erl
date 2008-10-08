@@ -26,6 +26,8 @@ start() ->
     start(false).
 
 start(Trace) ->
+    mnesia:start(),
+    pg2:start(),
     gen_server:start(bb, [Trace], []).
 
 init([Trace]) ->

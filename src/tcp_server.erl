@@ -103,7 +103,7 @@ port_name(Port) when integer(Port) ->
 
 cold_start(Master, Port, Fun, Max, Length) ->
     process_flag(trap_exit, true),
-    io:format("Starting a port server on ~p...~n",[Port]),
+    io:format("~p: port server on ~p...~n", [node(), Port]),
     case gen_tcp:listen(Port, [binary,
 			       %% {dontroute, true},
 			       {nodelay,true},

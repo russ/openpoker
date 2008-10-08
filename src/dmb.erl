@@ -2,7 +2,7 @@
 
 -module(dmb).
 
--export([test/1, test/2, test/3, setup/0, cleanup/0]).
+-export([run/3, test/1, test/2, test/3, setup/0, cleanup/0]).
 
 -include("ircdb.hrl").
 -include("common.hrl").
@@ -141,4 +141,50 @@ cleanup() ->
 	    io:format("dmb:cleanup: mnesia error ~w~n", [Any])
     end,
     ok.
+
+run(Games, GameServers, BotServers) ->
+    mnesia:start(),
+    pg2:start(),
+    start_bot_slaves(BotServers),
+    start_game_slaves(GameServers),
+    io:format("cluster: ~p~n", [nodes()]),
+    io:format("bot launchers  : ~p~n", [pg2:get_members(?LAUNCHERS)]),
+    io:format("game launchers : ~p~n", [pg2:get_members(?MULTIBOTS)]),
+    io:format("game servers   : ~p~n", [pg2:get_members(?GAME_SERVERS)]),
+    stats:start(10000),
+    dmb:test(Games).
+
+start_bot_slaves(0) ->
+    ok;
+
+start_bot_slaves(N) ->
+    Name = list_to_atom("bot" ++ integer_to_list(N)),
+    Args = common_args(),
+    Node = start_slave_node(Name, Args),
+    timer:sleep(100),
+    rpc:call(Node, bb, start, []),
+    start_bot_slaves(N - 1).
+
+start_game_slaves(0) ->
+    ok;
+
+start_game_slaves(N) ->
+    Name = list_to_atom("game" ++ integer_to_list(N)),
+    Args = common_args(),
+    Node = start_slave_node(Name, Args),
+    timer:sleep(100),
+    rpc:call(Node, mb, run, []),
+    start_game_slaves(N - 1).
+
+common_args() ->
+    "+K true +P 134217727 -smp disable".
+
+start_slave_node(Name, Args) ->
+    {ok, Node} = slave:start_link(net_adm:localhost(), Name, Args),
+    timer:sleep(1000),
+    %%mnesia:add_table_copy(schema, Node, ram_copies),
+    rpc:call(Node, mnesia, start, []),
+    rpc:call(Node, mnesia, change_config, [extra_db_nodes, [node()]]),
+    timer:sleep(1000),
+    Node.
 

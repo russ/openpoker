@@ -335,7 +335,9 @@ run(Host, TestMode)
 
 run(Host, TestMode) ->
     mnesia:start(),
+    pg2:start(),
     Port = next_port(Host),
+    io:format("~p: game server on port ~p~n", [node(), Port]),
     server:start(Host, Port, TestMode),
     {ok, _} = start(TestMode),
     ok.
@@ -344,6 +346,7 @@ run() ->
     run(localhost, false).
 
 next_port(Host) ->
+    pg2:create(?GAME_SERVERS),
     pg2:get_members(?GAME_SERVERS),
     timer:sleep(100),
     case pg2:get_members(?GAME_SERVERS) of
