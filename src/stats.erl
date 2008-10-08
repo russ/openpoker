@@ -3,13 +3,13 @@
 -module(stats).
 -behaviour(gen_server).
 
--compile([export_all]).
-
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 
--export([start/0, start/1, start/2, stop/1]).
--export([avg/2, sum/2, min/2, max/2]).
+-export([start/0, start/1, start/2, stop/0,
+         avg/2, sum/2, min/2, max/2, dump/0,
+         add/2, test/0
+        ]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -18,7 +18,7 @@
 -include("schema.hrl").
 
 -record(stats, {
-          interval,
+          i,
           trace,
           start,
           add,
@@ -61,11 +61,14 @@ min(Id, Value) ->
 max(Id, Value) ->
     gen_server:cast(?STATS, {'MAX', Id, Value}).
 
+dump() ->
+    gen_server:cast(?STATS, 'DUMP').
+
 init([Time, Trace]) ->
     process_flag(trap_exit, true),
     timer:send_interval(Time, self(), 'DUMP STATS'),
     Data = #stats{ 
-      interval = Time,
+      i = 0,
       trace = Trace, 
       avg = gb_trees:empty(),
       sum = gb_trees:empty(),
@@ -74,10 +77,18 @@ init([Time, Trace]) ->
       min = gb_trees:empty(),
       start = now()
      },
+    Opts = [named_table, ordered_set],
+    ets:new(stats_elapsed, Opts),
+    ets:new(stats_avg, Opts),
+    ets:new(stats_sum, Opts),
+    ets:new(stats_sum_ps, Opts),
+    ets:new(stats_add, Opts),
+    ets:new(stats_max, Opts),
+    ets:new(stats_min, Opts),
     {ok, Data}.
 
-stop(Ref) ->
-    gen_server:cast(Ref, stop).
+stop() ->
+    gen_server:cast(?STATS, stop).
 
 terminate(_Reason, _Data) ->
     ok.
@@ -147,6 +158,10 @@ handle_cast({'MIN', Id, New}, Data) ->
     Min1 = gb_trees:enter(Id, Min, Data#stats.min),
     {noreply, Data#stats{ min = Min1 }};
 
+handle_cast('DUMP', Data) ->
+    stats2csv(Data),
+    {noreply, Data};
+
 handle_cast(Event, Data) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},
@@ -168,23 +183,34 @@ handle_call(Event, From, Data) ->
 
 handle_info('DUMP STATS', Data) ->
     End = now(),
+    I = Data#stats.i,
+    %% elapsed time
     Elapsed = timer:now_diff(End, Data#stats.start) / 1000000,
-    F1 = fun({Key, Avg}) -> {{Key, avg}, Avg / 1000} end,
-    Avg = lists:map(F1, gb_trees:to_list(Data#stats.avg)),
-    F2 = fun({Key, Sum}) -> {{Key, per_sec}, trunc(Sum / Elapsed)} end,
+    ets:insert(stats_elapsed, [{{elapsed, I}, Elapsed}]),
+    %% helper funs
+    F1 = fun({K, V}) -> {{K, I}, V} end,
+    F2 = fun({K, V}) -> {{K, I}, V / 1000} end,
+    F3 = fun({K, V}) -> {{atom_to_list(K) ++ "/sec", I}, trunc(V / Elapsed)} end,
+    %% average
+    Avg = lists:map(F2, gb_trees:to_list(Data#stats.avg)),
+    ets:insert(stats_avg, Avg),
+    %% total
     Add = gb_trees:to_list(Data#stats.add),
+    ets:insert(stats_add, lists:map(F1, Add)),
+    %% sum
     Sum = gb_trees:to_list(Data#stats.sum),
-    SumPS = lists:map(F2, Sum),
-    F3 = fun({Key, Max}) -> {{Key, max}, Max / 1000} end,
-    Max = lists:map(F3, gb_trees:to_list(Data#stats.max)),
-    F4 = fun({Key, Min}) -> {{Key, min}, Min / 1000} end,
-    Min = lists:map(F4, gb_trees:to_list(Data#stats.min)),
-    error_logger:info_report([{module, ?MODULE}, 
-                              {elapsed, Elapsed} ]
-                             ++ Add ++ Sum ++ SumPS 
-                             ++ Min ++ Max ++ Avg
-                            ),
+    ets:insert(stats_sum, lists:map(F1, Sum)),
+    %% sum/ps
+    ets:insert(stats_sum_ps, lists:map(F3, Sum)),
+    %% max
+    Max = lists:map(F1, gb_trees:to_list(Data#stats.max)),
+    ets:insert(stats_max, Max),
+    %% min
+    Min = lists:map(F1, gb_trees:to_list(Data#stats.min)),
+    ets:insert(stats_min, Min),
+    %% 
     Data1 = Data#stats{
+              i = Data#stats.i + 1,
               avg = gb_trees:empty(),
               sum = gb_trees:empty(),
               max = gb_trees:empty(),
@@ -202,4 +228,75 @@ handle_info(Info, Data) ->
 
 code_change(_OldVsn, Data, _Extra) ->
     {ok, Data}.
+
+%%%
+%%% Utility 
+%%% 
+
+stats2csv(Data) ->
+    {ok, F} = file:open("stats.csv", [write]),
+    stats2csv(Data, F, [stats_elapsed,
+                        stats_add,
+                        stats_avg,
+                        stats_sum,
+                        stats_sum_ps,
+                        stats_min,
+                        stats_max
+                       ]),
+    file:close(F).
+
+stats2csv(_, _, []) ->
+    ok;
+
+stats2csv(Data, F, [H|T]) ->
+    tab2csv(F, H),
+    stats2csv(Data, F, T).
+
+tab2csv(F, Tab) ->
+    tab2csv(F, Tab, ets:first(Tab), none, []).
+
+tab2csv(F, _, '$end_of_table', Name, Acc) ->
+    write_values(F, Name, Acc),
+    ok;
+
+tab2csv(F, Tab, X = {K, _}, Name, Acc) 
+  when K /= Name ->
+    write_values(F, Name, Acc),
+    tab2csv(F, Tab, X, K, []);
+
+tab2csv(F, Tab, X, Name, Acc) ->
+    [V] = ets:lookup(Tab, X),
+    tab2csv(F, Tab, ets:next(Tab, X), Name, [V|Acc]).
+
+write_values(_, _, []) ->
+    ok;
+
+write_values(F, Name, L) ->
+    io:fwrite(F, "~p", [Name]),
+    write_values(F, lists:reverse(L)).
+
+write_values(F, []) ->
+    io:nl(F),
+    ok;
+
+write_values(F, [{_, V}|T]) 
+  when is_float(V) ->
+    io:fwrite(F, ",~.4. f", [V]),
+    write_values(F, T);
+
+write_values(F, [{_, V}|T]) ->
+    io:fwrite(F, ",~p", [V]),
+    write_values(F, T).
+
+test() ->
+    stats:start(),
+    stats:sum(foo_sum, 1),
+    stats:sum(foo_sum, 1),
+    stats:add(foo_add, 1),
+    stats:avg(foo_avg, 2),
+    stats:avg(foo_avg, 3),
+    stats:max(foo_max, 3),
+    timer:sleep(6000),
+    stats:dump(),
+    stats:stop().
 
