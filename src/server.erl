@@ -107,8 +107,8 @@ handle_cast({'PONG', R = #pong{}}, Server) ->
     TS = timer:now_diff(R#pong.recv_time, R#pong.send_time),
     stats:avg(time_to_client, TC),
     stats:avg(time_to_server, TS),
-    stats:max(time_to_client, TC),
-    stats:max(time_to_server, TS),
+    stats:max(max_time_to_client, TC),
+    stats:max(max_time_to_server, TS),
     {noreply, Server};
   
 handle_cast(stop, Server) ->

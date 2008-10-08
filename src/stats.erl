@@ -188,7 +188,7 @@ handle_info('DUMP STATS', Data) ->
     Elapsed = timer:now_diff(End, Data#stats.start) / 1000000,
     ets:insert(stats_elapsed, [{{elapsed, I}, Elapsed}]),
     %% helper funs
-    F1 = fun({K, V}) -> {{K, I}, V} end,
+    F1 = fun({K, V}) -> {{K, I}, V / 1000} end,
     F2 = fun({K, V}) -> {{K, I}, V / 1000} end,
     F3 = fun({K, V}) -> {{atom_to_list(K) ++ "/sec", I}, trunc(V / Elapsed)} end,
     %% average

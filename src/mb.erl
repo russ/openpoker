@@ -101,7 +101,7 @@ handle_cast({'RUN', Game, Barrier, Delay, Trace}, Data)
              },
     T5 = now(),
     stats:sum(games_launched, 1),
-    stats:max(game_launch_time, timer:now_diff(T5, T1)),
+    stats:max(max_game_launch_time, timer:now_diff(T5, T1)),
     stats:avg(game_launch_time, timer:now_diff(T5, T1)),
     stats:avg(game_prep_time, timer:now_diff(T2, T1)),
     stats:avg(game_start_time, timer:now_diff(T3, T2)),

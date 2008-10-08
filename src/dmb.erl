@@ -151,7 +151,7 @@ run(Games, GameServers, BotServers) ->
     io:format("bot launchers  : ~p~n", [pg2:get_members(?LAUNCHERS)]),
     io:format("game launchers : ~p~n", [pg2:get_members(?MULTIBOTS)]),
     io:format("game servers   : ~p~n", [pg2:get_members(?GAME_SERVERS)]),
-    stats:start(10000),
+    stats:start(),
     dmb:test(Games).
 
 start_bot_slaves(0) ->

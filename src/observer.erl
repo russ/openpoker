@@ -76,7 +76,7 @@ handle_call(X = {'CONNECT', Host, Port}, From, Data) ->
             {reply, ok, Data#obs{ socket = Sock }};
         {error, E} when E == eaddrnotavail; 
                         E == econnrefused ->
-            stats:sum(bot_connect_error, 1),
+            stats:sum(bot_connect_errors, 1),
             timer:sleep(random:uniform(5000)),
             handle_call(X, From, Data)
     end;
