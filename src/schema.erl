@@ -15,7 +15,7 @@ install(Nodes) when is_list(Nodes) ->
     mnesia:stop(),
     mnesia:delete_schema(Nodes),
     catch(mnesia:create_schema(Nodes)),
-    mnesia:start(),
+    db:start(),
     install_counter(Nodes),
     install_player_info(Nodes),
     install_player(Nodes),

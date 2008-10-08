@@ -141,13 +141,8 @@ query_op() ->
             }).
 
 game_to_id(G) when is_pid(G) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-                              {game, erlang:process_info(G)},
-                              {self, erlang:process_info(self())},
-                              {backtrace, erlang:process_display(self(), 
-                                                                 backtrace)}
-                             ]);
+    erlang:process_display(self(), backtrace);
+
 game_to_id(GID) 
   when is_integer(GID) ->
     GID.
@@ -175,7 +170,7 @@ id_to_player(0) ->
     undefined;
 
 id_to_player(PID) ->
-    case mnesia:dirty_read(tab_player, PID) of
+    case db:read(tab_player, PID) of
         [Player] ->
             Player#tab_player.process;
         Any ->

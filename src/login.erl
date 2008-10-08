@@ -13,7 +13,7 @@ login(Nick, Pass, Socket)
   when is_binary(Nick),
        is_binary(Pass),
        is_pid(Socket) -> % socket handler process
-    Recs = mnesia:dirty_index_read(tab_player_info, Nick, #tab_player_info.nick),
+    Recs = db:index_read(tab_player_info, Nick, #tab_player_info.nick),
     login(Recs, [Nick, Pass, Socket]).
 
 login([], _) ->
@@ -23,11 +23,11 @@ login([], _) ->
 login([Info], [_Nick, Pass|_] = Args) 
   when is_record(Info, tab_player_info) ->
     PID = Info#tab_player_info.pid,
-    Player = case mnesia:dirty_read(tab_player, PID) of
+    Player = case db:read(tab_player, PID) of
                  [P] ->
                      P;
                  _ ->
-                     ok = mnesia:dirty_delete(tab_player, PID),
+                     ok = db:delete(tab_player, PID),
                      #tab_player{ pid = PID }
              end,
     %% replace dead pids with none
@@ -46,7 +46,7 @@ login([Info], [_Nick, Pass|_] = Args)
 			      fun is_offline/3
 			     ]),
     {Player2, Info1, Result} = login(Info, Player1, Condition, Args),
-    case {mnesia:dirty_write(Player2), mnesia:dirty_write(Info1)} of
+    case {db:write(Player2), db:write(Info1)} of
 	{ok, ok} ->
 	    Result;
 	_ ->
@@ -55,7 +55,7 @@ login([Info], [_Nick, Pass|_] = Args)
 
 login(Info, Player, bad_password, _) ->
     N = Info#tab_player_info.login_errors + 1,
-    [CC] = mnesia:dirty_read(tab_cluster_config, 0),
+    [CC] = db:read(tab_cluster_config, 0),
     MaxLoginErrors = CC#tab_cluster_config.max_login_errors,
     if
 	N > MaxLoginErrors ->
@@ -161,7 +161,7 @@ fix_pid(Pid)
 
 %% logout(ID)
 %%   when is_number(ID) ->
-%%     case mnesia:dirty_read(player, ID) of
+%%     case db:read(player, ID) of
 %% 	[Player] ->
 %%             logout(Player);
 %% 	_ ->

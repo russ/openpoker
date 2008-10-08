@@ -36,8 +36,8 @@ start(Host, Port) ->
     start(Host, Port, false).
 
 start(Host, Port, TestMode) ->
-    mnesia:start(),
-    case mnesia:wait_for_tables([tab_game_config, tab_game_xref], 10000) of 
+    db:start(),
+    case db:wait_for_tables([tab_game_config, tab_game_xref], 10000) of 
 	ok ->
 	    case gen_server:start(server, [Host, Port, TestMode], []) of
 		{ok, Pid} ->
@@ -62,7 +62,7 @@ start(Host, Port, TestMode) ->
 	       {line, ?LINE},
 	       {message, "Unexpected result"},
 	{result, Other},
-	       {call, 'mnesia:wait_for_tables'}, 
+	       {call, 'db:wait_for_tables'}, 
 	       {now, now()}]),
 	    Other
     end.

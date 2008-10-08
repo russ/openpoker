@@ -68,8 +68,8 @@ handle_cast(#seat_query{ game = Game }, Data) ->
     {noreply, Data};
 
 handle_cast(#player_query{ player = PID }, Data) ->
-    I = mnesia:dirty_read(tab_player_info, PID),
-    P = mnesia:dirty_read(tab_player, PID),
+    I = db:read(tab_player_info, PID),
+    P = db:read(tab_player, PID),
     case {I, P} of
 	{[Info], [Player]} ->
 	    handle_cast(_ = #player_info{

@@ -269,7 +269,7 @@ setup_observer(Parent, GID, Host, Port, Trace) ->
     %% watch game
     ok = gen_server:call(Observer, {'CONNECT', Host, Port}, infinity),
     %% XXX temp fix
-    %% [Game] = mnesia:dirty_read(tab_game_xref, GID),
+    %% [Game] = db:read(tab_game_xref, GID),
     %% gen_server:cast(Observer, #watch{ game = Game#tab_game_xref.process }),
     gen_server:cast(Observer, #watch{ game = GID }),
     Observer.
@@ -334,7 +334,7 @@ run(Host, TestMode)
     run(atom_to_list(Host), TestMode);
 
 run(Host, TestMode) ->
-    mnesia:start(),
+    db:start(),
     pg2:start(),
     Port = next_port(Host),
     io:format("~p: game server on port ~p~n", [node(), Port]),

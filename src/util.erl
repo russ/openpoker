@@ -12,7 +12,7 @@ is_process_alive(Pid)
     rpc:call(node(Pid), erlang, is_process_alive, [Pid]).
     
 init_db_slave(MasterNode) ->
-    mnesia:start(),
+    db:start(),
     mnesia:change_config(extra_db_nodes, [MasterNode]),
     mnesia:change_table_copy_type(schema, node(), disc_copies),
     Tabs = mnesia:system_info(tables) -- [schema],

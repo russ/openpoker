@@ -6,7 +6,7 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 -export([start/1, stop/1, stop/2, cast/2, call/2, test/0]).
--export([create/4, delete_balance/1, update_balance/2, update_inplay/3]).
+-export([create/4, delete_balance/1, update_balance/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -35,7 +35,7 @@ init([Nick])
   when is_binary(Nick) ->
     process_flag(trap_exit, true),
     %% make sure we exist
-    case mnesia:dirty_index_read(tab_player_info, Nick, #tab_player_info.nick) of
+    case db:index_read(tab_player_info, Nick, #tab_player_info.nick) of
 	[Info] ->
 	    ID = Info#tab_player_info.pid,
             ok = create_runtime(ID, self()),
@@ -53,7 +53,7 @@ stop(Player, Reason)
     gen_server:cast(Player, {stop, Reason}).
 
 terminate(_Reason, Data) ->
-    ok = mnesia:dirty_delete(tab_player, Data#player_data.pid).
+    ok = db:delete(tab_player, Data#player_data.pid).
 
 handle_cast('DISCONNECT', Data) ->
     handle_cast_disconnect(Data);
@@ -265,7 +265,7 @@ handle_cast_seat_query(#seat_query{ game = Game }, Data) ->
     {noreply, Data}.
 
 handle_cast_player_info_req(PID, Data) ->
-    case mnesia:dirty_read(tab_player_info, PID) of
+    case db:read(tab_player_info, PID) of
 	[Info] ->
 	    handle_cast(_ = #player_info{
                           player = self(),
@@ -279,7 +279,7 @@ handle_cast_player_info_req(PID, Data) ->
     {noreply, Data}.
 
 handle_cast_new_game_req(R, Data) ->
-    [CC] = mnesia:dirty_read(tab_cluster_config, 0),
+    [CC] = db:read(tab_cluster_config, 0),
     Cmd = if
               CC#tab_cluster_config.enable_dynamic_games ->
                   case cardgame:start(R#start_game{ rigged_deck = [] }) of
@@ -295,7 +295,7 @@ handle_cast_new_game_req(R, Data) ->
     handle_cast(Cmd, Data).
 
 handle_cast_balance_req(Data) ->
-    case mnesia:dirty_read(tab_balance, Data#player_data.pid) of
+    case db:read(tab_balance, Data#player_data.pid) of
 	[Balance] ->
 	    handle_cast(_ = #balance{
                           amount = Balance#tab_balance.amount,
@@ -378,7 +378,7 @@ handle_call_other(Event, From, Data) ->
 %%%
 
 cast(PID, Event) ->
-    case mnesia:dirty_read(tab_player, PID) of
+    case db:read(tab_player, PID) of
 	[Player] ->
 	    gen_server:cast(Player#tab_player.process, Event);
 	_ ->
@@ -386,7 +386,7 @@ cast(PID, Event) ->
     end.
 
 call(PID, Event) ->
-    case mnesia:dirty_read(tab_player, PID) of
+    case db:read(tab_player, PID) of
 	[Player] ->
 	    gen_server:call(Player#tab_player.process, Event);
 	_ ->
@@ -408,7 +408,7 @@ create(Nick, Pass, Location, Balance)
        is_binary(Pass),
        is_binary(Location),
        is_number(Balance) ->
-    case mnesia:dirty_index_read(tab_player_info, Nick, #tab_player_info.nick) of
+    case db:index_read(tab_player_info, Nick, #tab_player_info.nick) of
         [_] ->
             {error, player_exists};
         _ ->
@@ -421,7 +421,7 @@ create(Nick, Pass, Location, Balance)
               password = erlang:phash2(Pass, 1 bsl 32),
               location = Location
              },
-            ok = mnesia:dirty_write(Info),
+            ok = db:write(Info),
             update_balance(ID, Balance),
             {ok, ID}
     end.
@@ -433,7 +433,7 @@ create_runtime(ID, Pid)
       pid = ID,
       process = Pid
      },
-    ok = mnesia:dirty_write(Player).
+    ok = db:write(Player).
 
 inplay(Data) 
   when is_record(Data, player_data) ->
@@ -458,17 +458,10 @@ leave_games(Data, [Game|Rest]) ->
     leave_games(Data, Rest).
 
 delete_balance(PID) ->
-    mnesia:dirty_delete(tab_balance, PID).
+    db:delete(tab_balance, PID).
 
 update_balance(PID, Amount) ->
-    mnesia:dirty_update_counter(tab_balance, 
-                                PID, 
-                                trunc(Amount * 10000)).    
-    
-update_inplay(GID, PID, Amount) ->
-    mnesia:dirty_update_counter(tab_inplay, 
-                                {GID, PID}, 
-                                trunc(Amount * 10000)).    
+    db:update_balance(tab_balance, PID, Amount).
 
 %%%
 %%% Test suite

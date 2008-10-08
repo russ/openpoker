@@ -128,22 +128,22 @@ setup() ->
     timer:sleep(1000).
 
 cleanup() ->
-    mnesia:start(),
-    case mnesia:wait_for_tables([tab_game_config], 10000) of 
+    db:start(),
+    case db:wait_for_tables([tab_game_config], 10000) of 
 	ok ->
 	    io:format("dmb:cleanup: deleting game info...~n"),
-	    mnesia:clear_table(tab_game_xref),
-            mnesia:clear_table(tab_timeout_history),
+	    db:clear_table(tab_game_xref),
+            db:clear_table(tab_timeout_history),
 	    counter:reset(game),
             CC = #tab_cluster_config{ id = 0, enable_dynamic_games = true},
-            ok = mnesia:dirty_write(CC);
+            ok = db:write(CC);
 	Any ->
 	    io:format("dmb:cleanup: mnesia error ~w~n", [Any])
     end,
     ok.
 
 run(Games, GameServers, BotServers) ->
-    mnesia:start(),
+    db:start(),
     pg2:start(),
     start_bot_slaves(BotServers),
     start_game_slaves(GameServers),

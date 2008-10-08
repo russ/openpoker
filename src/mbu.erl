@@ -46,7 +46,7 @@ create_players([Player|Rest])
   when is_record(Player, irc_player) ->
     Nick = list_to_binary(Player#irc_player.nick),
     Balance = Player#irc_player.balance,
-    case mnesia:dirty_index_read(tab_player_info, 
+    case db:index_read(tab_player_info, 
                                  Nick, #tab_player_info.nick) of
 	[Info] ->
             PID = Info#tab_player_info.pid,

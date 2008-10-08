@@ -112,7 +112,7 @@ init([FSM, R])
       timeout = R#start_game.player_timeout,
       required = R#start_game.required
      },
-    case mnesia:dirty_write(Game) of
+    case db:write(Game) of
 	ok ->
             {ok, Data};
 	Any ->
@@ -131,7 +131,7 @@ terminate(_Reason, Game) ->
     %% the stop message directly to the process.
     gen_server:cast(Game#game.limit, stop),
     %% remove ourselves from the db
-    ok = mnesia:dirty_delete({tab_game_xref, Game#game.gid}),
+    ok = db:delete(tab_game_xref, Game#game.gid),
     ok.
 
 %%% Reset is used each time the game is restarted
@@ -499,9 +499,8 @@ handle_cast_leave(R, Game) ->
                              },
                     %% update inplay balance
                     Inplay = Seat#seat.inplay,
-                    mnesia:dirty_update_counter(tab_balance, PID, 
-                                                trunc(Inplay * 10000)),
-                    ok = mnesia:dirty_delete(tab_inplay, {GID, PID}),
+                    db:update_balance(tab_balance, PID, Inplay),
+                    ok = db:delete(tab_inplay, {GID, PID}),
                     {noreply, Game2};
                 %% cannot leave now, use auto-play
                 true ->
@@ -1116,7 +1115,7 @@ setup(GameType, SeatCount, Limit, Delay, Timeout, Max) ->
       player_timeout = Timeout,
       max = Max
      },
-    ok = mnesia:dirty_write(Game).
+    ok = db:write(Game).
     
 %%% Use stored commands instead of asking player
 
@@ -1167,15 +1166,15 @@ do_buy_in(GID, PID, Amt)
        is_number(PID),
        is_number(Amt) ->
     BuyIn = trunc(Amt * 10000),
-    case mnesia:dirty_read(tab_balance, PID) of
+    case db:read(tab_balance, PID) of
         [] ->
             {error, no_balance_found};
         [B] when BuyIn > B#tab_balance.amount ->
             {error, not_enough_money};
         [_] ->
             %% may need to perform these two in a transaction!
-            mnesia:dirty_update_counter(tab_inplay, {GID, PID}, BuyIn),
-            mnesia:dirty_update_counter(tab_balance, PID, - BuyIn),
+            db:update_balance(tab_inplay, {GID, PID}, Amt),
+            db:update_balance(tab_balance, PID, - Amt),
             ok;
         Any ->
             Any

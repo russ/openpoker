@@ -17,4 +17,4 @@ reset(Type) ->
       type = Type,
       value = 0
      },
-    ok = mnesia:dirty_write(Counter).
+    ok = db:write(Counter).

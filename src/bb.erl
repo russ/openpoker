@@ -26,7 +26,7 @@ start() ->
     start(false).
 
 start(Trace) ->
-    mnesia:start(),
+    db:start(),
     pg2:start(),
     gen_server:start(bb, [Trace], []).
 
@@ -117,9 +117,6 @@ setup_observer(Parent, GID, Host, Port, Trace) ->
     gen_server:cast(Observer, {'TRACE', Trace}),
     %% watch game
     ok = gen_server:call(Observer, {'CONNECT', Host, Port}, infinity),
-    %% XXX temp fix
-    %% [Game] = mnesia:dirty_read(tab_game_xref, GID),
-    %% gen_server:cast(Observer, #watch{ game = Game#tab_game_xref.process }),
     gen_server:cast(Observer, #watch{ game = GID }),
     Observer.
 

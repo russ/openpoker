@@ -2,6 +2,10 @@
 
 -module(db).
 
+-export([start/0, wait_for_tables/2, clear_table/1,
+         write/1, delete/2, read/2, index_read/3, 
+         update_balance/3]).
+
 -export([test/0]).
 -export([delete_pat/1, find/1, find/2]).
 -export([find_game/1]).
@@ -9,6 +13,32 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("test.hrl").
 -include("schema.hrl").
+
+start() ->
+    mnesia:start().
+
+wait_for_tables(L, N) ->
+    mnesia:wait_for_tables(L, N).
+
+clear_table(T) ->
+    mnesia:clear_table(T).
+
+write(R) ->
+    mnesia:dirty_write(R).
+
+delete(T, K) ->
+    mnesia:dirty_delete(T, K).
+
+read(T, K) ->
+    mnesia:dirty_read(T, K).
+
+index_read(T, V, K) ->
+    mnesia:dirty_index_read(T, V, K).
+
+update_balance(T, K, V) ->
+    mnesia:dirty_update_counter(T, K, trunc(V * 10000)).
+
+%%%
 
 delete_pat(Pat) ->
     F = fun() -> 
@@ -54,7 +84,7 @@ find(Pat, FieldNum)
     end.
 
 find_game(GID) ->
-    [XRef] = mnesia:dirty_read(tab_game_xref, GID),
+    [XRef] = read(tab_game_xref, GID),
     XRef#tab_game_xref.process.
     
 %%% 
