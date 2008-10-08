@@ -405,12 +405,12 @@ notify_bb() ->
 
 notify_end_game() ->
     record(notify_end_game, {
-             game()
+             int()
             }).
 
 notify_cancel_game() ->
     record(notify_cancel_game, {
-             game()
+             int()
             }).
 
 notify_win() ->
