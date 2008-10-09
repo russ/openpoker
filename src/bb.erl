@@ -8,7 +8,7 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 
--export([start/0, start/1, stop/1]).
+-export([start/0, start/1, stop/1, launch/7]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -30,6 +30,12 @@ start(Trace) ->
     pg2:start(),
     gen_server:start(bb, [Trace], []).
 
+launch(Bb, Parent, GID, Game, Host, Port, Trace)
+  when is_record(Game, irc_game),
+       is_integer(GID),
+       is_pid(Parent) ->
+    gen_server:cast(Bb, {'LAUNCH', Parent, GID, Game, Host, Port, Trace}).
+
 init([Trace]) ->
     process_flag(trap_exit, true),
     pg2:create(?LAUNCHERS),
@@ -45,6 +51,19 @@ terminate(_Reason, _Data) ->
 handle_cast(stop, Data) ->
     {stop, normal, Data};
 
+handle_cast({'LAUNCH', Parent, GID, Game, Host, Port, Trace}, Data) 
+  when is_record(Game, irc_game),
+       is_integer(GID),
+       is_pid(Parent) ->
+    T1 = now(),
+    _Observer = setup_observer(Parent, GID, Host, Port, Trace),
+    _Players = setup_players(Game, GID, Host, Port),
+    T2 = now(),
+    Delta = timer:now_diff(T2, T1),
+    stats:max(player_connect_time, Delta),
+    stats:avg(player_connect_time, Delta),
+    {noreply, Data};
+
 handle_cast(Event, Data) ->
     error_logger:info_report([{module, ?MODULE}, 
 			      {line, ?LINE},
@@ -53,14 +72,6 @@ handle_cast(Event, Data) ->
                               {data, Data}
                              ]),
     {noreply, Data}.
-
-handle_call({'LAUNCH', Parent, GID, Game, Host, Port, Trace}, _, Data) 
-  when is_record(Game, irc_game),
-       is_integer(GID),
-       is_pid(Parent) ->
-    Observer = setup_observer(Parent, GID, Host, Port, Trace),
-    Players = setup_players(Game, GID, Host, Port),
-    {reply, {ok, Observer, Players}, Data};
 
 handle_call(Event, From, Data) ->
     error_logger:info_report([{module, ?MODULE}, 

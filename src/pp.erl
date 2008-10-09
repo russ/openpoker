@@ -803,8 +803,9 @@ ping(Socket, Size, true) ->
                                        {error, Any}
                                       ])
     end,
-    stats:sum(packets_out, 2),
-    stats:sum(bytes_out, Size + size(Bin)).
+    %%stats:sum(packets_out, 2),
+    %%stats:sum(bytes_out, Size + size(Bin)),
+    ok.
 
 test() ->
     ok.

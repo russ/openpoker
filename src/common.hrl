@@ -17,8 +17,6 @@
 
 -record(test_game, {
 	  irc_id,
-	  observer,
-	  players,
 	  winners,
 	  nicks,
 	  trace

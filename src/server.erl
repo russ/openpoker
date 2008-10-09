@@ -98,8 +98,8 @@ terminate(normal, Server) ->
     ok.
 
 handle_cast({'BUMP', Size}, Server) ->
-    stats:sum(packets_in, 1),
-    stats:sum(bytes_in, Size),
+    %%stats:sum(packets_in, 1),
+    %%stats:sum(bytes_in, Size),
     {noreply, Server};
   
 handle_cast({'PONG', R = #pong{}}, Server) ->
