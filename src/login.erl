@@ -73,6 +73,7 @@ login(Info, Player, account_disabled, _) ->
 login(Info, Player, player_online, Args) ->
     %% player is idle
     gen_server:cast(Player#tab_player.process, #logout{}),
+    timer:sleep(100),
     login(Info, Player, player_offline, Args);
 
 login(Info, Player, client_down, [_, _, Socket]) ->
