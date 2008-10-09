@@ -9,7 +9,7 @@
 
 %% export the gen_fsm interface
 
--export([start/1, test_start/3,
+-export([start/1, start/2, test_start/3,
 	 send_event/2, sync_send_event/2, sync_send_event/3,
 	 send_all_state_event/2, sync_send_all_state_event/2,
 	 sync_send_all_state_event/3, reply/2, send_event_after/2,
@@ -56,6 +56,10 @@ behaviour_info(Other) ->
 	 }).
 
 start(R = #start_game{}) ->
+    ID = counter:bump(game),
+    start(ID, R).
+
+start(ID, R = #start_game{}) ->
     %% create game stack. context is used to propagate 
     %% game information from module to module, e.g. button
     %% and blinds position for texas hold'em
@@ -125,10 +129,17 @@ start(R = #start_game{}) ->
 	    Context = #texas{}
     end,
     %% start the cardgame finite state machine
-    gen_fsm:start(?MODULE, [self(), R, Context, Modules], []).
+    gen_fsm:start({global, {game, ID}}, ?MODULE, 
+                  [ID, self(), R, Context, Modules], []).
 
 test_start(R = #start_game{}, Context, Modules) ->
-    gen_fsm:start(?MODULE, [self(), R, Context, Modules], []).
+    ID = counter:bump(game),
+    test_start(ID, R, Context, Modules).
+
+test_start(ID, R = #start_game{}, Context, Modules) ->
+    gen_fsm:start({global, {game, ID}}, ?MODULE, 
+                  [ID, self(), R, Context, Modules], []).
+
 %%
 %% The gen_fsm API functions
 %%
@@ -167,15 +178,15 @@ cancel_timer(Ref) ->
 %% The gen_fsm call backs
 %%
 
-init([Parent, R, Context, Modules]) 
-  when is_pid(Parent), 
+init([GID, Parent, R, Context, Modules]) 
+  when is_integer(GID),
+       is_pid(Parent), 
        is_record(R, start_game), 
        is_tuple(Context),
        is_list(Modules) ->
     process_flag(trap_exit, true),
     {Module, Args} = hd(Modules),
-    {ok, Game} = game:start(self(), R),
-    GID = gen_server:call(Game, 'ID'),
+    {ok, Game} = game:start(GID, self(), R),
     Ctx = #cardgame{
       parent = Parent,
       game = Game,

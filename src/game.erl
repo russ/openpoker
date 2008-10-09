@@ -5,7 +5,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
--export([start/2, stop/1, test/0]).
+-export([start/3, stop/1, test/0]).
 -export([find/8, setup/6, seat_query/1]).
 -include_lib("stdlib/include/qlc.hrl").
 
@@ -92,18 +92,17 @@ new(OID, FSM, R) ->
       timeout = R#start_game.player_timeout
      }.
 
-start(FSM, R = #start_game{}) ->
-    gen_server:start(game, [FSM, R], []).
+start(GID, FSM, R = #start_game{}) ->
+    gen_server:start(game, [GID, FSM, R], []).
 
-init([FSM, R])
+init([GID, FSM, R])
   when is_pid(FSM),
        is_record(R, start_game) ->
     process_flag(trap_exit, true),
-    OID = counter:bump(game),
-    Data = new(OID, FSM, R),
+    Data = new(GID, FSM, R),
     %% store game info
     Game = #tab_game_xref {
-      gid = OID,
+      gid = GID,
       process = FSM,
       type = R#start_game.type, 
       limit = R#start_game.limit,

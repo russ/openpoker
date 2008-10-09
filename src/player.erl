@@ -24,25 +24,25 @@
           self
 	 }).
 
-new(ID) ->
-    #player_data{ pid = ID, self = self() }.
+new(PID) ->
+    #player_data{ pid = PID, self = self() }.
 
 start(Nick) 
   when is_binary(Nick) ->
-    gen_server:start(player, [Nick], []).
-
-init([Nick]) 
-  when is_binary(Nick) ->
-    process_flag(trap_exit, true),
     %% make sure we exist
     case db:index_read(tab_player_info, Nick, #tab_player_info.nick) of
 	[Info] ->
-	    ID = Info#tab_player_info.pid,
-            ok = create_runtime(ID, self()),
-            {ok, new(ID)};
+	    PID = Info#tab_player_info.pid,
+            gen_server:start({global, {player, PID}}, player, [PID], []);
         Any ->
-	    {stop, Any}
+	    {error, Any}
     end.
+
+init([PID]) 
+  when is_integer(PID) ->
+    process_flag(trap_exit, true),
+    ok = create_runtime(PID, self()),
+    {ok, new(PID)}.
 
 stop(Player) 
   when is_pid(Player) ->
