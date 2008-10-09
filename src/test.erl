@@ -750,10 +750,10 @@ dummy_game() ->
     cardgame:cast(Game, {'NOTE', dummy_game}),
     %% create dummy players
     setup_game(Host, Port, Game,
-	       [{<<"test14-bot1">>, 1, ['SIT OUT']},
-		{<<"test14-bot2">>, 2, ['SIT OUT']},
-		{<<"test14-bot3">>, 3, ['SIT OUT']},
-		{<<"test14-bot4">>, 4, ['SIT OUT']}]),
+	       [{nick(), 1, ['SIT OUT']},
+		{nick(), 2, ['SIT OUT']},
+		{nick(), 3, ['SIT OUT']},
+		{nick(), 4, ['SIT OUT']}]),
     GID.
 
 %%%
