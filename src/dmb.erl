@@ -2,7 +2,8 @@
 
 -module(dmb).
 
--export([run/3, test/1, test/2, test/3, setup/0, cleanup/0]).
+-export([run/3, run/4, test/1, test/2, test/3, 
+         setup/0, cleanup/0]).
 
 -include("ircdb.hrl").
 -include("common.hrl").
@@ -143,6 +144,9 @@ cleanup() ->
     ok.
 
 run(Games, GameServers, BotServers) ->
+    run(Games, GameServers, BotServers, 5000).
+
+run(Games, GameServers, BotServers, Interval) ->
     db:start(),
     pg2:start(),
     start_bot_slaves(BotServers),
@@ -151,7 +155,7 @@ run(Games, GameServers, BotServers) ->
     io:format("bot launchers  : ~p~n", [pg2:get_members(?LAUNCHERS)]),
     io:format("game launchers : ~p~n", [pg2:get_members(?MULTIBOTS)]),
     io:format("game servers   : ~p~n", [pg2:get_members(?GAME_SERVERS)]),
-    stats:start(),
+    stats:start(Interval),
     dmb:test(Games).
 
 start_bot_slaves(0) ->
