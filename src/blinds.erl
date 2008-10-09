@@ -603,9 +603,10 @@ make_game_5_bust(Button_N, SB_N, BB_N) ->
     Game = test:make_test_game(10, Players, Ctx, modules()),
     {Game, Players}.
 
-bust_trigger(Game, Event, Pid) ->
+bust_trigger(Game, Event, RegName) ->
     case Event of
 	{in, {'$gen_cast', #notify_start_game{}}} ->
+            Pid = global:whereis_name(RegName),
             cardgame:cast(Game, {'SET STATE', Pid, ?PS_FOLD}),
             done;
         _ ->
@@ -614,7 +615,7 @@ bust_trigger(Game, Event, Pid) ->
         
 %% Both blinds are posted
 
-post_blinds_trigger({Game, GID}, Event, Pid) ->
+post_blinds_trigger({Game, GID}, Event, RegName) ->
     case Event of 
 	{in, {'$gen_cast', #bet_req{ 
                 game = GID, 
@@ -623,6 +624,7 @@ post_blinds_trigger({Game, GID}, Event, Pid) ->
                 raise_max = 0
                }}} ->
 	    %% post the blind
+            Pid = global:whereis_name(RegName),
 	    cardgame:send_event(Game, #call{ player = Pid, amount = Amount }),
             done;
 	_ ->
