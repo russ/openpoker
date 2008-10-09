@@ -188,25 +188,28 @@ handle_info('DUMP STATS', Data) ->
     Elapsed = timer:now_diff(End, Data#stats.start) / 1000000,
     ets:insert(stats_elapsed, [{{elapsed, I}, Elapsed}]),
     %% helper funs
-    F1 = fun({K, V}) -> {{K, I}, V / 1000} end,
+    F1 = fun({K, V}) -> {{K, I}, V} end,
     F2 = fun({K, V}) -> {{K, I}, V / 1000} end,
-    F3 = fun({K, V}) -> {{atom_to_list(K) ++ "/sec", I}, trunc(V / Elapsed)} end,
+    F3 = fun({{K, _}, V}) -> 
+                 {{atom_to_list(K) ++ "/sec", I}, trunc(V / Elapsed)} 
+         end,
     %% average
     Avg = lists:map(F2, gb_trees:to_list(Data#stats.avg)),
     ets:insert(stats_avg, Avg),
     %% total
-    Add = gb_trees:to_list(Data#stats.add),
-    ets:insert(stats_add, lists:map(F1, Add)),
+    Add = lists:map(F1, gb_trees:to_list(Data#stats.add)),
+    ets:insert(stats_add, Add),
     %% sum
-    Sum = gb_trees:to_list(Data#stats.sum),
-    ets:insert(stats_sum, lists:map(F1, Sum)),
+    Sum = lists:map(F1, gb_trees:to_list(Data#stats.sum)),
+    ets:insert(stats_sum, Sum),
     %% sum/ps
-    ets:insert(stats_sum_ps, lists:map(F3, Sum)),
+    SumPS = lists:map(F3, Sum),
+    ets:insert(stats_sum_ps, SumPS),
     %% max
-    Max = lists:map(F1, gb_trees:to_list(Data#stats.max)),
+    Max = lists:map(F2, gb_trees:to_list(Data#stats.max)),
     ets:insert(stats_max, Max),
     %% min
-    Min = lists:map(F1, gb_trees:to_list(Data#stats.min)),
+    Min = lists:map(F2, gb_trees:to_list(Data#stats.min)),
     ets:insert(stats_min, Min),
     %% 
     Data1 = Data#stats{
@@ -217,6 +220,15 @@ handle_info('DUMP STATS', Data) ->
               min = gb_trees:empty(),
               start = End
              },
+    error_logger:info_report([{module, ?MODULE}, 
+                              {elapsed, Elapsed}]
+                             ++ Add
+                             ++ Sum
+                             ++ SumPS
+                             ++ Max
+                             ++ Avg
+                             ++ Min
+                             ),
     {noreply, Data1};
 
 handle_info(Info, Data) ->
