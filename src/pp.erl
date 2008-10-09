@@ -148,12 +148,7 @@ game_to_id(GID)
     GID.
 
 id_to_game(GID) ->
-    case db:find_game(GID) of
-        Pid when is_pid(Pid) ->
-            Pid;
-        Any ->
-            Any
-    end.
+    global:whereis_name({game, GID}).
     
 game() ->
     wrap({fun game_to_id/1, fun id_to_game/1}, int()).
@@ -170,12 +165,7 @@ id_to_player(0) ->
     undefined;
 
 id_to_player(PID) ->
-    case db:read(tab_player, PID) of
-        [Player] ->
-            Player#tab_player.process;
-        Any ->
-            Any
-    end.
+    global:whereis_name({player, PID}).
     
 player() ->
     wrap({fun player_to_id/1, fun id_to_player/1}, int()).
