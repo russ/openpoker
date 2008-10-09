@@ -33,10 +33,10 @@ write(R) ->
 
 delete(T, K) ->
     %%mnesia:dirty_delete(T, K).
-    {Time, Value} = timer:tc(mnesia, dirty_delete, [T, K]),
-    stats:sum(delete_count, 1),
-    stats:avg(delete_time, Time),
-    stats:max(max_delete_time, Time),
+    {_Time, Value} = timer:tc(mnesia, dirty_delete, [T, K]),
+    %%stats:sum(delete_count, 1),
+    %%stats:avg(delete_time, Time),
+    %%stats:max(max_delete_time, Time),
     Value.
 
 read(T, K) ->
@@ -49,10 +49,10 @@ read(T, K) ->
 
 index_read(T, V, K) ->
     %%mnesia:dirty_index_read(T, V, K).
-    {Time, Value} = timer:tc(mnesia, dirty_index_read, [T, V, K]),
-    stats:sum(index_read_count, 1),
-    stats:avg(index_read_time, Time),
-    stats:max(max_index_read_time, Time),
+    {_Time, Value} = timer:tc(mnesia, dirty_index_read, [T, V, K]),
+    %%stats:sum(index_read_count, 1),
+    %%stats:avg(index_read_time, Time),
+    %%stats:max(max_index_read_time, Time),
     Value.
 
 update_balance(T, K, V) ->
