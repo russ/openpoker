@@ -184,8 +184,18 @@
 -define(HC_STRAIGHT_FLUSH, 8).
 
 -record(hand, {
-          combo = ?HC_HIGH_CARD,
-          high_face1 = ?CF_NONE,
-          high_face2 = ?CF_NONE
+	  player = none,
+          pid = none,
+	  cards = [], 
+	  rank = none,
+	  score = 0,
+	  high1 = none,
+          high2 = none
+	 }).
+
+-record(player_hand, {
+          rank = ?HC_HIGH_CARD,
+          high1 = ?CF_NONE,
+          high2 = ?CF_NONE
          }).
 
