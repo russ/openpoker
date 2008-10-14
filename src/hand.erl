@@ -2,92 +2,224 @@
 
 -module(hand).
 
--export([new/0, new/1, new/2, set/2, set_pid/2, id/1, add/2, cards/1, rank/1]).
+-export([new/2, new/3, add/2, rank/1]).
 
 -export([make_card/1, make_card/2, print_bin/1, 
-         print_rep/1, describe/1, hand/1, card_to_string/1]).
-
--export([debug_score/1]).
+         print_rep/1, to_string/1, export/1, card_to_string/1]).
 
 -include_lib("eunit/include/eunit.hrl").
+
 -include("test.hrl").
 -include("common.hrl").
 -include("pp.hrl").
 
 -record(data, {
-	  id, 
-          pid,
+	  player = none,
+          pid = none,
 	  cards = [], 
 	  rank = none,
 	  score = 0,
-	  high = none
+	  high1 = none,
+          high2 = none
 	 }).
 
-new() ->
-    new(0, []).
+new(Player, PID) ->
+    new(Player, PID, []).
 
-new(Id) ->
-    new(Id, []).
-
-new(Id, Cards) ->
-    #data{ id = Id, cards = Cards }.
-
-set(Hand, Id) ->
-    Hand#data{ id = Id }.
-
-set_pid(Hand, PID) ->
-    Hand#data{ pid = PID }.
-
-id(Hand = #data{}) ->
-    Hand#data.id.
-
-cards(Hand = #data{}) ->
-    Hand#data.cards.
-
-rank(Hand = #data{}) ->
-    NewHand = do_rank(Hand),
-    Id = NewHand#data.id,
-    Value = NewHand#data.rank,
-    High = NewHand#data.high,
-    Score = NewHand#data.score,
-    PID = NewHand#data.pid,
-    {Id, Value, High, Score, PID}.
+new(Player, PID, Cards) ->
+    #data{ 
+     player = Player, 
+     pid = PID,
+     cards = Cards 
+    }.
 
 add(Hand, Card) ->
     Hand#data{ cards = [Card|Hand#data.cards] }.
 
-do_rank(Hand) ->
-    Rep = make_rep(Hand),
-    {Rank, High, Score} = score(Rep),
-    Hand#data {
-      rank = Rank, 
-      high = High, 
-      score = Score
-     }.
+rank(Hand) ->
+    rank(Hand, [fun is_straight_flush/2,
+                fun is_four_kind/2,
+                fun is_full_house/2,
+                fun is_flush/2,
+                fun is_straight/2,
+                fun is_three_kind/2,
+                fun is_two_pair/2,
+                fun is_pair/2
+               ], make_rep(Hand)).
 
-score(Rep) ->
-    score([fun is_straight_flush/1,
-	   fun is_four_kind/1,
-	   fun is_full_house/1,
-	   fun is_flush/1,
-	   fun is_straight/1,
-	   fun is_three_kind/1,
-	   fun is_two_pair/1,
-	   fun is_pair/1
-	  ], Rep).
-
-score([H|T], Rep) ->
-    case Score = H(Rep) of
-	junk ->
-	    score(T, Rep);
-	_ ->
-	    Score
+rank(Hand, [Rank|T], Rep) ->
+    case Rank(Hand, Rep) of
+	none ->
+	    rank(Hand, T, Rep);
+	Hand1 ->
+            Hand1
     end;
 
-score([], Rep) ->
+rank(Hand, [], Rep) ->
     Mask = make_mask(Rep),
     High = bits:clear_extra_bits(Mask, 5),
-    {?HC_HIGH_CARD, High, 0}.
+    Hand#data{ rank = ?HC_HIGH_CARD, high1 = High, score = 0 }.
+
+is_straight_flush(Hand, Rep) ->
+    Mask = make_mask(Rep),
+    case is_flush(Hand, Mask, Rep) of
+        none ->
+            none;
+        Hand1 ->
+            High = Hand1#data.high1,
+	    case is_straight(Hand, [High, High, High, High]) of
+                none ->
+                    none;
+                Hand2 ->
+                    Hand2#data{ rank = ?HC_STRAIGHT_FLUSH }
+	    end
+    end.
+
+is_flush(Hand, Rep) ->
+    Mask = make_mask(Rep),
+    is_flush(Hand, Mask, Rep).
+
+is_flush(Hand, Mask, [H|T]) ->
+    Score = Mask band H,
+    Count = bits:bits1(Score),
+    if 
+	Count < 5 ->
+	    is_flush(Hand, Mask, T);
+	true ->
+            High1 = bits:clear_extra_bits(Score, 5),
+            Hand#data{ rank = ?HC_FLUSH, high1 = High1 }
+    end;
+
+is_flush(_, _, []) ->
+    none.
+
+is_straight(Hand, Rep) ->
+    Mask = make_mask(Rep),
+    is_straight(Hand, Mask, Rep).
+
+is_straight(Hand, Mask, Rep) 
+  when is_list(Rep) ->
+    if             %AKQJT98765432A
+	Mask band 2#10000000000000 > 0 ->
+	    Value = Mask bor 1;
+	true ->
+	    Value = Mask
+    end,                %AKQJT98765432A
+    is_straight(Hand, Value, 2#11111000000000);
+
+is_straight(_, _, Mask) 
+  when Mask < 2#11111 ->
+    none;
+
+is_straight(Hand, Value, Mask) 
+  when Mask >= 2#11111 ->
+    if 
+	Value band Mask =:= Mask ->
+            Hand#data{ rank = ?HC_STRAIGHT, high1 = Mask };
+	true ->
+	    is_straight(Hand, Value, Mask bsr 1)
+    end.
+	
+is_four_kind(Hand, [C, D, H, S]) ->
+    Value = C band D band H band S,
+    if
+	Value > 0 ->
+            Hand#data{ 
+              rank = ?HC_FOUR_KIND, 
+              high1 = Value, 
+              score = score([C, D, H, S], Value, 1)
+             };
+	true ->
+	    none
+    end.
+
+is_full_house(Hand, Rep) ->
+    case is_three_kind(Hand, Rep) of
+        none -> 
+            none;
+        Hand1 ->
+            High3 = Hand1#data.high1,
+	    case is_pair(Hand1, clear_high_bit(Rep, High3)) of
+                none ->
+                    none;
+                Hand2 ->
+                    High2 = Hand2#data.high1,
+                    Hand2#data{ 
+                      rank = ?HC_FULL_HOUSE, 
+                      high1 = High3,
+                      high2 = High2
+                     }
+            end
+    end.
+
+is_three_kind(Hand, [C, D, H, S]) ->
+    L = lists:sort(fun(A, B) ->
+			   A > B
+		   end, [C band D band H,
+			 D band H band S,
+			 H band S band C,
+			 S band C band D]),
+    is_three_kind(Hand, L, [C, D, H, S]).
+
+is_three_kind(Hand, [H|T], Rep) ->
+    if 
+	H > 0 ->
+            Hand#data{
+              rank = ?HC_THREE_KIND, 
+              high1 = high_bit(H), 
+              score = score(Rep, H, 2)
+             };
+	true ->
+	    is_three_kind(Hand, T, Rep)
+    end;
+
+is_three_kind(_, [], _) ->
+    none.
+
+is_two_pair(Hand, Rep) ->
+    case is_pair(Hand, Rep) of
+        none ->
+            none;
+        Hand1 = #data{ rank = ?HC_PAIR, high1 = High1 } ->
+	    Rep1 = clear_high_bit(Rep, High1),
+	    case is_pair(Hand1, Rep1) of
+                none ->
+                    none;
+                Hand2 = #data{ rank = ?HC_PAIR, high1 = High2 } ->
+                    Hand2#data{ 
+                      rank = ?HC_TWO_PAIR,
+                      high1 = High1,
+                      high2 = High2,
+                      score = score(Rep, High1 bor High2, 1)
+                     }
+            end
+    end.
+
+is_pair(Hand, [C, D, H, S]) ->
+    L = lists:sort(fun(A, B) ->
+			   A > B
+		   end, [C band D,
+			 D band H,
+			 H band S,
+			 S band C,
+			 C band H,
+			 D band S]),
+    is_pair(Hand, L, [C, D, H, S]).
+
+is_pair(Hand, [H|T], Rep) ->
+    if 
+	H > 0 ->
+            Hand#data{ 
+              rank = ?HC_PAIR, 
+              high1 = high_bit(H), 
+              score = score(Rep, H, 3)
+             };
+	true ->
+	    is_pair(Hand, T, Rep)
+    end;
+
+is_pair(_, [], _) ->
+    none.
 
 make_rep(Hand = #data{}) ->
     make_rep(Hand#data.cards);
@@ -122,138 +254,6 @@ score(Rep, High, Bits) ->
     Mask = make_mask(Rep),
     Mask1 = Mask band (bnot High),
     bits:clear_extra_bits(Mask1, Bits).
-
-is_straight_flush(Rep) ->
-    Mask = make_mask(Rep),
-    case is_flush(Mask, Rep) of
-	{_, High, _} ->
-	    case is_straight([High, High, High, High]) of
-		{_, High1, _} ->
-		    {?HC_STRAIGHT_FLUSH, High1, 0};
-		_ ->
-		    junk
-	    end;
-	_ ->
-	    junk
-    end.
-
-is_flush(Rep) ->
-    Mask = make_mask(Rep),
-    is_flush(Mask, Rep).
-
-is_flush(Mask, [H|T]) ->
-    Score = Mask band H,
-    Count = bits:bits1(Score),
-    if 
-	Count < 5 ->
-	    is_flush(Mask, T);
-	true ->
-	    {?HC_FLUSH, bits:clear_extra_bits(Score, 5), 0}
-    end;
-
-is_flush(_, []) ->
-    junk.
-
-is_straight(Rep) ->
-    Temp = make_mask(Rep),
-    if             %AKQJT98765432A
-	Temp band 2#10000000000000 > 0 ->
-	    Value = Temp bor 1;
-	true ->
-	    Value = Temp
-    end,                %AKQJT98765432A
-    is_straight(Value, 2#11111000000000).
-
-is_straight(_, Mask) when Mask < 2#11111 ->
-    junk;
-
-is_straight(Value, Mask) when Mask >= 2#11111 ->
-    if 
-	Value band Mask =:= Mask ->
-	    {?HC_STRAIGHT, Mask, 0};
-	true ->
-	    is_straight(Value, Mask bsr 1)
-    end.
-	
-is_four_kind([C, D, H, S]) ->
-    Value = C band D band H band S,
-    if
-	Value > 0 ->
-	    {?HC_FOUR_KIND, Value, score([C, D, H, S], Value, 1)};
-	true ->
-	    junk
-    end.
-
-is_full_house(Rep) ->
-    case is_three_kind(Rep) of
-	{_, High3, _} ->
-	    case is_pair(clear_high_bit(Rep, High3)) of
-		{_, High2, _} ->
-		    Score = (High3 bsl 16) bor High2,
-		    {?HC_FULL_HOUSE, Score, 0};
-		_ -> 
-		    junk
-	    end;
-	_ ->
-	    junk
-    end.
-
-is_three_kind([C, D, H, S]) ->
-    L = lists:sort(fun(A, B) ->
-			   A > B
-		   end, [C band D band H,
-			 D band H band S,
-			 H band S band C,
-			 S band C band D]),
-    is_three_kind(L, [C, D, H, S]).
-
-is_three_kind([H|T], Rep) ->
-    if 
-	H > 0 ->
-	    {?HC_THREE_KIND, high_bit(H), score(Rep, H, 2)};
-	true ->
-	    is_three_kind(T, Rep)
-    end;
-
-is_three_kind([], _Rep) ->
-    junk.
-
-is_two_pair(Rep) ->
-    case is_pair(Rep) of
-	{?HC_PAIR, High1, _} ->
-	    Rep1 = clear_high_bit(Rep, High1),
-	    case is_pair(Rep1) of
-		{?HC_PAIR, High2, _} ->
-		    High = High1 bor High2, 
-		    {?HC_TWO_PAIR, High1 bor High2, score(Rep, High, 1)};
-		_ ->
-		    junk
-	    end;
-	_ ->
-	    junk
-    end.
-
-is_pair([C, D, H, S]) ->
-    L = lists:sort(fun(A, B) ->
-			   A > B
-		   end, [C band D,
-			 D band H,
-			 H band S,
-			 S band C,
-			 C band H,
-			 D band S]),
-    is_pair(L, [C, D, H, S]).
-
-is_pair([H|T], Rep) ->
-    if 
-	H > 0 ->
-	    {?HC_PAIR, high_bit(H), score(Rep, H, 3)};
-	true ->
-	    is_pair(T, Rep)
-    end;
-
-is_pair([], _Rep) ->
-    junk.
 
 %% Make a list of cards from a space-delimited string 
 
@@ -366,116 +366,66 @@ card_to_string(Card) ->
     Suit = Card band 16#ff,
     face_to_string(Face) ++ " of " ++ suit_to_string(Suit).
     
-describe(H = #hand{ combo = ?HC_STRAIGHT_FLUSH }) ->
+to_string(H = #hand{ rank = ?HC_STRAIGHT_FLUSH }) ->
     "straight flush high " 
-	++ face_to_string(H#hand.high_face1)
+	++ face_to_string(H#hand.high1)
 	++ "s";
 
-describe(H = #hand{ combo = ?HC_FOUR_KIND }) ->
+to_string(H = #hand{ rank = ?HC_FOUR_KIND }) ->
     "four of a kind " 
-	++ face_to_string(H#hand.high_face1)
+	++ face_to_string(H#hand.high1)
 	++ "s";
 	
-describe(H = #hand{ combo = ?HC_FULL_HOUSE }) ->
+to_string(H = #hand{ rank = ?HC_FULL_HOUSE }) ->
     "house of " 
-	++ face_to_string(H#hand.high_face1) 
+	++ face_to_string(H#hand.high1) 
 	++ "s full of " 
-	++ face_to_string(H#hand.high_face2)
+	++ face_to_string(H#hand.high2)
 	++ "s";
 
-describe(H = #hand{ combo = ?HC_FLUSH }) ->
+to_string(H = #hand{ rank = ?HC_FLUSH }) ->
     "flush high "
-	++ face_to_string(H#hand.high_face1)
+	++ face_to_string(H#hand.high1)
 	++ "s";
 	
-describe(H = #hand{ combo = ?HC_STRAIGHT }) ->
+to_string(H = #hand{ rank = ?HC_STRAIGHT }) ->
     "straight high "
-	++ face_to_string(H#hand.high_face1)
+	++ face_to_string(H#hand.high1)
 	++ "s";
 	
-describe(H = #hand{ combo = ?HC_THREE_KIND }) ->
+to_string(H = #hand{ rank = ?HC_THREE_KIND }) ->
     "three of a kind "
-	++ face_to_string(H#hand.high_face1)
+	++ face_to_string(H#hand.high1)
 	++ "s";
 	
-describe(H = #hand{ combo = ?HC_TWO_PAIR }) ->
+to_string(H = #hand{ rank = ?HC_TWO_PAIR }) ->
     "two pairs of "
-	++ face_to_string(H#hand.high_face1)
+	++ face_to_string(H#hand.high1)
 	++ "s and "
-	++ face_to_string(H#hand.high_face2)
+	++ face_to_string(H#hand.high2)
 	++ "s";
 	
-describe(H = #hand{ combo = ?HC_PAIR }) ->
+to_string(H = #hand{ rank = ?HC_PAIR }) ->
     "pair of "
-	++ face_to_string(H#hand.high_face1)
+	++ face_to_string(H#hand.high1)
 	++ "s";
 	
-describe(H = #hand{ combo = ?HC_HIGH_CARD }) ->
+to_string(H = #hand{ rank = ?HC_HIGH_CARD }) ->
     "high card "
-	++ face_to_string(H#hand.high_face1).
+	++ face_to_string(H#hand.high1).
 
-%%% Description for the poker client
+%%% Hand description for the poker client
+	
+export(#data{ rank = Rank, high1 = High3, high2 = High2 }) 
+  when Rank == ?HC_FULL_HOUSE;
+       Rank == ?HC_TWO_PAIR ->
+    H1 = face_from_mask(High3),
+    H2 = face_from_mask(High2),
+    #hand{ rank = Rank, high1 = H1, high2 = H2 };
 
-hand({_, ?HC_STRAIGHT_FLUSH, High, _Score, _PID}) ->
-    _ = #hand{
-      combo = ?HC_STRAIGHT_FLUSH,
-      high_face1 = face_from_mask(High)
-     };
+export(#data{ rank = Rank, high1 = High }) ->
+    #hand{ rank = Rank, high1 = face_from_mask(High) }.
 
-hand({_, ?HC_FOUR_KIND, High, _Score, _PID}) ->
-    _ = #hand{
-      combo = ?HC_FOUR_KIND,
-      high_face1 = face_from_mask(High)
-     };
-	
-hand({_, ?HC_FULL_HOUSE, High, _Score, _PID}) ->
-    High3 = High bsr 16,
-    High2 = High band 16#ffff,
-    _ = #hand{
-      combo = ?HC_FULL_HOUSE,
-      high_face1 = face_from_mask(High3),
-      high_face2 = face_from_mask(High2)
-     };
-
-hand({_, ?HC_FLUSH, High, _Score, _PID}) ->
-    _ = #hand{
-      combo = ?HC_FLUSH,
-      high_face1 = face_from_mask(High)
-     };
-	
-hand({_, ?HC_STRAIGHT, High, _Score, _PID}) ->
-    _ = #hand{
-      combo = ?HC_STRAIGHT,
-      high_face1 = face_from_mask(High)
-     };
-	
-hand({_, ?HC_THREE_KIND, High, _Score, _PID}) ->
-    _ = #hand{
-      combo = ?HC_THREE_KIND,
-      high_face1 = face_from_mask(High)
-     };
-	
-hand({_, ?HC_TWO_PAIR, High, _Score, _PID}) ->
-    High1 = face_from_mask(High),
-    High2 = face_from_mask(High band (bnot High1)),
-    _ = #hand{
-      combo = ?HC_TWO_PAIR,
-      high_face1 = face_from_mask(High1),
-      high_face2 = face_from_mask(High2)
-     };
-	
-hand({_, ?HC_PAIR, High, _Score, _PID}) ->
-    _ = #hand{
-      combo = ?HC_PAIR,
-      high_face1 = face_from_mask(High)
-     };
-	
-hand({_, ?HC_HIGH_CARD, High, _Score, _PID}) ->
-    _ = #hand{
-      combo = ?HC_HIGH_CARD,
-      high_face1 = face_from_mask(High)
-     }.
-         
 %%%
 %%% Test suite
 %%%
@@ -488,216 +438,339 @@ make_rep_test() ->
      2#00000000000000]
 	= make_rep(make_cards("4D JH 5D 8C QD TD 7H")).
 
--define(score(Cards),
-	score(make_rep(make_cards(Cards)))).
+rank_test_hand(Cards) ->
+    Hand = new(0, 0, make_cards(Cards)),
+    rank(Hand).
 
-debug_score(Cards) ->
-    score(make_rep(make_cards(Cards))).
-
-rank_high_card_test() ->
-    ?assertEqual({?HC_HIGH_CARD, 2#00111011000000, 0},
-	   ?score("4D JH 5D 8C QD TD 7H")),
-    ?assertEqual({?HC_HIGH_CARD, 2#11000110010000, 0},
-	   ?score("8C AD 5H 3S KD 9D 4D")),
-    ?assertEqual({?HC_HIGH_CARD, 2#00110010011000, 0},
-	   ?score("4C JH 5C 8D QC 2C 3D")).
+short(Hand) ->
+    {Hand#data.rank, 
+     Hand#data.high1, 
+     Hand#data.high2,
+     Hand#data.score}.
     
-rank_pair_test() ->
-    ?assertEqual({?HC_PAIR, 2#00000000000100, 2#01100100000000},
-	   ?score("KD 3S 5H 3D 6C QH 9S")),
-    ?assertEqual({?HC_PAIR, 2#10000000000000, 2#01000100010000},
-	   ?score("AC 2D 5D AS 4H 9D KD")),
-    ?assertEqual({?HC_PAIR, 2#00000000000100, 2#01011000000000},
-	   ?score("9S JH 5D TS 3C KC 3H")).
+rank_high_card1_test() ->
+    H = rank_test_hand("4D JH 5D 8C QD TD 7H"),
+    ?assertEqual(?HC_HIGH_CARD, H#data.rank),
+    ?assertEqual(2#00111011000000, H#data.high1),
+    ?assertEqual(0, H#data.score).
 
-rank_two_pair_test() ->
-    ?assertEqual({?HC_TWO_PAIR, 2#01100000000000, 2#00010000000000},
-	   ?score("QC KD JD QD JC 5C KC")),
-    ?assertEqual({?HC_TWO_PAIR, 2#00000001100000, 2#00010000000000},
-	   ?score("7H 3H 6C TD 7C JH 6H")),
-    ?assertEqual({?HC_TWO_PAIR, 2#00010000010000, 2#00100000000000},
-	   ?score("4D 3S 5H JD JC QH 5S")),
-    ?assertEqual({?HC_TWO_PAIR, 2#10000000010000, 2#00000100000000},
-	   ?score("AC 2D 5D AS 5H 9D 4D")),
-    ?assertEqual({?HC_TWO_PAIR, 2#00010000010000, 2#01000000000000},
-	   ?score("9S JH 5D JS 5C KC 3D")).
+rank_high_card2_test() ->
+    H = rank_test_hand("8C AD 5H 3S KD 9D 4D"),
+    ?assertEqual(?HC_HIGH_CARD, H#data.rank),
+    ?assertEqual(2#11000110010000, H#data.high1),
+    ?assertEqual(0, H#data.score).
 
-rank_three_kind_test() ->
-    ?assertEqual({?HC_THREE_KIND, 2#00100000000000, 2#01000100000000},
-	   ?score("KH 9S 5H QD QC QH 3S")),
-    ?assertEqual({?HC_THREE_KIND, 2#01000000000000, 2#10000100000000},
-	   ?score("AC KC KD KS 7H 9D 4D")),
-    ?assertEqual({?HC_THREE_KIND, 2#00100000000000, 2#01001000000000},
-	   ?score("KS TS QD QS QH 4C 5D")).
+rank_high_card3_test() ->
+    H = rank_test_hand("4C JH 5C 8D QC 2C 3D"),
+    ?assertEqual(?HC_HIGH_CARD, H#data.rank),
+    ?assertEqual(2#00110010011000, H#data.high1), 
+    ?assertEqual(0, H#data.score).
+    
+rank_pair1_test() ->
+    H = rank_test_hand("KD 3S 5H 3D 6C QH 9S"),
+    ?assertEqual(?HC_PAIR, H#data.rank),
+    ?assertEqual(2#00000000000100, H#data.high1),
+    ?assertEqual(2#01100100000000, H#data.score).
 
-rank_straight_test() ->
-    ?assertEqual({?HC_STRAIGHT, 2#01111100000000, 0},
-	   ?score("KC QS JH TC 9C 4D 3S")),
-    ?assertEqual({?HC_STRAIGHT, 2#11111000000000, 0},
-	   ?score("AC KS QH JC TC 9D 4D")),
-    ?assertEqual({?HC_STRAIGHT, 2#01111100000000, 0},
-	   ?score("KS QD JS TC 9S 2D 7S")),
-    ?assertEqual({?HC_STRAIGHT, 2#00000000011111, 0},
-	   ?score("5C 4D 3H 2C AD 7H 9S")),
-    ?assertEqual({?HC_STRAIGHT, 2#00000011111000, 0},
-	   ?score("5H 4S JC 8S 7D 6C 3C")).
+rank_pair2_test() ->
+    H = rank_test_hand("AC 2D 5D AS 4H 9D KD"),
+    ?assertEqual(?HC_PAIR, H#data.rank),
+    ?assertEqual(2#10000000000000, H#data.high1),
+    ?assertEqual(2#01000100010000, H#data.score).
 
-rank_flush_test() ->
-    ?assertEqual({?HC_FLUSH, 2#00110000011010, 0},
-	   ?score("4D JD 5D JC QD 2D 7H")),
-    ?assertEqual({?HC_FLUSH, 2#11000100011000, 0},
-	   ?score("8C AD 5D AS KD 9D 4D")),
-    ?assertEqual({?HC_FLUSH, 2#00110000011100, 0},
-	   ?score("4C JC 5C 8D QC 3C 7S")).
+rank_pair3_test() ->
+    H = rank_test_hand("9S JH 5D TS 3C KC 3H"),
+    ?assertEqual(?HC_PAIR, H#data.rank),
+    ?assertEqual(2#00000000000100, H#data.high1),
+    ?assertEqual(2#01011000000000, H#data.score).
 
-rank_full_house_test() ->
-    ?assertEqual({?HC_FULL_HOUSE, (2#00010000000000 bsl 16) bor 2#00100000000000, 0},
- 	   ?score("4D JS 5H JD JC QH QS")),
-    ?assertEqual({?HC_FULL_HOUSE, (2#10000000000000 bsl 16) bor 2#01000000000000, 0},
- 	   ?score("AC AD KD AS KH 9D 4D")),
-    ?assertEqual({?HC_FULL_HOUSE, (2#00010000000000 bsl 16) bor 2#01000000000000, 0},
- 	   ?score("3S JH JD JS KH KC 5D")),
-    ?assertEqual({?HC_FULL_HOUSE, (2#00100000000000 bsl 16) bor 2#00001000000000, 0},
-	   ?score("TD QH TH TC 6C QD QC")).
+rank_two_pair1_test() ->
+    H = rank_test_hand("QC KD JD QD JC 5C KC"),
+    ?assertEqual(?HC_TWO_PAIR, H#data.rank),
+    ?assertEqual(2#01000000000000, H#data.high1),
+    ?assertEqual(2#00100000000000, H#data.high2),
+    ?assertEqual(2#00010000000000, H#data.score).
 
-rank_four_kind_test() ->
-    ?assertEqual({?HC_FOUR_KIND, 2#00100000000000, 2#10000000000000},
-	   ?score("4D AS 5H QD QC QH QS")),
-    ?assertEqual({?HC_FOUR_KIND, 2#01000000000000, 2#10000000000000},
-	   ?score("AC KC KD KS KH 9D 4D")),
-    ?assertEqual({?HC_FOUR_KIND, 2#00100000000000, 2#01000000000000},
-	   ?score("KS TS QD QS QH QC 5D")).
+rank_two_pair2_test() ->
+    H = rank_test_hand("7H 3H 6C TD 7C JH 6H"),
+    ?assertEqual(?HC_TWO_PAIR, H#data.rank),
+    ?assertEqual(2#00000001000000, H#data.high1),
+    ?assertEqual(2#00000000100000, H#data.high2),
+    ?assertEqual(2#00010000000000, H#data.score).
 
-rank_straight_flush_test() ->
-    ?assertEqual({?HC_STRAIGHT_FLUSH, 2#01111100000000, 0},
-	   ?score("KC QC JC TC 9C 4D AS")),
-    ?assertEqual({?HC_STRAIGHT_FLUSH, 2#11111000000000, 0},
-	   ?score("AC KC QC JC TC 9D 4D")),
-    ?assertEqual({?HC_STRAIGHT_FLUSH, 2#01111100000000, 0},
-	   ?score("KS QS JS TS 9S AD 7S")).
+rank_two_pair3_test() ->
+    H = rank_test_hand("4D 3S 5H JD JC QH 5S"),
+    ?assertEqual(?HC_TWO_PAIR, H#data.rank),
+    ?assertEqual(2#00010000000000, H#data.high1),
+    ?assertEqual(2#00000000010000, H#data.high2),
+    ?assertEqual(2#00100000000000, H#data.score).
+
+rank_two_pair4_test() ->
+    H = rank_test_hand("AC 2D 5D AS 5H 9D 4D"),
+    ?assertEqual(?HC_TWO_PAIR, H#data.rank),
+    ?assertEqual(2#10000000000000, H#data.high1),
+    ?assertEqual(2#00000000010000, H#data.high2),
+    ?assertEqual(2#00000100000000, H#data.score).
+
+rank_two_pair5_test() ->
+    H = rank_test_hand("9S JH 5D JS 5C KC 3D"),
+    ?assertEqual(?HC_TWO_PAIR, H#data.rank),
+    ?assertEqual(2#00010000000000, H#data.high1),
+    ?assertEqual(2#00000000010000, H#data.high2),
+    ?assertEqual(2#01000000000000, H#data.score).
+
+rank_three_kind1_test() ->
+    H = rank_test_hand("KH 9S 5H QD QC QH 3S"),
+    ?assertEqual(?HC_THREE_KIND, H#data.rank),
+    ?assertEqual(2#00100000000000, H#data.high1),
+    ?assertEqual(2#01000100000000, H#data.score).
+
+rank_three_kind2_test() ->
+    H = rank_test_hand("AC KC KD KS 7H 9D 4D"),
+    ?assertEqual(?HC_THREE_KIND, H#data.rank),
+    ?assertEqual(2#01000000000000, H#data.high1),
+    ?assertEqual(2#10000100000000, H#data.score).
+
+rank_three_kind3_test() ->
+    H = rank_test_hand("KS TS QD QS QH 4C 5D"),
+    ?assertEqual(?HC_THREE_KIND, H#data.rank),
+    ?assertEqual(2#00100000000000, H#data.high1),
+    ?assertEqual(2#01001000000000, H#data.score).
+
+rank_straight1_test() ->
+    H = rank_test_hand("KC QS JH TC 9C 4D 3S"),
+    ?assertEqual(?HC_STRAIGHT, H#data.rank),
+    ?assertEqual(2#01111100000000, H#data.high1),
+    ?assertEqual(0, H#data.score).
+
+rank_straight2_test() ->
+    H = rank_test_hand("AC KS QH JC TC 9D 4D"),
+    ?assertEqual(?HC_STRAIGHT, H#data.rank),
+    ?assertEqual(2#11111000000000, H#data.high1),
+    ?assertEqual(0, H#data.score).
+
+rank_straight3_test() ->
+    H = rank_test_hand("KS QD JS TC 9S 2D 7S"),
+    ?assertEqual(?HC_STRAIGHT, H#data.rank),
+    ?assertEqual(2#01111100000000, H#data.high1),
+    ?assertEqual(0, H#data.score).
+
+rank_straight4_test() ->
+    H = rank_test_hand("5C 4D 3H 2C AD 7H 9S"),
+    ?assertEqual(?HC_STRAIGHT, H#data.rank),
+    ?assertEqual(2#00000000011111, H#data.high1),
+    ?assertEqual(0, H#data.score).
+
+rank_straight5_test() ->
+    H = rank_test_hand("5H 4S JC 8S 7D 6C 3C"),
+    ?assertEqual(?HC_STRAIGHT, H#data.rank),
+    ?assertEqual(2#00000011111000, H#data.high1),
+    ?assertEqual(0, H#data.score).
+
+rank_flush1_test() ->
+    H = rank_test_hand("4D JD 5D JC QD 2D 7H"),
+    ?assertEqual(?HC_FLUSH, H#data.rank),
+    ?assertEqual(2#00110000011010, H#data.high1),
+    ?assertEqual(0, H#data.score).
+
+rank_flush2_test() ->
+    H = rank_test_hand("8C AD 5D AS KD 9D 4D"),
+    ?assertEqual(?HC_FLUSH, H#data.rank),
+    ?assertEqual(2#11000100011000, H#data.high1),
+    ?assertEqual(0, H#data.score).
+
+rank_flush3_test() ->
+    H = rank_test_hand("4C JC 5C 8D QC 3C 7S"),
+    ?assertEqual(?HC_FLUSH, H#data.rank),
+    ?assertEqual(2#00110000011100, H#data.high1),
+    ?assertEqual(0, H#data.score).
+
+rank_full_house1_test() ->
+    H = rank_test_hand("4D JS 5H JD JC QH QS"),
+    ?assertEqual(?HC_FULL_HOUSE, H#data.rank),
+    ?assertEqual(2#00010000000000, H#data.high1),
+    ?assertEqual(2#00100000000000, H#data.high2),
+    ?assertEqual(24, H#data.score).
+
+rank_full_house2_test() ->
+    H = rank_test_hand("AC AD KD AS KH 9D 4D"),
+    ?assertEqual(?HC_FULL_HOUSE, H#data.rank),
+    ?assertEqual(2#10000000000000, H#data.high1),
+    ?assertEqual(2#01000000000000, H#data.high2),
+    ?assertEqual(264, H#data.score).
+
+rank_full_house3_test() ->
+    H = rank_test_hand("3S JH JD JS KH KC 5D"),
+    ?assertEqual(?HC_FULL_HOUSE, H#data.rank),
+    ?assertEqual(2#00010000000000, H#data.high1),
+    ?assertEqual(2#01000000000000, H#data.high2),
+    ?assertEqual(20, H#data.score).
+
+rank_full_house4_test() ->
+    H = rank_test_hand("TD QH TH TC 6C QD QC"),
+    ?assertEqual(?HC_FULL_HOUSE, H#data.rank),
+    ?assertEqual(2#00100000000000, H#data.high1),
+    ?assertEqual(2#00001000000000, H#data.high2),
+    ?assertEqual(32, H#data.score).
+
+rank_four_kind1_test() ->
+    H = rank_test_hand("4D AS 5H QD QC QH QS"),
+    ?assertEqual(?HC_FOUR_KIND, H#data.rank),
+    ?assertEqual(2#00100000000000, H#data.high1),
+    ?assertEqual(2#10000000000000, H#data.score).
+
+rank_four_kind2_test() ->
+    H = rank_test_hand("AC KC KD KS KH 9D 4D"),
+    ?assertEqual(?HC_FOUR_KIND, H#data.rank),
+    ?assertEqual(2#01000000000000, H#data.high1),
+    ?assertEqual(2#10000000000000, H#data.score).
+
+rank_four_kind3_test() ->
+    H = rank_test_hand("KS TS QD QS QH QC 5D"),
+    ?assertEqual(?HC_FOUR_KIND, H#data.rank),
+    ?assertEqual(2#00100000000000, H#data.high1),
+    ?assertEqual(2#01000000000000, H#data.score).
+
+rank_straight_flush1_test() ->
+    H = rank_test_hand("KC QC JC TC 9C 4D AS"),
+    ?assertEqual(?HC_STRAIGHT_FLUSH, H#data.rank),
+    ?assertEqual(2#01111100000000, H#data.high1),
+    ?assertEqual(0, H#data.score).
+
+rank_straight_flush2_test() ->
+    H = rank_test_hand("AC KC QC JC TC 9D 4D"),
+    ?assertEqual(?HC_STRAIGHT_FLUSH, H#data.rank),
+    ?assertEqual(2#11111000000000, H#data.high1),
+    ?assertEqual(0, H#data.score).
+
+rank_straight_flush3_test() ->
+    H = rank_test_hand("KS QS JS TS 9S AD 7S"),
+    ?assertEqual(?HC_STRAIGHT_FLUSH, H#data.rank),
+    ?assertEqual(2#01111100000000, H#data.high1),
+    ?assertEqual(0, H#data.score).
 
 high_card_win_test() ->
-    S1 = ?score("4D JH 5D 8C QD TD 7H"),
-    S2 = ?score("8C AD 5H 3S KD 9D 4D"),
-    S3 = ?score("4C JH 5C 8D QC 2C 3D"),
-    ?assertEqual(?HC_HIGH_CARD, element(1, S1)),
-    ?assertEqual(?HC_HIGH_CARD, element(1, S2)),
-    ?assertEqual(?HC_HIGH_CARD, element(1, S3)),
-    ?assertEqual(true, S2 > S1),
-    ?assertEqual(true, S2 > S3),
-    ?assertEqual(true, S1 > S3).
+    H1 = rank_test_hand("4D JH 5D 8C QD TD 7H"),
+    H2 = rank_test_hand("8C AD 5H 3S KD 9D 4D"),
+    H3 = rank_test_hand("4C JH 5C 8D QC 2C 3D"),
+    ?assertEqual(?HC_HIGH_CARD, H1#data.rank),
+    ?assertEqual(?HC_HIGH_CARD, H2#data.rank),
+    ?assertEqual(?HC_HIGH_CARD, H3#data.rank),
+    ?assertEqual(true, short(H2) > short(H1)),
+    ?assertEqual(true, short(H2) > short(H3)),
+    ?assertEqual(true, short(H1) > short(H3)).
 
 pair_win_test() ->
-    S1 = ?score("KD 3S 5H 3D 6C QH 9S"),
-    S2 = ?score("AC 2D 5D AS 4H 9D KD"),
-    S3 = ?score("9S JH 5D TS 3C KC 3H"),
-    ?assertEqual(?HC_PAIR, element(1, S1)),
-    ?assertEqual(?HC_PAIR, element(1, S2)),
-    ?assertEqual(?HC_PAIR, element(1, S3)),
-    ?assertEqual(true, S2 > S1),
-    ?assertEqual(true, S2 > S3),
-    ?assertEqual(true, S1 > S3).
+    H1 = rank_test_hand("KD 3S 5H 3D 6C QH 9S"),
+    H2 = rank_test_hand("AC 2D 5D AS 4H 9D KD"),
+    H3 = rank_test_hand("9S JH 5D TS 3C KC 3H"),
+    ?assertEqual(?HC_PAIR, H1#data.rank),
+    ?assertEqual(?HC_PAIR, H2#data.rank),
+    ?assertEqual(?HC_PAIR, H3#data.rank),
+    ?assertEqual(true, short(H2) > short(H1)),
+    ?assertEqual(true, short(H2) > short(H3)),
+    ?assertEqual(true, short(H1) > short(H3)).
 
 two_pair_win_test() ->
-    S1 = ?score("4D 3S 5H JD JC QH 5S"),
-    S2 = ?score("AC 2D 5D AS 5H 9D 4D"),
-    S3 = ?score("9S JH 5D JS 5C KC 3D"),
-    ?assertEqual(?HC_TWO_PAIR, element(1, S1)),
-    ?assertEqual(?HC_TWO_PAIR, element(1, S2)),
-    ?assertEqual(?HC_TWO_PAIR, element(1, S3)),
-    ?assertEqual(true, S2 > S1),
-    ?assertEqual(true, S2 > S3),
-    ?assertEqual(true, S3 > S1).
+    H1 = rank_test_hand("4D 3S 5H JD JC QH 5S"),
+    H2 = rank_test_hand("AC 2D 5D AS 5H 9D 4D"),
+    H3 = rank_test_hand("9S JH 5D JS 5C KC 3D"),
+    ?assertEqual(?HC_TWO_PAIR, H1#data.rank),
+    ?assertEqual(?HC_TWO_PAIR, H2#data.rank),
+    ?assertEqual(?HC_TWO_PAIR, H3#data.rank),
+    ?assertEqual(true, short(H2) > short(H1)),
+    ?assertEqual(true, short(H2) > short(H3)),
+    ?assertEqual(true, short(H3) > short(H1)).
 
 three_kind_win_test() ->    
-    S1 = ?score("KH 9S 5H QD QC QH 3S"),
-    S2 = ?score("AC KC KD KS 7H 9D 4D"),
-    S3 = ?score("KS TS QD QS QH 4C 5D"),
-    ?assertEqual(?HC_THREE_KIND, element(1, S1)),
-    ?assertEqual(?HC_THREE_KIND, element(1, S2)),
-    ?assertEqual(?HC_THREE_KIND, element(1, S3)),
-    ?assertEqual(true, S2 > S1),
-    ?assertEqual(true, S2 > S3),
-    ?assertEqual(true, S3 > S1).
+    H1 = rank_test_hand("KH 9S 5H QD QC QH 3S"),
+    H2 = rank_test_hand("AC KC KD KS 7H 9D 4D"),
+    H3 = rank_test_hand("KS TS QD QS QH 4C 5D"),
+    ?assertEqual(?HC_THREE_KIND, H1#data.rank),
+    ?assertEqual(?HC_THREE_KIND, H2#data.rank),
+    ?assertEqual(?HC_THREE_KIND, H3#data.rank),
+    ?assertEqual(true, short(H2) > short(H1)),
+    ?assertEqual(true, short(H2) > short(H3)),
+    ?assertEqual(true, short(H3) > short(H1)).
 
 straight_win_test() ->
-    S1 = ?score("KC QS JH TC 9C 4D 3S"),
-    S2 = ?score("AC KS QH JC TC 9D 4D"),
-    S3 = ?score("KS QD JS TC 9S 2D 7S"),
-    ?assertEqual(?HC_STRAIGHT, element(1, S1)),
-    ?assertEqual(?HC_STRAIGHT, element(1, S2)),
-    ?assertEqual(?HC_STRAIGHT, element(1, S3)),
-    ?assertEqual(true, S2 > S1),
-    ?assertEqual(true, S2 > S3),
-    ?assertEqual(true, S1 == S3).
+    H1 = rank_test_hand("KC QS JH TC 9C 4D 3S"),
+    H2 = rank_test_hand("AC KS QH JC TC 9D 4D"),
+    H3 = rank_test_hand("KS QD JS TC 9S 2D 7S"),
+    ?assertEqual(?HC_STRAIGHT, H1#data.rank),
+    ?assertEqual(?HC_STRAIGHT, H2#data.rank),
+    ?assertEqual(?HC_STRAIGHT, H3#data.rank),
+    ?assertEqual(true, short(H2) > short(H1)),
+    ?assertEqual(true, short(H2) > short(H3)),
+    ?assertEqual(true, short(H1) == short(H3)).
 
 flush_win_test() ->
-    S1 = ?score("4D JD 5D JC QD 2D 7H"),
-    S2 = ?score("8C AD 5D AS KD 9D 4D"),
-    S3 = ?score("4C JC 5C 8D QC 3C 7S"),
-    S4 = ?score("4C JC 7C 8D QC 5C 7S"),
-    ?assertEqual(?HC_FLUSH, element(1, S1)),
-    ?assertEqual(?HC_FLUSH, element(1, S2)),
-    ?assertEqual(?HC_FLUSH, element(1, S3)),
-    ?assertEqual(?HC_FLUSH, element(1, S4)),
-    ?assertEqual(true, S2 > S1),
-    ?assertEqual(true, S2 > S3),
-    ?assertEqual(true, S3 > S1),
-    ?assertEqual(true, S4 > S1).
+    H1 = rank_test_hand("4D JD 5D JC QD 2D 7H"),
+    H2 = rank_test_hand("8C AD 5D AS KD 9D 4D"),
+    H3 = rank_test_hand("4C JC 5C 8D QC 3C 7S"),
+    H4 = rank_test_hand("4C JC 7C 8D QC 5C 7S"),
+    ?assertEqual(?HC_FLUSH, H1#data.rank),
+    ?assertEqual(?HC_FLUSH, H2#data.rank),
+    ?assertEqual(?HC_FLUSH, H3#data.rank),
+    ?assertEqual(?HC_FLUSH, H4#data.rank),
+    ?assertEqual(true, short(H2) > short(H1)),
+    ?assertEqual(true, short(H2) > short(H3)),
+    ?assertEqual(true, short(H3) > short(H1)),
+    ?assertEqual(true, short(H4) > short(H1)).
 
 four_kind_win_test() ->
-    S1 = ?score("4D AS 5H QD QC QH QS"),
-    S2 = ?score("AC KC KD KS KH 9D 4D"),
-    S3 = ?score("KS TS QD QS QH QC 5D"),
-    ?assertEqual(?HC_FOUR_KIND, element(1, S1)),
-    ?assertEqual(?HC_FOUR_KIND, element(1, S2)),
-    ?assertEqual(?HC_FOUR_KIND, element(1, S3)),
-    ?assertEqual(true, S2 > S1),
-    ?assertEqual(true, S2 > S3),
-    ?assertEqual(true, S1 > S3).
+    H1 = rank_test_hand("4D AS 5H QD QC QH QS"),
+    H2 = rank_test_hand("AC KC KD KS KH 9D 4D"),
+    H3 = rank_test_hand("KS TS QD QS QH QC 5D"),
+    ?assertEqual(?HC_FOUR_KIND, H1#data.rank),
+    ?assertEqual(?HC_FOUR_KIND, H2#data.rank),
+    ?assertEqual(?HC_FOUR_KIND, H3#data.rank),
+    ?assertEqual(true, short(H2) > short(H1)),
+    ?assertEqual(true, short(H2) > short(H3)),
+    ?assertEqual(true, short(H1) > short(H3)).
 
 straight_flush_win_test() ->
-    S1 = ?score("KC QC JC TC 9C 4D AS"),
-    S2 = ?score("AC KC QC JC TC 9D 4D"),
-    S3 = ?score("KS QS JS TS 9S AD 7S"),
-    ?assertEqual(?HC_STRAIGHT_FLUSH, element(1, S1)),
-    ?assertEqual(?HC_STRAIGHT_FLUSH, element(1, S2)),
-    ?assertEqual(?HC_STRAIGHT_FLUSH, element(1, S3)),
-    ?assertEqual(true, S2 > S1),
-    ?assertEqual(true, S2 > S3),
-    ?assertEqual(true, S1 == S3).
+    H1 = rank_test_hand("KC QC JC TC 9C 4D AS"),
+    H2 = rank_test_hand("AC KC QC JC TC 9D 4D"),
+    H3 = rank_test_hand("KS QS JS TS 9S AD 7S"),
+    ?assertEqual(?HC_STRAIGHT_FLUSH, H1#data.rank),
+    ?assertEqual(?HC_STRAIGHT_FLUSH, H2#data.rank),
+    ?assertEqual(?HC_STRAIGHT_FLUSH, H3#data.rank),
+    ?assertEqual(true, short(H2) > short(H1)),
+    ?assertEqual(true, short(H2) > short(H3)),
+    ?assertEqual(true, short(H1) == short(H3)).
 
 full_house_win_test() ->
-    S1 = ?score("4D JS 5H JD JC QH QS"),
-    S2 = ?score("AC AD KD AS KH 9D 4D"),
-    S3 = ?score("3S JH JD JS KH KC 5D"),
-    ?assertEqual(?HC_FULL_HOUSE, element(1, S1)),
-    ?assertEqual(?HC_FULL_HOUSE, element(1, S2)),
-    ?assertEqual(?HC_FULL_HOUSE, element(1, S3)),
-    ?assertEqual(true, S2 > S1),
-    ?assertEqual(true, S2 > S3),
-    ?assertEqual(true, S3 > S1).
+    H1 = rank_test_hand("4D JS 5H JD JC QH QS"),
+    H2 = rank_test_hand("AC AD KD AS KH 9D 4D"),
+    H3 = rank_test_hand("3S JH JD JS KH KC 5D"),
+    ?assertEqual(?HC_FULL_HOUSE, H1#data.rank),
+    ?assertEqual(?HC_FULL_HOUSE, H2#data.rank),
+    ?assertEqual(?HC_FULL_HOUSE, H3#data.rank),
+    ?assertEqual(true, short(H2) > short(H1)),
+    ?assertEqual(true, short(H2) > short(H3)),
+    ?assertEqual(true, short(H3) > short(H1)).
 
 two_pair_win1_test() ->
-    S1 = ?score("5C TC 7H KH 5S TS KS"),
-    S2 = ?score("5C TC 7H KH 5S KC TH"),
-    ?assertEqual(?HC_TWO_PAIR, element(1, S1)),
-    ?assertEqual(?HC_TWO_PAIR, element(1, S2)),
-    ?assertEqual(true, S1 == S2).
+    H1 = rank_test_hand("5C TC 7H KH 5S TS KS"),
+    H2 = rank_test_hand("5C TC 7H KH 5S KC TH"),
+    ?assertEqual(?HC_TWO_PAIR, H1#data.rank),
+    ?assertEqual(?HC_TWO_PAIR, H2#data.rank),
+    ?assertEqual(true, short(H1) == short(H2)).
 
 high_card_win1_test() ->
-    S1 = ?score("KH TC 9H 7D 6H 5D 2S"),
-    S2 = ?score("KH TC 9H 7H 6H 3D 2S"),
-    ?assertEqual(?HC_HIGH_CARD, element(1, S1)),
-    ?assertEqual(?HC_HIGH_CARD, element(1, S2)),
-    ?assertEqual(true, S1 == S2).
+    H1 = rank_test_hand("KH TC 9H 7D 6H 5D 2S"),
+    H2 = rank_test_hand("KH TC 9H 7H 6H 3D 2S"),
+    ?assertEqual(?HC_HIGH_CARD, H1#data.rank),
+    ?assertEqual(?HC_HIGH_CARD, H2#data.rank),
+    ?assertEqual(true, short(H1) == short(H2)).
 
 full_house_win1_test() ->
-    S1 = ?score("2H 2C 5H 5S 5C 7C 4D"),
-    S2 = ?score("2H 2C 5H 5S 5D 4D 2D"),
-    ?assertEqual(?HC_FULL_HOUSE, element(1, S1)),
-    ?assertEqual(?HC_FULL_HOUSE, element(1, S2)),
-    ?assertEqual(true, S1 == S2).
+    H1 = rank_test_hand("2H 2C 5H 5S 5C 7C 4D"),
+    H2 = rank_test_hand("2H 2C 5H 5S 5D 4D 2D"),
+    ?assertEqual(?HC_FULL_HOUSE, H1#data.rank),
+    ?assertEqual(?HC_FULL_HOUSE, H2#data.rank),
+    ?assertEqual(true, short(H1) > short(H2)).
 
 print_bin(X) ->
     io:format("AKQJT98765432A~n"),
