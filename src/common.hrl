@@ -22,23 +22,6 @@
 	  trace
 	 }).
 
--record(bot, {
-	  nick,
-	  player,
-          pid,
-	  game,
-          gid,
-	  socket,
-	  actions,
-          filters,
-	  balance,
-	  seat_num,
-	  irc_game_id,
-	  done,
-          games_to_play,
-          connect_attempts
-	 }).
-
 -define(PLAYER_TIMEOUT, 15000).
 -define(START_DELAY, 14000).
 
@@ -106,6 +89,7 @@
 -define(PS_BET, 64). 
 -define(PS_RESERVED, 128). % reserved seat
 -define(PS_AUTOPLAY, 256).
+-define(PS_MUCK, 512). % will show cards
 
 -define(PS_ANY, 
 	?PS_PLAY bor
@@ -188,9 +172,9 @@
           pid = none,
 	  cards = [], 
 	  rank = none,
-	  score = 0,
 	  high1 = none,
-          high2 = none
+          high2 = none,
+	  score = 0
 	 }).
 
 -record(player_hand, {

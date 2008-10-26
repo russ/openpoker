@@ -1,15 +1,11 @@
 %%% Copyright (C) 2005-2008 Wager Labs, SA
 
 -module(observer).
--behaviour(gen_server).
 
--export([init/1, handle_call/3, handle_cast/2, 
-	 handle_info/2, terminate/2, code_change/3]).
+-export([start/1, stop/1, observe/2]).
 
--export([start/1, stop/1]).
-
--include("test.hrl").
 -include("common.hrl").
+-include("bot.hrl").
 -include("pp.hrl").
 
 -record(obs, {
@@ -17,408 +13,220 @@
 	  trace,
 	  parent,
 	  gid,
-	  socket,
 	  winners,
 	  seats,
+          games_started,
           games_to_watch,
-          cancel_count
+          cancel_count,
+          stop,
+          events
 	 }).
 
-new(Parent) ->
-    #obs {
-     trace = false,
-     parent = Parent,
-     socket = none,
-     winners = gb_trees:empty(),
-     seats = gb_trees:empty(),
-     games_to_watch = 1,
-     cancel_count = -1
-    }.
+start([Parent, Trace, GamesToWatch]) ->
+    Obs = #obs {
+      trace = Trace,
+      parent = Parent,
+      winners = gb_trees:empty(),
+      seats = gb_trees:empty(),
+      games_started = 0,
+      games_to_watch = GamesToWatch,
+      cancel_count = -1,
+      stop = false,
+      events = []
+     },
+    {ok, observe, Obs}.
 
-start(Parent) ->
-    gen_server:start(observer, [Parent], []).
-
-init([Parent]) ->
-    process_flag(trap_exit, true),
-    {ok, new(Parent)}.
-
-stop(Ref) ->
-    gen_server:cast(Ref, stop).
-
-terminate(_Reason, Data) ->
-    case Data#obs.socket of
-	none ->
-	    ignore;
-	Socket ->
-	    gen_tcp:close(Socket)
-    end,
+stop(_) ->
     ok.
 
-handle_cast({'ID', ID}, Data) ->
-    {noreply, Data#obs{ id = ID }};
-
-handle_cast({'TRACE', On}, Data) ->
-    {noreply, Data#obs{ trace = On }};
-
-handle_cast({'GAMES TO PLAY', N}, Data) ->
-    {noreply, Data#obs{ games_to_watch = N}};
-
-handle_cast(stop, Data) ->
-    {stop, normal, Data};
-
-handle_cast(Event, Data) ->
-    ok = ?tcpsend1(Data#obs.socket, Event),
-    {noreply, Data}.
-
-handle_call(X = {'CONNECT', Host, Port}, From, Data) ->
-    case tcp_server:start_client(Host, Port, 1024) of
-        {ok, Sock} ->
-            {reply, ok, Data#obs{ socket = Sock }};
-        {error, E} when E == eaddrnotavail; 
-                        E == econnrefused ->
-            stats:sum(bot_connect_errors, 1),
-            timer:sleep(random:uniform(5000)),
-            handle_call(X, From, Data)
-    end;
-
-handle_call('ID', _From, Data) ->
-    {reply, Data#obs.id, Data};
-
-handle_call(Event, From, Data) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {self, self()}, 
-			      {from, From},
-			      {message, Event}]),
-    {noreply, Data}.
-
-handle_info({tcp_closed, _Socket}, Data) ->
-    if 
-	Data#obs.trace ->
-	    catch io:format("Observer ~p: Connection closed!~n", [Data]);
+observe(R, Data) ->
+    Data1 = process(R, Data),
+    maybe_report(R, Data1),
+    if
+        Data#obs.stop ->
+            Next = stop,
+            Events = Data#obs.events;
         true ->
-	    ok
+            Next = continue,
+            Events = []
     end,
-    {stop, normal, Data#obs{ socket = none }};
+    {Next, Data1, Events}.
 
-handle_info({tcp, _Socket, Bin}, Data) ->
-    case pp:read(Bin) of
-	none ->
-            error_logger:info_report([{module, ?MODULE}, 
-                                      {line, ?LINE},
-                                      {observer, Data}, 
-                                      {bin, Bin}
-                                     ]),
-	    {noreply, Data};
-	Event ->
-	    handle(Event, Data)
-    end;
-	    
-handle_info({'EXIT', _Pid, _Reason}, Data) ->
-    %% child exit?
-    {noreply, Data};
-
-handle_info(Info, Data) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {self, self()}, 
-			      {message, Info}]),
-    {noreply, Data}.
-
-code_change(_OldVsn, Data, _Extra) ->
-    {ok, Data}.
-
-handle(#pong{}, Data) ->
-    {noreply, Data};
-
-handle(R = #ping{}, Data) ->
-    Pong = #pong{ orig_send_time = R#ping.send_time },
-    ok = ?tcpsend1(Data#obs.socket, Pong),
-    {noreply, Data};
-
-handle(R = #game_info{}, Data) ->
-    if 
-	Data#obs.trace ->
-	    catch io:format("Game #~w, #players: ~w, joined: ~w, waiting: ~w; ",
-                            [R#game_info.game, R#game_info.required, 
-                             R#game_info.joined, R#game_info.waiting]),
-            Limit = R#game_info.limit,
-            catch io:format("limit: low: ~w, high: ~w~n", 
-                            [Limit#limit.low, Limit#limit.high]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(R = #player_info{}, Data) ->
-    if
-	Data#obs.trace ->
-            PID = R#player_info.player, 
-            Inplay = R#player_info.total_inplay, 
-            Nick = R#player_info.nick, 
-            Location = R#player_info.location,
-	    catch io:format("Player: #~w, in-play: ~w, nick: ~w, location: ~w~n",
-                            [PID, Inplay,  Nick, Location]),
-	    Amount = gb_trees:get(PID, Data#obs.winners),
-	    T1 = gb_trees:delete(PID, Data#obs.winners),
-	    catch io:format("Observer: Nick: ~w, Amount: ~w~n", [Nick, Amount]),
-	    Data1 = Data#obs {
-		      winners = gb_trees:insert(Nick, Amount, T1)
-		     },
-	    {noreply, Data1};
-	true ->
-	    {noreply, Data}
-    end;
-
-handle(R = #join{}, Data) ->
-    Game = R#join.game,
-    Player = R#join.player,
-    SeatNum = R#join.seat_num,
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: JOIN: ~w at seat#~w~n",
-		      [Game, Player, SeatNum]);
-	true ->
-	    ok
-    end,
-    Data1 = Data#obs {
-	      seats = gb_trees:insert(Player, SeatNum, Data#obs.seats)
-	     },
-    {noreply, Data1};
-
-handle(R = #game_inplay{}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("GID#:  ~w PID#~w: At Seat No:~w GAME INPLAY: ~w  ~n",
-		      [R#game_inplay.game, R#game_inplay.player,
-                       R#game_inplay.seat_num, R#game_inplay.amount]);
-	true ->
-	    ok
-    end,
-    Data1 = Data#obs {
-	      seats = gb_trees:enter(R#game_inplay.player, 
-                                     R#game_inplay.seat_num, 
-                                     Data#obs.seats)
-	     },
-    {noreply, Data1};
-
-handle(R = #chat{}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: CHAT: ~w: ~p~n",
-		      [R#chat.game, R#chat.player, R#chat.message]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(R = #fold{}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: FOLD: ~w~n",
-		      [R#fold.game, R#fold.player]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(R = #leave{}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: LEAVE: ~w~n",
-		      [R#leave.game, R#leave.player]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(R = #notify_draw{ card = 0 }, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: CARD: ~w~n",
-                            [R#notify_draw.game, R#notify_draw.player]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(#game_stage{ game = GID, stage = Stage}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: STAGE: ~w~n",
-		      [GID, Stage]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(#call{ game = GID, player = PID, amount = Amount }, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: CALL: ~w, ~-14.2. f~n",
-		      [GID, PID, Amount / 1.0]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(#raise{ game = GID, player = PID, raise = Amt, total = Total}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: RAISE: ~w, ~-14.2. f, ~-14.2. f~n",
-                            [GID, PID, Amt / 1.0, Total / 1.0]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(R = #notify_sb{}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: SB: ~w~n",
-                            [R#notify_sb.game, R#notify_sb.sb]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(R = #notify_bb{}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: BB: ~w~n",
-                            [R#notify_bb.game, R#notify_bb.bb]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(R = #notify_shared{}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: BOARD: ~w~n",
-                            [R#notify_shared.game, R#notify_shared.card]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
-
-handle(R = #notify_win{}, Data) ->
-    Game = R#notify_win.game,
-    Player = R#notify_win.player,
+process(R = #notify_join{}, Data) ->
+    Seats1 = gb_trees:insert(R#notify_join.player, 
+                             R#notify_join.seat, 
+                             Data#obs.seats),
+    Data#obs{ seats = Seats1 };
+    
+process(R = #notify_win{}, Data) ->
     Amt = R#notify_win.amount / 1.0,
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: WIN: ~w, ~-14.2. f~n", [Game, Player, Amt]);
-	true ->
-	    ok
-    end,
-    SeatNum = gb_trees:get(Player, Data#obs.seats),
-    Data1 = Data#obs {
-	      winners = gb_trees:insert(SeatNum, 
-					Amt, 
-					Data#obs.winners)
-	     },
-    {noreply, Data1};
+    N = gb_trees:get(R#notify_win.player, Data#obs.seats),
+    Winners1 = gb_trees:insert(N, Amt, Data#obs.winners),
+    Data#obs{ winners = Winners1 };
 
-handle(R = #notify_button{}, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: DEALER: seat#~w~n", 
-                            [R#notify_button.game, R#notify_button.button]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
+process(R = #player_info{}, Data) ->
+    PID = R#player_info.player, 
+    Amount = gb_trees:get(PID, Data#obs.winners),
+    T1 = gb_trees:delete(PID, Data#obs.winners),
+    Winners1 = gb_trees:insert(R#player_info.nick, Amount, T1),
+    Data#obs{ winners = Winners1 };
 
-handle(#notify_start_game{ game = GID }, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: START~n", [GID]);
-	true ->
-	    ok
-    end,
+process(R = #notify_start_game{}, Data) ->
+    GID = R#notify_start_game.game,
+    Started = Data#obs.games_started, 
     Data#obs.parent ! {'START', GID},
-    {noreply, Data#obs{ winners = gb_trees:empty()}};
+    Data#obs{ winners = gb_trees:empty(), games_started = Started + 1 };
 
-handle(#notify_cancel_game{ game = GID }, Data) 
-  when is_integer(GID) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: CANCEL~n", [GID]);
-	true ->
-	    ok
-    end,
+process(R = #notify_cancel_game{}, Data) ->
+    GID = R#notify_cancel_game.game,
     N = Data#obs.cancel_count,
     if
-        N == Data#obs.games_to_watch ->
+        Data#obs.games_started > 0 ->
             Data#obs.parent ! {'CANCEL', GID},
-            ok = ?tcpsend1(Data#obs.socket, #unwatch{ game = GID }),
-            {stop, normal, Data};
+            timer:sleep(50),
+            error_logger:info_report([{self, self()},
+                                      {games_started, Data#obs.games_started},
+                                      {parent, Data#obs.parent},
+                                      {gid, GID},
+                                      {messages, process_info(Data#obs.parent, messages)},
+                                      {now, now()}
+                                     ]),            
+            Data#obs{ stop = true, events = [#unwatch{ game = GID }] };
         true ->
-            {noreply, Data#obs{ cancel_count = N + 1}}
+            Data#obs{ cancel_count = N + 1 }
     end;
 
-handle(#notify_end_game{ game = GID }, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: END~n", [GID]);
-	true ->
-	    ok
-    end,
+process(R = #notify_end_game{}, Data) ->
+    GID = R#notify_end_game.game,
     Data#obs.parent ! {'END', GID, Data#obs.winners},
+    N = Data#obs.games_to_watch,
     if 
-        Data#obs.games_to_watch == 1 ->
-            ok = ?tcpsend1(Data#obs.socket, #unwatch{ game = GID }),
-            {stop, normal, Data};
+        N == 1 ->
+            Data#obs{ stop = true, events = [#unwatch{ game = GID }] };
         true ->
-            N = Data#obs.games_to_watch,
-            {noreply, Data#obs{ games_to_watch = N - 1}}
+            Data#obs{ games_to_watch = N - 1 }
     end;
 
-handle(#good{}, Data) ->
-    {noreply, Data};
+process(_, Data) ->
+    Data.
 
-handle(H = #notify_hand{}, Data) ->
-    if
-	Data#obs.trace ->
-            Game = H#notify_hand.game,
-            Player = H#notify_hand.player,
-            H1 = H#notify_hand.hand,
-	    catch io:format("~w: HAND: ~w, with ~p~n", 
-                            [Game, Player, hand:describe(H1)]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
+maybe_report(R, #obs{ trace = true }) ->
+    catch report(R);
 
-handle(#muck{ game = Game, player = Player }, Data) ->
-    if
-	Data#obs.trace ->
-	    catch io:format("~w: MUCK: ~w~n", [Game, Player]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
+maybe_report(_, _) ->
+    ok.
 
-handle(#show_cards{ game = Game, player = Player, cards = Cards }, Data) ->
-    if
-	Data#obs.trace ->
-            Cards1 = [hand:card_to_string(Card) || Card <- Cards],
-	    catch io:format("~w: SHOW: ~w: ~p~n", [Game, Player, Cards1]);
-	true ->
-	    ok
-    end,
-    {noreply, Data};
+report(R = #notify_join{}) ->
+    io:format("~p: JOIN: ~p @ ~p~n", 
+              [R#notify_join.game,
+               R#notify_join.player,
+               R#notify_join.seat]);
 
-%% Sink
+report(R = #notify_leave{}) ->
+    io:format("~p: LEAVE: ~p~n", 
+              [R#notify_join.game,
+               R#notify_join.player]);
 
-handle(Event, Data) ->
-    error_logger:info_report([{module, ?MODULE}, 
-			      {line, ?LINE},
-			      {self, self()}, 
-			      {event, Event}]),
-    {noreply, Data}.
+report(R = #game_info{}) ->
+    io:format("Game #~w, #players: ~w, joined: ~w, waiting: ~w; ",
+              [R#game_info.game, 
+               R#game_info.required, 
+               R#game_info.joined, 
+               R#game_info.waiting]),
+    Limit = R#game_info.limit,
+    io:format("limit: low: ~w, high: ~w~n", 
+              [Limit#limit.low, 
+               Limit#limit.high]);
 
-    
+report(R = #seat_state{}) ->
+    io:format("~p: STATE: ~p @ ~p = ~p~n",
+              [R#seat_state.game, 
+               R#seat_state.player, 
+               R#seat_state.seat, 
+               R#seat_state.state
+              ]);
 
+report(R = #notify_chat{}) ->
+    io:format("~w: CHAT: ~w: ~p~n",
+              [R#notify_chat.game, 
+               R#notify_chat.player, 
+               R#notify_chat.message]);
 
+report(R = #notify_draw{ card = 0 }) ->
+    io:format("~w: CARD: ~w~n",
+              [R#notify_draw.game, 
+               R#notify_draw.player]);
+
+report(R = #game_stage{}) ->
+    io:format("~w: STAGE: ~w~n", 
+              [R#game_stage.game,
+               R#game_stage.stage]);
+
+report(R = #notify_call{}) ->
+    io:format("~w: CALL: ~w, ~-14.2. f~n",
+              [R#notify_call.game, 
+               R#notify_call.player,
+               R#notify_call.amount / 1.0]);
+
+report(R = #notify_raise{}) ->
+    io:format("~w: RAISE: ~w, ~-14.2. f, ~-14.2. f~n",
+              [R#notify_raise.game, 
+               R#notify_raise.player, 
+               R#notify_raise.raise / 1.0, 
+               R#notify_raise.total / 1.0]);
+
+report(R = #notify_sb{}) ->
+    io:format("~w: SB: ~w~n",
+              [R#notify_sb.game, 
+               R#notify_sb.sb]);
+
+report(R = #notify_bb{}) ->
+    io:format("~w: BB: ~w~n",
+              [R#notify_bb.game, 
+               R#notify_bb.bb]);
+
+report(R = #notify_shared{}) ->
+    io:format("~w: BOARD: ~w~n",
+              [R#notify_shared.game, 
+               R#notify_shared.card]);
+
+report(R = #notify_win{}) ->
+    io:format("~w: WIN: ~w, ~-14.2. f~n", 
+              [R#notify_win.game, 
+               R#notify_win.player, 
+               R#notify_win.amount / 1.0]);
+
+report(R = #notify_button{}) ->
+    io:format("~w: DEALER: ~w~n", 
+              [R#notify_button.game, 
+               R#notify_button.button]);
+
+report(R = #notify_start_game{}) ->
+    io:format("~w: START~n", [R#notify_start_game.game]);
+
+report(R = #notify_cancel_game{}) ->
+    io:format("~w: CANCEL~n", [R#notify_cancel_game.game]);
+
+report(R = #notify_end_game{}) ->
+    io:format("~w: END~n", [R#notify_end_game.game]);
+
+report(R = #notify_hand{}) ->
+    H = hand:describe(R#notify_hand.hand),
+    io:format("~w: HAND: ~w, with ~p~n", 
+              [R#notify_hand.game, 
+               R#notify_hand.player, 
+               H]);
+
+report(R = #show_cards{}) ->
+    Cards1 = [hand:card_to_string(Card) || Card <- R#show_cards.cards],
+    io:format("~w: SHOW: ~w: ~p~n", 
+              [R#show_cards.game, 
+               R#show_cards.player, 
+               Cards1]);
+
+report(R) ->
+    error_logger:error_report([{module, ?MODULE}, 
+                               {line, ?LINE},
+                               {message, R}
+                              ]),
+    ok.

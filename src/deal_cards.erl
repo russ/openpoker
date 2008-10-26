@@ -1,148 +1,21 @@
 %%% Copyright (C) 2005-2008 Wager Labs, SA
 
 -module(deal_cards).
--behaviour(cardgame).
 
--export([stop/1, test/0]).
-
--export([init/1, terminate/3]).
--export([handle_event/3, handle_info/3, 
-	 handle_sync_event/4, code_change/4]).
-
--export([deal_cards/2]).
+-export([start/3]).
 
 -include("common.hrl").
--include("pp.hrl").
 -include("texas.hrl").
--include("test.hrl").
 
--record(deal, {
-          fsm,
-	  game,
-          gid,
-	  n,
-	  type
-	 }).
+start(Game, Ctx, [N, Type]) ->
+    Ctx1 = Ctx#texas{ deal_type = Type, deal_count = N },
+    Game1 = case Type of
+                private ->
+                    B = Ctx1#texas.b,
+                    Seats = g:get_seats(Game, B, ?PS_STANDING),
+                    g:draw(Game, Seats, N);
+                shared ->
+                    g:draw_shared(Game, N)
+            end,
+    {stop, Game1, Ctx1}.
 
-init([FSM, Game, GID, N, Type]) ->
-    Data = #deal {
-      fsm = FSM,
-      game = Game,
-      gid = GID,
-      n = N,
-      type = Type
-     },
-    {ok, deal_cards, Data}.
-
-stop(Ref) ->
-    cardgame:send_all_state_event(Ref, stop).
-
-deal_cards({'START', Context}, Data) ->
-    deal_cards_start(Context, Data);
-
-deal_cards(R, Data) 
-  when is_record(R, join) ->
-    deal_cards_join(R, Data);
-
-deal_cards(R, Data) 
-  when is_record(R, leave) ->
-    deal_cards_leave(R, Data);
-
-deal_cards({timeout, _Timer, _Player}, Data) ->
-    deal_cards_timeout(Data);
-
-deal_cards(Event, Data) ->
-    deal_cards_other(Event, Data).
-
-handle_event(stop, _State, Data) ->
-    {stop, normal, Data};
-
-handle_event(Event, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Event}, 
-			       {self, self()},
-			       {game, Data#deal.game}]),
-    {next_state, State, Data}.
-        
-handle_sync_event(Event, From, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Event}, 
-			       {from, From},
-			       {self, self()},
-			       {game, Data#deal.game}]),
-    {next_state, State, Data}.
-        
-handle_info(Info, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Info}, 
-			       {self, self()},
-			       {game, Data#deal.game}]),
-    {next_state, State, Data}.
-
-terminate(_Reason, _State, _Data) -> 
-    ok.
-
-code_change(_OldVsn, State, Data, _Extra) ->
-    {ok, State, Data}.
-
-%%%
-%%% Handlers
-%%%
-
-deal_cards_start(Context, Data) ->
-    Game = Data#deal.game,
-    case Data#deal.type of
-	private ->
-	    B = element(2, Context),
-	    Seats = gen_server:call(Game, {'SEATS', B, ?PS_STANDING}),
-	    deal_private(Game, Seats, Data#deal.n);
-	shared ->
-	    deal_shared(Game, Data#deal.n)
-    end,
-    {stop, {normal, Context}, Data}.
-
-deal_cards_join(R, Data) ->
-    gen_server:cast(Data#deal.game, R#join{ state = ?PS_FOLD }),
-    {next_state, deal_cards, Data}.
-
-deal_cards_leave(R, Data) ->
-    gen_server:cast(Data#deal.game, R#leave{ state = ?PS_CAN_LEAVE }),
-    {next_state, deal_cards, Data}.
-
-deal_cards_timeout(Data) ->
-    {next_state, deal_cards, Data}.
-
-deal_cards_other(Event, Data) ->
-    handle_event(Event, deal_cards, Data).
-
-%%%
-%%% Utility
-%%%
-
-deal_shared(_Game, 0) ->
-    ok;
-
-deal_shared(Game, N) ->
-    gen_server:cast(Game, 'DRAW SHARED'),
-    deal_shared(Game, N - 1).
-
-deal_private(_Game, _Seats, 0) ->
-    ok;
-
-deal_private(Game, Seats, N) ->
-    F = fun(Seat) ->
-		Player = gen_server:call(Game, {'PLAYER AT', Seat}),
-		gen_server:cast(Game, {'DRAW', Player})
-	end,
-    lists:foreach(F, Seats),
-    deal_private(Game, Seats, N - 1).
-
-%%
-%% Test suite
-%% 
-
-test() ->
-    ok.

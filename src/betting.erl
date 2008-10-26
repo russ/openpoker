@@ -1,331 +1,194 @@
 %%% Copyright (C) 2005-2008 Wager Labs, SA
 
 -module(betting).
--behaviour(cardgame).
 
--export([stop/1, test/0]).
+-export([start/3, betting/3]).
 
--export([init/1, terminate/3]).
--export([handle_event/3, handle_info/3, 
-	 handle_sync_event/4, code_change/4]).
-
--export([betting/2]).
+-include_lib("eunit/include/eunit.hrl").
 
 -include("common.hrl").
 -include("texas.hrl").
--include("test.hrl").
 -include("pp.hrl").
--include("schema.hrl").
+-include("game.hrl").
 
--record(betting, {
-          fsm,
-	  game,
-          gid,
-	  context,
-	  have_blinds,
-	  max_raises,
-	  stage,
-	  expected, % {Player, Min, Max}
-	  call,
-	  raise_count,
-	  timer
-	 }).
+start(Game, Ctx, [MaxRaises, Stage]) ->
+    start(Game, Ctx, [MaxRaises, Stage, false]);
 
-init([FSM, Game, GID, MaxRaises, Stage]) ->
-    init([FSM, Game, GID, MaxRaises, Stage, false]);
-
-init([FSM, Game, GID, MaxRaises, Stage, HaveBlinds]) ->
-    Data = #betting {
-      fsm = FSM,
-      game = Game,
-      gid = GID,
-      have_blinds = HaveBlinds,
-      max_raises = MaxRaises,
-      stage = Stage
-     },
-    {ok, betting, Data}.
-
-stop(Ref) ->
-    cardgame:send_all_state_event(Ref, stop).
-
-betting({'START', Context}, Data) ->
-    betting_handle_start(Context, Data);
-
-betting(R = #call{}, Data) ->
-    betting_handle_call(R, Data);
-
-betting(R = #raise{}, Data) ->
-    betting_handle_raise(R, Data);
-
-betting(R = #fold{}, Data) ->
-    betting_handle_fold(R, Data);
-
-betting({timeout, _Timer, Player}, Data) ->
-    betting_handle_timeout(Player, Data);
-
-betting(R = #join{}, Data) ->
-    betting_handle_join(R, Data);
-
-betting(R = #leave{}, Data) ->
-    betting_handle_leave(R, Data);
-
-betting(Event, Data) ->
-    betting_handle_rest(Event, Data).
-
-handle_event(stop, _State, Data) ->
-    {stop, normal, Data};
-
-handle_event(Event, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Event}, 
-			       {self, self()},
-			       {game, Data#betting.game},
-			       {expected, Data#betting.expected}]),
-    {next_state, State, Data}.
-        
-handle_sync_event(Event, From, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Event}, 
-			       {from, From},
-			       {self, self()},
-			       {game, Data#betting.game},
-			       {expected, Data#betting.expected}]),
-    {next_state, State, Data}.
-        
-handle_info(Info, State, Data) ->
-    error_logger:error_report([{module, ?MODULE}, 
-			       {line, ?LINE},
-			       {message, Info}, 
-			       {self, self()},
-			       {game, Data#betting.game},
-			       {expected, Data#betting.expected}]),
-    {next_state, State, Data}.
-
-terminate(_Reason, _State, _Data) -> 
-    ok.
-
-code_change(_OldVsn, State, Data, _Extra) ->
-    {ok, State, Data}.
-
-%%%
-%%% Handlers
-%%%
-
-betting_handle_start(Context, Data) ->
-    Game = Data#betting.game,
-    %% assume that we are given a record
-    Button = element(2, Context),
-    Call = element(3, Context),
-    %%io:format("betting/start: call = ~.2. f~n", [Call * 1.0]),
-    Active = gen_server:call(Game, {'SEATS', Button, ?PS_PLAY}),
+start(Game, Ctx, [MaxRaises, Stage, HaveBlinds]) ->
+    Ctx1 = Ctx#texas{
+             have_blinds = HaveBlinds,
+             max_raises = MaxRaises,
+             stage = Stage
+            },
+    B = Ctx1#texas.b, 
+    Call = Ctx1#texas.call,
+    Active = g:get_seats(Game, B, ?PS_PLAY),
     PlayerCount = length(Active),
     if
 	PlayerCount < 2 ->
-	    {stop, {normal, Context}, Data};
+            {stop, Game, Ctx};
 	true ->
-	    _Total = gen_server:call(Game, 'POT TOTAL'),
-            Stage = #game_stage{ 
-              game = Data#betting.gid, 
-              stage = Data#betting.stage
+            Event = #game_stage{ 
+              game = Game#game.gid, 
+              stage = Ctx1#texas.stage
              },
-	    gen_server:cast(Game, {'BROADCAST', Stage}),
+            Game1 = g:broadcast(Game, Event),
 	    if 
-		Data#betting.have_blinds ->
+		HaveBlinds ->
 		    %% start with the player after the big blind
-		    BB = element(6, Context),
-		    Temp = gen_server:call(Game, {'SEATS', BB, ?PS_PLAY}),
+		    BB = Ctx1#texas.bb,
+		    Temp = g:get_seats(Game1, BB, ?PS_PLAY),
 		    Player = hd(Temp);
 		true ->
 		    %% start with the first player after the button
 		    Player = hd(Active)
 	    end,
-	    Data1 = Data#betting {
-		      context = Context,
-		      call = Call,
-		      raise_count = 0
-		     },
-	    Data2 = ask_for_bet(Data1, Player),
-	    {next_state, betting, Data2}
+            Game2 = Game1#game{ call = Call, raise_count = 0 },
+	    ask_for_bet(Game2, Ctx, Player)
     end.
 
-betting_handle_call(R = #call{ player = Player, amount = Amount }, Data) ->
-    Game = Data#betting.game,
-    GID = Data#betting.gid,
-    PID = R#call.pid,
-    {Expected, Call, _Min, _Max} = Data#betting.expected,
+betting(Game, Ctx, #call{ player = Player }) 
+  when Ctx#texas.exp_player /= Player ->
+    {continue, Game, Ctx};
+
+betting(Game, Ctx, #call{ player = Player, amount = Amt }) ->
+    Game1 = g:cancel_timer(Game),
+    Call = Ctx#texas.exp_amt,
+    Seat = g:get_seat(Game1, Ctx#texas.exp_seat),
+    Inplay = Seat#seat.inplay,
     if 
-	Expected /= Player ->
-	    {next_state, betting, Data};
-	true ->
-	    %% it's us
-	    cancel_timer(Data),
-            GameInplay = gen_server:call(Game, {'INPLAY', Player}),
-	    if 
-		Amount > GameInplay  ->
-		    betting(#fold{ player = PID }, Data);
-		Amount > Call ->
-		    betting(#fold{ player = PID }, Data);
-		Amount == GameInplay  ->
-		    %% all-in
-                    gen_server:cast(Game, {'SET STATE', Player, ?PS_ALL_IN}),
-		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
-                    gen_server:cast(Game, {'BROADCAST', R#call{
-                                                          game = GID,
-                                                          player = PID
-                                                          }, Player}),
-		    next_turn(Data, Player);
-		true ->
-		    %% proper bet
-		    gen_server:cast(Game, {'SET STATE', Player, ?PS_BET}),
-		    gen_server:cast(Game, {'ADD BET', Player, Amount}),
-		    gen_server:cast(Game, {'BROADCAST', R#call{
-                                                          game = GID,
-                                                          player = PID
-                                                         }, Player}),
-		    next_turn(Data, Player)
-	    end
-    end.
+        (Amt > Inplay) or (Amt > Call)  ->
+            betting(Game, Ctx, #fold{ player = Player });
+        true ->
+            %% proper bet
+            Game2 = g:set_state(Game1, Player, ?PS_BET),
+            Game3 = g:add_bet(Game2, Player, Amt),
+            R1 = #notify_call{ 
+              game = Game3#game.gid, 
+              player = Seat#seat.pid,
+              amount = Amt
+             },
+            Game4 = g:broadcast(Game3, R1),
+            next_turn(Game4, Ctx, Ctx#texas.exp_seat)
+    end;
 
-betting_handle_raise(R, Data) ->
-    Game = Data#betting.game,
-    GID = Data#betting.gid,
-    PID = R#raise.pid,
-    Player = R#raise.player,
-    Amount = R#raise.raise,
-    RaiseCount = Data#betting.raise_count,
-    {Expected, Call, Min, Max} = Data#betting.expected,
+betting(Game, Ctx, #raise{ player = Player }) 
+  when Ctx#texas.exp_player /= Player ->
+    {continue, Game, Ctx};
+
+betting(Game, Ctx, #raise{ player = Player, raise = Amt }) ->
+    Game1 = g:cancel_timer(Game),
+    Call = Ctx#texas.exp_amt,
+    Min = Ctx#texas.exp_min,
+    Max = Ctx#texas.exp_max,
+    Seat = g:get_seat(Game, Ctx#texas.exp_seat),
+    Inplay = Seat#seat.inplay,
+    RC = Game1#game.raise_count,
+    if 
+        (Amt > Inplay) or 
+        (Amt > Max) or
+        (Max == 0) or % should have sent CALL
+        ((Amt < Min) and ((Amt + Call) /= Inplay)) ->
+            betting(Game1, Ctx, #fold{ player = Player });
+        true ->
+            %% proper raise
+            RC1 = if 
+                      Call /= 0 ->
+                          RC + 1;
+                      true ->
+                          RC
+                  end,
+            Game2 = g:add_bet(Game1, Player, Amt + Call),
+            Game3 = g:reset_player_state(Game2, ?PS_BET, ?PS_PLAY),
+            Game4 = if
+                        Amt + Call == Inplay ->
+                            Game3;
+                        true ->
+                            g:set_state(Game3, Player, ?PS_BET)
+                    end,
+            R1 = #notify_raise{ 
+              game = Game4#game.gid,
+              player = Seat#seat.pid,
+              raise = Amt,
+              total = Amt + Call
+             },
+            Game5 = g:broadcast(Game4, R1),
+            Game6 = Game5#game{ call = Amt + Call, raise_count = RC1 },
+            next_turn(Game6, Ctx, Ctx#texas.exp_seat)
+    end;
+
+betting(Game, Ctx, R = #fold{}) ->
     if
-	Expected /= Player ->
-	    {next_state, betting, Data};
+	Ctx#texas.exp_player /= R#fold.player ->
+	    {continue, Game, Ctx};
 	true ->
-	    %% it's us
-	    cancel_timer(Data),
-            GameInplay = gen_server:call(Game, {'INPLAY', Player}),
-	    if 
-		(Amount > GameInplay) or 
-		(Amount > Max) or
-		(Max == 0) or % should have sent CALL
-		((Amount < Min) and ((Amount + Call) /= GameInplay)) ->
-		    betting(#fold{ player = Player }, Data);
-		true ->
-		    %% proper raise
-		    RaiseCount1 = if 
-				      Call /= 0 ->
-					  RaiseCount + 1;
-				      true ->
-					  RaiseCount
-				  end,
-		    gen_server:cast(Game, {'ADD BET', Player, Amount + Call}),
-		    gen_server:cast(Game, {'RESET STATE', ?PS_BET, ?PS_PLAY}),
-		    if
-			Amount + Call == GameInplay ->
-			    ok;
-			true ->
-			    gen_server:cast(Game, 
-					    {'SET STATE', Player, ?PS_BET})
-		    end,
-		    gen_server:cast(Game, {'BROADCAST', R#raise{
-                                                          game = GID,
-                                                          player = PID,
-                                                          total = Amount + Call
-                                                         }, Player}),
-		    Data1 = Data#betting {
-			      call = Data#betting.call + Amount,
-			      raise_count = RaiseCount1
-			     },
-		    next_turn(Data1, Player)
-	    end
-    end.
+            Game1 = g:cancel_timer(Game),
+            Game2 = g:set_state(Game1, Ctx#texas.exp_seat, ?PS_FOLD),
+            next_turn(Game2, Ctx, Ctx#texas.exp_seat)
+    end;
 
-betting_handle_fold(R, Data) ->
-    {Expected, _Call, _Min, _Max} = Data#betting.expected,
-    if
-	Expected /= R#fold.player ->
-	    {next_state, betting, Data};
-	true ->
-	    cancel_timer(Data),
-	    gen_server:cast(Data#betting.game, R),
-	    next_turn(Data, R#fold.player)
-    end.
-
-betting_handle_timeout(Player, Data) ->
-    cancel_timer(Data),
-    Game = Data#betting.game,
-    GID = gen_server:call(Game, 'ID'),
-    Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
+betting(Game, Ctx, {timeout, _, _}) ->
+    Game1 = g:cancel_timer(Game),
+    Player = Ctx#texas.exp_player,
     error_logger:warning_report([{message, "Player timeout!"},
 				 {module, ?MODULE}, 
-				 {player, Player},
-				 {game, GID},
-				 {seat, Seat}]),
-    %%io:format("~w timed out, folding~n", [Player]),
-    betting(#fold{ player = Player }, Data).
+				 {player, Player}
+                                ]),
+    betting(Game1, Ctx, #fold{ player = Player });
 
-betting_handle_join(R, Data) ->
-    blinds:join(R, Data, betting, ?PS_FOLD).
+betting(Game, Ctx, R = #join{}) ->
+    Game1 = g:join(Game, R#join{ state = ?PS_FOLD }),
+    {continue, Game1, Ctx};
 
-betting_handle_leave(R, Data) ->
-    gen_server:cast(Data#betting.game, R),
-    {next_state, betting, Data}.
+betting(Game, Ctx, R = #leave{}) ->
+    Game1 = g:leave(Game, R#leave{ state = ?PS_CAN_LEAVE }),
+    {continue, Game1, Ctx};
 
-betting_handle_rest(Event, Data) ->
-    handle_event(Event, betting, Data).
-
-%%
-%% Utility
-%%
-
-next_turn(Data, Player) ->
-    Game = Data#betting.game,
-    Seat = gen_server:call(Game, {'WHAT SEAT', Player}),
-    Active = gen_server:call(Game, {'SEATS', Seat, ?PS_PLAY}),
-    Standing = gen_server:call(Game, {'SEATS', Seat, ?PS_STANDING}),
+betting(Game, Ctx, Event) ->
+    error_logger:error_report([{module, ?MODULE}, 
+			       {line, ?LINE},
+			       {message, Event}, 
+			       {self, self()}
+                              ]),
+    {continue, Game, Ctx}.
+        
+next_turn(Game, Ctx, N) ->
+    Active = g:get_seats(Game, N, ?PS_PLAY),
+    Standing = g:get_seats(Game, N, ?PS_STANDING),
     ActiveCount = length(Active),
     StandingCount = length(Standing),
     if 
 	StandingCount < 2 ->
 	    %% last man standing wins
-	    {stop, {goto, showdown, Data#betting.context}, Data};
+	    {goto, showdown, Game, Ctx};
  	ActiveCount == 0 ->
  	    %% we are done with this stage
- 	    gen_server:cast(Game, {'RESET STATE', ?PS_BET, ?PS_PLAY}),
- 	    Ctx = setelement(3, Data#betting.context, 0), % call = 0
-	    gen_server:cast(Game, 'NEW STAGE'),
-	    {stop, {normal, Ctx}, Data};
+            Game1 = g:reset_player_state(Game, ?PS_BET, ?PS_PLAY),
+            Game2 = g:new_stage(Game1),
+            Ctx1 = Ctx#texas{ call = 0 },
+            {stop, Game2, Ctx1 };
  	true ->
  	    %% next player
- 	    Data1 = ask_for_bet(Data, hd(Active)),
- 	    {next_state, betting, Data1}
+ 	    ask_for_bet(Game, Ctx, hd(Active))
     end.
 
-ask_for_bet(Data, Seat) ->
-    Game = Data#betting.game,
-    Stage = Data#betting.stage,
-    Player = gen_server:call(Game, {'PLAYER AT', Seat}),
-    Bet = gen_server:call(Game, {'BET TOTAL', Player}),
-    Call = Data#betting.call - Bet,
-    {Min, Max} = gen_server:call(Game, {'RAISE SIZE', Player, Stage}),
-    gen_server:cast(Game, {'REQUEST BET', Seat, Call, Min, Max}),
-    Data1 = restart_timer(Data, Player),
-    Data1#betting {
-      expected = {Player, Call, Min, Max}
-     }.
+ask_for_bet(Game, Ctx, N) ->
+    Seat = g:get_seat(Game, N),
+    Player = Seat#seat.player,
+    Inplay = Seat#seat.inplay,
+    Bet = Seat#seat.bet,
+    Stage = Ctx#texas.stage,
+    PotSize = g:pot_size(Game),
+    Call = Ctx#texas.call - Bet,
+    {Min, Max} = limit:raise_size(Game#game.limit, PotSize, Inplay, Stage),
+    Game1 = g:request_bet(Game, N, Call, Min, Max),
+    Game2 = g:restart_timer(Game1, ?PLAYER_TIMEOUT),
+    Ctx1 = Ctx#texas{ 
+             exp_player = Player, 
+             exp_seat = N,
+             exp_amt = Call,
+             exp_min = Min,
+             exp_max = Max
+            },
+    {next, betting, Game2, Ctx1}.
 
-cancel_timer(Data) ->
-    catch cardgame:cancel_timer(Data#betting.timer).
-
-restart_timer(Data, Msg) ->
-    Timeout = gen_server:call(Data#betting.game, 'TIMEOUT'),
-    Data#betting {
-      timer = cardgame:start_timer(Timeout, Msg)
-     }.
-
-    
-%%
-%% Test suite
-%% 
-
-test() ->
-    ok.

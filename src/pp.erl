@@ -18,6 +18,10 @@
 
 -define(PP_VER, 1).
 
+internal() -> 
+    {fun(Acc, _) -> Acc end, 
+     fun(Bin) -> {undefined, Bin} end}.
+
 timestamp() ->
     tuple({int(), int(), int()}).
 
@@ -114,12 +118,12 @@ card() ->
 face() ->
     byte().
 
-combo() ->
+rank() ->
     byte().
 
-hand() ->
-    record(hand, {
-             combo(),
+player_hand() ->
+    record(player_hand, {
+             rank(),
              face(),
              face()
             }).
@@ -140,7 +144,8 @@ query_op() ->
              byte()
             }).
 
-game_to_id(G) when is_pid(G) ->
+game_to_id(G) 
+  when is_pid(G) ->
     erlang:process_display(self(), backtrace);
 
 game_to_id(GID) 
@@ -151,6 +156,12 @@ id_to_game(GID) ->
     global:whereis_name({game, GID}).
     
 game() ->
+    game(get(pass_through)).
+
+game(true) ->
+    int();
+
+game(_) ->
     wrap({fun game_to_id/1, fun id_to_game/1}, int()).
 
 player_to_id(undefined) ->
@@ -168,20 +179,20 @@ id_to_player(PID) ->
     global:whereis_name({player, PID}).
     
 player() ->
+    player(get(pass_through)).
+
+player(true) ->
+    int();
+
+player(_) ->
     wrap({fun player_to_id/1, fun id_to_player/1}, int()).
 
-seat_num() ->
+seat() ->
     byte().
 
 state() ->
     byte().
 
-%% Does not get written, is set to none on read
-
-internal() -> 
-    {fun(Acc, _) -> Acc end, 
-     fun(Bin) -> {none, Bin} end}.
-    
 %%% Commands 
 
 bad() ->
@@ -208,55 +219,61 @@ logout() ->
 watch() ->
     record(watch, {
              game(),
-             player()
+             internal()
             }).
 
 unwatch() ->
     record(unwatch, {
              game(),
-             player()
+             internal()
             }).
 
 wait_bb() ->
     record(wait_bb, {
-             game(), 
-             player(),
+             game(),
              internal()
             }).
 
 call() ->
     record(call, {
              game(),
-             player(),
-             amount(),
              internal(),
-             internal()
+             amount()
+            }).
+
+notify_call() ->
+    record(notify_call, {
+             game(),
+             player(),
+             amount()
             }).
 
 raise() ->
     record(raise, {
              game(),
+             internal(),
+             raise_amount()
+            }).
+
+notify_raise() ->
+    record(notify_raise, {
+             game(),
              player(),
              raise_amount(),
-             total_amount(), % do set to 0
-             internal(),
-             internal(),
-             internal(),
-             internal()
+             total_amount()
             }).
 
 fold() ->
     record(fold, {
              game(),
-             player(),
-             internal() % internal
+             internal()
             }).
 
 join() ->
     record(join, {
              game(),
-             player(),
-             seat_num(),
+             internal(),
+             seat(),
              amount(),
              internal(),
              internal()
@@ -265,31 +282,50 @@ join() ->
 leave() ->
     record(leave, {
              game(),
-             player(),
              internal(),
+             internal()
+            }).
+
+notify_join() ->
+    record(notify_join, {
+             game(),
+             player(),
+             seat(),
+             amount(),
+             internal()
+            }).
+
+notify_leave() ->
+    record(notify_leave, {
+             game(),
+             player(),
              internal()
             }).
 
 sit_out() ->
     record(sit_out, {
              game(),
-             player(),
              internal()
             }).
 
 come_back() ->
     record(come_back, {
              game(),
-             player(),
              internal()
             }).
 
 chat() ->
     record(chat, {
              game(),
+             internal(),
+             message()
+            }).
+
+notify_chat() ->
+    record(notify_chat, {
+             game(),
              player(),
-             message(),
-             internal()
+             message()
             }).
 
 game_query() ->
@@ -351,7 +387,6 @@ player_info() ->
 bet_req() ->
     record(bet_req, {
              game(),
-             player(),
              call_amount(),
              raise_min(),
              raise_max()
@@ -414,13 +449,12 @@ notify_hand() ->
     record(notify_hand, {
              game(),
              player(),
-             hand()
+             player_hand()
             }).
 
 muck() ->
     record(muck, {
              game(),
-             player(),
              internal()
             }).
 
@@ -433,7 +467,7 @@ game_stage() ->
 seat_state() ->
     record(seat_state, {
              game(), 
-             seat_num(),
+             seat(),
              state(),
              player(),
              amount()
@@ -454,14 +488,6 @@ balance() ->
     record(balance, {
              int(),
              int()
-            }).
-
-game_inplay() ->
-    record(game_inplay, {
-             game(), 
-             player(),
-             seat_num(),
-             amount()
             }).
 
 your_game() ->
@@ -485,7 +511,7 @@ pong() ->
     record(pong, {
              timestamp(),
              timestamp(),
-             internal()
+             timestamp()
             }).
 
 %%% Pickle
@@ -514,8 +540,14 @@ write(R) when is_record(R, wait_bb) ->
 write(R) when is_record(R, call) ->
     [?CMD_CALL|pickle(call(), R)];
 
+write(R) when is_record(R, notify_call) ->
+    [?CMD_NOTIFY_CALL|pickle(notify_call(), R)];
+
 write(R) when is_record(R, raise) ->
     [?CMD_RAISE|pickle(raise(), R)];
+
+write(R) when is_record(R, notify_raise) ->
+    [?CMD_NOTIFY_RAISE|pickle(notify_raise(), R)];
 
 write(R) when is_record(R, fold) ->
     [?CMD_FOLD|pickle(fold(), R)];
@@ -523,8 +555,14 @@ write(R) when is_record(R, fold) ->
 write(R) when is_record(R, join) ->
     [?CMD_JOIN|pickle(join(), R)];
 
+write(R) when is_record(R, notify_join) ->
+    [?CMD_NOTIFY_JOIN|pickle(notify_join(), R)];
+
 write(R) when is_record(R, leave) ->
     [?CMD_LEAVE|pickle(leave(), R)];
+
+write(R) when is_record(R, notify_leave) ->
+    [?CMD_NOTIFY_LEAVE|pickle(notify_leave(), R)];
 
 write(R) when is_record(R, sit_out) ->
     [?CMD_SIT_OUT|pickle(sit_out(), R)];
@@ -534,6 +572,9 @@ write(R) when is_record(R, come_back) ->
 
 write(R) when is_record(R, chat) ->
     [?CMD_CHAT|pickle(chat(), R)];
+
+write(R) when is_record(R, notify_chat) ->
+    [?CMD_NOTIFY_CHAT|pickle(notify_chat(), R)];
 
 write(R) when is_record(R, game_query) ->
     [?CMD_GAME_QUERY|pickle(game_query(), R)];
@@ -598,9 +639,6 @@ write(R) when is_record(R, goto) ->
 write(R) when is_record(R, balance) ->
     [?CMD_BALANCE|pickle(balance(), R)];
 
-write(R) when is_record(R, game_inplay) ->
-    [?CMD_GAME_INPLAY|pickle(game_inplay(), R)];
-
 write(R) when is_record(R, notify_button) ->
     [?CMD_NOTIFY_BUTTON|pickle(notify_button(), R)];
 
@@ -649,8 +687,14 @@ read(<<?CMD_WAIT_BB, Bin/binary>>) ->
 read(<<?CMD_CALL, Bin/binary>>) ->
     unpickle(call(), Bin);
 
+read(<<?CMD_NOTIFY_CALL, Bin/binary>>) ->
+    unpickle(notify_call(), Bin);
+
 read(<<?CMD_RAISE, Bin/binary>>) ->
     unpickle(raise(), Bin);
+
+read(<<?CMD_NOTIFY_RAISE, Bin/binary>>) ->
+    unpickle(notify_raise(), Bin);
 
 read(<<?CMD_FOLD, Bin/binary>>) ->
     unpickle(fold(), Bin);
@@ -658,8 +702,14 @@ read(<<?CMD_FOLD, Bin/binary>>) ->
 read(<<?CMD_JOIN, Bin/binary>>) ->
     unpickle(join(), Bin);
 
+read(<<?CMD_NOTIFY_JOIN, Bin/binary>>) ->
+    unpickle(notify_join(), Bin);
+
 read(<<?CMD_LEAVE, Bin/binary>>) ->
     unpickle(leave(), Bin);
+
+read(<<?CMD_NOTIFY_LEAVE, Bin/binary>>) ->
+    unpickle(notify_leave(), Bin);
 
 read(<<?CMD_SIT_OUT, Bin/binary>>) ->
     unpickle(sit_out(), Bin);
@@ -669,6 +719,9 @@ read(<<?CMD_COME_BACK, Bin/binary>>) ->
 
 read(<<?CMD_CHAT, Bin/binary>>) ->
     unpickle(chat(), Bin);
+
+read(<<?CMD_NOTIFY_CHAT, Bin/binary>>) ->
+    unpickle(notify_chat(), Bin);
 
 read(<<?CMD_GAME_QUERY, Bin/binary>>) ->
     unpickle(game_query(), Bin);
@@ -732,9 +785,6 @@ read(<<?CMD_GOTO, Bin/binary>>) ->
 
 read(<<?CMD_BALANCE, Bin/binary>>) ->
     unpickle(balance(), Bin);
-
-read(<<?CMD_GAME_INPLAY, Bin/binary>>) ->
-    unpickle(game_inplay(), Bin);
 
 read(<<?CMD_NOTIFY_BUTTON, Bin/binary>>) ->
     unpickle(notify_button(), Bin);

@@ -95,7 +95,7 @@ code_change(_OldVsn, Data, _Extra) ->
 
 setup_players(Game, GID, Host, Port) 
   when is_pid(GID) ->
-    GID1 = cardgame:call(GID, 'ID'),
+    GID1 = gen_server:call(GID, 'ID'),
     setup_players(Game, GID1, Host, Port);
 
 setup_players(Game, GID, Host, Port) ->
@@ -119,7 +119,7 @@ setup_players(IRC_ID, GID, Host, Port, [Player|Rest], N, Acc) ->
 
 setup_observer(Parent, GID, Host, Port, Trace) 
   when is_pid(GID) ->
-    GID1 = cardgame:call(GID, 'ID'),
+    GID1 = gen_server:call(GID, 'ID'),
     setup_observer(Parent, GID1, Host, Port, Trace);
     
 setup_observer(Parent, GID, Host, Port, Trace) ->

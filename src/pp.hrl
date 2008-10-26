@@ -46,9 +46,7 @@
 -record(call, {
           game,
           player,
-          amount,
-          expected, % internal
-          pid % internal
+          amount
          }).
 
 -define(CMD_RAISE, 6).
@@ -56,20 +54,14 @@
 -record(raise, {
           game,
           player,
-          raise,
-          total = 0.0, % notification only
-          call, % internal
-          min, % internal
-          max, % internal
-          pid % internal
+          raise
          }).
 
 -define(CMD_FOLD, 7).
 
 -record(fold, {
           game,
-          player,
-          pid % internal
+          player
          }).
 
 -define(CMD_JOIN, 8).
@@ -77,10 +69,10 @@
 -record(join, {
           game,
           player,
-          seat_num,
+          seat,
           amount,
-          state = ?PS_PLAY, % internal
-          pid % internal
+          pid,
+          state
          }).
 
 -define(CMD_LEAVE, 9).
@@ -88,24 +80,21 @@
 -record(leave, {
           game,
           player,
-          state, % internal
-          pid % internal
+          state
          }).
 
 -define(CMD_SIT_OUT, 10).
 
 -record(sit_out, {
           game,
-          player,
-          pid % internal
+          player
          }).
 
 -define(CMD_COME_BACK, 11).
 
 -record(come_back, {
           game,
-          player,
-          pid % internal
+          player
          }).
 
 -define(CMD_CHAT, 12).
@@ -113,8 +102,7 @@
 -record(chat, {
           game,
           player,
-          message,
-          pid % internal
+          message
          }).
 
 -define(CMD_GAME_QUERY, 13).
@@ -184,10 +172,9 @@
 
 -record(bet_req, {
           game,
-          player,
           call,
-          raise_min,
-          raise_max
+          min,
+          max
          }).
 
 -define(CMD_NOTIFY_DRAW, 21).
@@ -243,8 +230,7 @@
 
 -record(muck, {
           game,
-          player,
-          pid % internal
+          player
          }).
 
 -define(CMD_GAME_STAGE, 29).
@@ -258,7 +244,7 @@
 
 -record(seat_state, {
           game, 
-          seat_num,
+          seat,
           state,
           player,
           inplay
@@ -284,14 +270,7 @@
           inplay
          }).
 
--define(CMD_GAME_INPLAY, 34).
-
--record(game_inplay, {
-          game, 
-          player,
-          seat_num,
-          amount
-         }).
+%%% 34 NOT USED
 
 -define(CMD_NOTIFY_BUTTON, 35).
 
@@ -317,9 +296,8 @@
 -define(CMD_WAIT_BB, 38).
 
 -record(wait_bb, {
-          game, 
-          player,
-          pid % internal
+          game,
+          player
          }).
 
 -define(CMD_YOUR_GAME, 39).
@@ -336,6 +314,49 @@
           cards
          }).
 
+-define(CMD_NOTIFY_CALL, 41).
+
+-record(notify_call, {
+          game,
+          player,
+          amount
+         }).
+
+-define(CMD_NOTIFY_RAISE, 42).
+
+-record(notify_raise, {
+          game,
+          player,
+          raise,
+          total
+         }).
+
+-define(CMD_NOTIFY_CHAT, 43).
+
+-record(notify_chat, {
+          game,
+          player,
+          message
+         }).
+
+-define(CMD_NOTIFY_JOIN, 44).
+
+-record(notify_join, {
+          game,
+          player,
+          seat,
+          amount,
+          proc % internal
+         }).
+
+-define(CMD_NOTIFY_LEAVE, 45).
+
+-record(notify_leave, {
+          game,
+          player,
+          proc % internal
+         }).
+
 -define(CMD_PING, 253).
 
 -record(ping, {
@@ -347,7 +368,7 @@
 -record(pong, {
           orig_send_time,
           send_time = now(),
-          recv_time
+          recv_time = now()
          }).
 
 %%% Internal game packets

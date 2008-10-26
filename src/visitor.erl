@@ -42,11 +42,11 @@ handle_cast({'SOCKET', Socket}, Data)
     {noreply, Data1};
 
 handle_cast(R = #watch{}, Data) ->
-    cardgame:cast(R#watch.game, R#watch{ player = self() }),
+    gen_server:cast(R#watch.game, R#watch{ player = self() }),
     {noreply, Data};
 
 handle_cast(R = #unwatch{}, Data) ->
-    cardgame:cast(R#unwatch.game, R#unwatch{ player = self() }),
+    gen_server:cast(R#unwatch.game, R#unwatch{ player = self() }),
     {noreply, Data};
 
 handle_cast(R, Data)
@@ -62,7 +62,7 @@ handle_cast(R, Data)
     {noreply, Data};
 
 handle_cast(#seat_query{ game = Game }, Data) ->
-    L = cardgame:call(Game, 'SEAT QUERY'),
+    L = gen_server:call(Game, 'SEAT QUERY'),
     F = fun(R) -> handle_cast(R, Data) end,
     lists:foreach(F, L),
     {noreply, Data};

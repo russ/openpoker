@@ -283,10 +283,10 @@ find_games(Socket,
 	   #query_op{ op = ExpOp, val = Expected }, 
 	   #query_op{ op = JoinOp, val = Joined },
 	   #query_op{ op = WaitOp, val = Waiting }) ->
-    {atomic, L} = game:find(GameType, LimitType,
-			    ExpOp, Expected, 
-			    JoinOp, Joined,
-			    WaitOp, Waiting),
+    {atomic, L} = g:find(GameType, LimitType,
+                         ExpOp, Expected, 
+                         JoinOp, Joined,
+                         WaitOp, Waiting),
     send_games(Socket, L).
 
 start_games() ->
@@ -304,13 +304,13 @@ start_games(_Game, 0) ->
     ok;
 
 start_games(Game, N) ->
-    cardgame:start(_ = #start_game{ 
-                     type = Game#tab_game_config.type, 
-                     limit = Game#tab_game_config.limit, 
-                     start_delay = Game#tab_game_config.start_delay,
-                     player_timeout = Game#tab_game_config.player_timeout,
-                     seat_count = Game#tab_game_config.seat_count
-                    }),
+    game:start(_ = #start_game{ 
+                 type = Game#tab_game_config.type, 
+                 limit = Game#tab_game_config.limit, 
+                 start_delay = Game#tab_game_config.start_delay,
+                 player_timeout = Game#tab_game_config.player_timeout,
+                 seat_count = Game#tab_game_config.seat_count
+                }),
     start_games(Game, N - 1).
 
 kill_games() ->
@@ -321,12 +321,12 @@ kill_games([]) ->
     ok;
 
 kill_games([H|T]) ->
-    cardgame:stop(H#tab_game_xref.process),
+    game:stop(H#tab_game_xref.process),
     kill_games(T).
 
 start_test_game(R) ->
-    {ok, Game} = cardgame:start(R),
-    GID = cardgame:call(Game, 'ID'),
+    {ok, Game} = game:start(R),
+    GID = game:call(Game, 'ID'),
     #your_game{ game = GID }.
 	    
 %%

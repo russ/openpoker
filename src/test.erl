@@ -6,7 +6,7 @@
 
 -export([all/0, make_players/1, make_test_game/3, 
          make_player/1, stop_player/2, install_trigger/3,
-         wait_for_msg/2]).
+         wait/2]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -15,12 +15,6 @@
 -include("texas.hrl").
 -include("schema.hrl").
 -include("test.hrl").
-
--record(test, {
-	  button_seat = none,
-	  call = 0,
-	  winners = none
-	 }).
 
 all() ->
     db:start(),
@@ -32,16 +26,255 @@ all() ->
     pot:test(),
     player:test(),
     game:test(),
-    cardgame:test(),
-    deal_cards:test(),
     deck:test(),
     fixed_limit:test(),
-    delayed_start:test(),
+    wait_for_players:test(),
     barrier_start:test(),
     blinds:test(),
     betting:test(),
     showdown:test(),
     login:test(),
+    ok.
+
+%%% Blinds
+
+bust_trigger(Game, Event, RegName) ->
+    case Event of
+	{in, {'$gen_cast', #notify_start_game{}}} ->
+            Pid = global:whereis_name(RegName),
+            gen_server:cast(Game, {'SET STATE', Pid, ?PS_FOLD}),
+            done;
+        _ ->
+            Game
+    end.
+        
+%%% Both blinds are posted
+
+post_blinds_trigger({Game, GID}, Event, RegName) ->
+    case Event of 
+	{in, {'$gen_cast', #bet_req{ 
+                game = GID, 
+                call = Amount, 
+                min = 0, 
+                max = 0
+               }}} ->
+	    %% post the blind
+            Pid = global:whereis_name(RegName),
+	    gen_server:cast(Game, #call{ player = Pid, amount = Amount }),
+            done;
+	_ ->
+	    {Game, GID}
+    end.
+
+ctx(Ctx) ->
+    {Ctx#texas.b, 
+     Ctx#texas.sb, 
+     Ctx#texas.bb, 
+     Ctx#texas.call}.
+
+headsup_test() ->
+    {Game, Players} = make_game_heads_up(),
+    GID = gen_server:call(Game, 'ID'),
+    [A, B] = Players,
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [A, B]),
+    Ctx = #texas {
+      b = element(2, A),
+      sb = element(2, A), 
+      bb = element(2, B),
+      call = 10
+     },
+    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(ctx(Ctx), ctx(Ctx1)),
+    game:stop(Game),
+    test:cleanup_players(Players),
+    ok.
+
+%%% http://www.homepokertourney.com/button.htm
+
+%%% 3 players, button is bust
+
+three_players_button_bust_test() ->
+    {Game, Players} = make_game_3_bust(),
+    GID = gen_server:call(Game, 'ID'),
+    [A, B, C] = Players,
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [A, B, C]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, A)),
+    Ctx = #texas {
+      b = element(2, C),
+      sb = element(2, C),
+      bb = element(2, B),
+      call = 10
+     },
+    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(ctx(Ctx), ctx(Ctx1)),
+    game:stop(Game),
+    test:cleanup_players(Players),
+    ok.
+
+%%% 3 players, small blind is bust
+
+three_players_sb_bust_test() ->
+    {Game, Players} = make_game_3_bust(),
+    GID = gen_server:call(Game, 'ID'),
+    [A, B, C] = Players,
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [A, B, C]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
+    Ctx = #texas {
+      b = element(2, C),
+      sb = element(2, C),
+      bb = element(2, A),
+      call = 10
+     },
+    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(ctx(Ctx), ctx(Ctx1)),
+    game:stop(Game),
+    test:cleanup_players(Players),
+    ok.
+
+%%% 3 players, big blind is bust
+
+three_players_bb_bust_test() ->
+    {Game, Players} = make_game_3_bust(),
+    GID = gen_server:call(Game, 'ID'),
+    [A, B, C] = Players,
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [A, B, C]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
+    Ctx = #texas {
+      b = element(2, B),
+      sb = element(2, B),
+      bb = element(2, A),
+      call = 10
+     },
+    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(ctx(Ctx), ctx(Ctx1)),
+    game:stop(Game),
+    test:cleanup_players(Players),
+    ok.
+
+%%% 5 players, small blind is bust
+
+five_players_sb_bust_test() ->
+    {Game, Players} = make_game_5_bust(),
+    GID = gen_server:call(Game, 'ID'),
+    [_, B, C, D, E] = Players,
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
+    Ctx = #texas {
+      b = element(2, B),
+      sb = element(2, C),
+      bb = element(2, D),
+      call = 10
+     },
+    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(ctx(Ctx), ctx(Ctx1)),
+    game:stop(Game),
+    test:cleanup_players(Players),
+    ok.
+
+five_players_bust_test() ->
+    {Game, Players} = make_game_5_bust(2, 3, 4),
+    GID = gen_server:call(Game, 'ID'),
+    [_, B, C, D, E] = Players,
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
+    Ctx = #texas {
+      b = element(2, C),
+      sb = element(2, D),
+      bb = element(2, E),
+      call = 10
+     },
+    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(ctx(Ctx), ctx(Ctx1)),
+    game:stop(Game),
+    test:cleanup_players(Players),
+    ok.
+
+%%% 5 players, big blind is bust
+
+five_players_bb_bust_test() ->
+    {Game, Players} = make_game_5_bust(),
+    GID = gen_server:call(Game, 'ID'),
+    [_, B, C, D, E] = Players,
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
+    Ctx = #texas {
+      b = element(2, B),
+      sb = element(2, C),
+      bb = element(2, D),
+      call = 10
+     },
+    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(ctx(Ctx), ctx(Ctx1)),
+    game:stop(Game),
+    test:cleanup_players(Players),
+    ok.
+
+five_players_bust1_test() ->
+    {Game, Players} = make_game_5_bust(2, 3, 4),
+    GID = gen_server:call(Game, 'ID'),
+    [_, B, C, D, E] = Players,
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
+    Ctx = #texas {
+      b = element(2, C),
+      sb = element(2, D),
+      bb = element(2, E),
+      call = 10
+     },
+    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(ctx(Ctx), ctx(Ctx1)),
+    game:stop(Game),
+    test:cleanup_players(Players),
+    ok.
+
+%%% 5 players, both blinds are bust
+
+five_players_blinds_bust_test() ->
+    {Game, Players} = make_game_5_bust(),
+    GID = gen_server:call(Game, 'ID'),
+    [_, B, C, D, E] = Players,
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
+    Ctx = #texas {
+      b = element(2, B),
+      sb = element(2, C),
+      bb = element(2, D),
+      call = 10
+     },
+    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(ctx(Ctx), ctx(Ctx1)),
+    game:stop(Game),
+    test:cleanup_players(Players),
+    ok.
+
+five_players_blinds_bust1_test() ->
+    {Game, Players} = make_game_5_bust(2, 3, 4),
+    GID = gen_server:call(Game, 'ID'),
+    [_, B, C, D, E] = Players,
+    test:install_trigger(fun post_blinds_trigger/3, {Game, GID}, [B, C, D, E]),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, B)),
+    test:install_trigger(fun bust_trigger/3, Game, element(1, C)),
+    Ctx = #texas {
+      b = element(2, C),
+      sb = element(2, D),
+      bb = element(2, E),
+      call = 10
+     },
+    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    ?assertEqual(Game, Game1),
+    ?assertEqual(ctx(Ctx), ctx(Ctx1)),
+    game:stop(Game),
+    test:cleanup_players(Players),
     ok.
 
 %%% Create player
@@ -65,13 +298,13 @@ create_player_test() ->
 create_game_test() ->
     flush(),
     {ok, Game} = start_basic_game(),
-    GID = cardgame:call(Game, 'ID'),
-    cardgame:cast(Game, {'NOTE', create_game}),
+    GID = gen_server:call(Game, 'ID'),
+    gen_server:cast(Game, {'NOTE', create_game}),
     ?assert(is_number(GID)),
-    ?assertEqual(0, cardgame:call(Game, 'JOINED')),
+    ?assertEqual(0, gen_server:call(Game, 'JOINED')),
     [Xref] = db:read(tab_game_xref, GID),
     ?assertEqual(Game, Xref#tab_game_xref.process),
-    cardgame:stop(Game),
+    game:stop(Game),
     timer:sleep(100),
     ?assertEqual([], db:read(tab_game_xref, GID)),
     ok.
@@ -82,25 +315,25 @@ simple_seat_query_test() ->
     flush(),
     Players = [{Player, _, _}] = make_players(1),
     Game = make_game(2, Players),
-    GID = cardgame:call(Game, 'ID'),
+    GID = gen_server:call(Game, 'ID'),
     PID = gen_server:call(Player, 'ID'),
-    X = cardgame:call(Game, 'SEAT QUERY'),
+    X = gen_server:call(Game, 'SEAT QUERY'),
     S1 = #seat_state{ 
       game = GID, 
-      seat_num = 1, 
+      seat = 1, 
       state = ?PS_PLAY, 
       player = PID,
       inplay = 1000.0 
      },
     S2 = #seat_state{
       game = GID,
-      seat_num = 2,
+      seat = 2,
       state = ?PS_EMPTY,
       inplay = 0.0
      },
-    cardgame:cast(Game, {'NOTE', simple_seat_query}),
+    gen_server:cast(Game, {'NOTE', simple_seat_query}),
     ?assertEqual([S1, S2], X),
-    Z = cardgame:call(Game, 'JOINED'),
+    Z = gen_server:call(Game, 'JOINED'),
     ?assertEqual(1, Z),
     cleanup_players(Players),
     ?assertEqual(ok, stop_game(Game)),
@@ -114,28 +347,28 @@ complex_seat_query_test() ->
     %% make sure we are notified
     gen_server:cast(Player, {'SOCKET', self()}),
     Game = make_game(Players),
-    cardgame:cast(Game, {'NOTE', complex_seat_query}),
-    GID = cardgame:call(Game, 'ID'),
+    gen_server:cast(Game, {'NOTE', complex_seat_query}),
+    GID = gen_server:call(Game, 'ID'),
     PID = gen_server:call(Player, 'ID'),
-    X1 = wait_for_msg(100, [chat, notify_cancel_game, ping, pong]),
-    Cmd = #join{ 
+    X1 = wait(),
+    X2 = X1#notify_join{ proc = undefined },
+    Cmd = #notify_join{ 
       game = GID, 
       player = PID, 
-      pid = PID,
-      seat_num = N, 
+      seat = N, 
       amount = 1000.0
      },
-    ?assertEqual(Cmd, X1),
-    player:cast(PID, #seat_query{ game = Game }),
-    X2 = wait_for_msg(100, [chat, notify_cancel_game, ping, pong]),
+    ?assertEqual(Cmd, X2),
+    gen_server:cast(Player, #seat_query{ game = Game }),
+    X3 = wait(),
     SeatState = #seat_state{
       game = GID,
-      seat_num = 1,
+      seat = 1,
       state = ?PS_PLAY,
       player = PID,
       inplay = 1000.0
      },
-    ?assertEqual(SeatState, X2),
+    ?assertEqual(SeatState, X3),
     ?assertNot(none == pp:write(SeatState)),
     cleanup_players(Players),
     ?assertEqual(ok, stop_game(Game)),
@@ -143,15 +376,15 @@ complex_seat_query_test() ->
     
 %%% Delayed start
 
-delayed_start_test() ->
+wait_for_players_test() ->
     flush(),
     Players = make_players(2),
+    Ctx = #texas{},
     Game = make_test_game(Players, 
-			  #test{},
-			  [{delayed_start, [0]}]),
-    cardgame:cast(Game, {'NOTE', delayed_start}),
-    cardgame:cast(Game, {'TIMEOUT', 0}),
-    ?assertEqual({'CARDGAME EXIT', Game, #test{}}, wait_for_msg(1000, [ping, pong])), 
+			  Ctx,
+			  [{wait_for_players, [0]}]),
+    gen_server:cast(Game, {'NOTE', wait_for_players}),
+    ?assertEqual({'CARDGAME EXIT', Game, Ctx}, wait()), 
     cleanup_players(Players),
     ?assertEqual(ok, stop_game(Game)),
     ok.
@@ -261,9 +494,9 @@ player_online_playing_test() ->
     ?assertEqual({ok, Pid}, login:login(Nick, Nick, Socket)),
     %% set up a busy player
     Game = make_game(2, [{Pid, 1, fun() -> stop_player(Pid, ID) end}]),
-    GID = cardgame:call(Game, 'ID'),
+    GID = gen_server:call(Game, 'ID'),
     PID = gen_server:call(Pid, 'ID'),
-    cardgame:cast(Game, {'NOTE', player_online_playing}),
+    gen_server:cast(Game, {'NOTE', player_online_playing}),
     timer:sleep(200),
     ?assertMatch([_], db:read(tab_inplay, {GID, ID})),
     %% login twice
@@ -273,16 +506,18 @@ player_online_playing_test() ->
     ?assertEqual(Socket, P#tab_player.socket),
     %% check inplay
     ?assertEqual(true, is_process_alive(Pid)),
-    Inplay3 = cardgame:call(Game, {'INPLAY', Pid}),
+    Inplay3 = gen_server:call(Game, {'INPLAY', Pid}),
     ?assertEqual(1000.0, Inplay3),
     %% look for notify join
-    ?assertEqual(#join{ 
-                 game = GID,
-                 player = PID,
-                 seat_num = 1,
-                 amount = 1000.00,
-                 pid = PID
-                }, wait_for_msg(100, [chat, notify_cancel_game, ping, pong])),
+    X1 = wait(),
+    X2 = X1#notify_join{ proc = undefined },
+    Cmd = #notify_join{ 
+      game = GID,
+      player = PID,
+      seat = 1,
+      amount = 1000.00
+     },
+    ?assertEqual(Cmd, X2),
     ?assertEqual(ok, stop_player(Pid, ID)),
     ?assertEqual(ok, stop_game(Game)),
     ok.
@@ -318,10 +553,10 @@ network_login_logout_test() ->
     ?assert(is_number(ID)),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend1(Socket, #login{ nick = Nick, pass = <<"@#%^@#">> }),
-    X = wait_for_msg(2000, [leave, chat, ping, pong]),
+    X = wait([leave, chat, ping, pong]),
     ?assertEqual(#bad{ cmd = ?CMD_LOGIN, error = ?ERR_BAD_LOGIN }, X),
     ?tcpsend1(Socket, #login{ nick = Nick, pass = Nick }),
-    X2 = wait_for_msg(2000, [ping, pong]),
+    X2 = wait([ping, pong]),
     [TP] = db:read(tab_player, ID),
     Player = TP#tab_player.process,
     ?assertEqual(#you_are{ player = Player }, X2),
@@ -331,7 +566,7 @@ network_login_logout_test() ->
     %% login again
     {ok, Socket1} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend1(Socket1, #login{ nick = Nick, pass = Nick }),
-    X3 = wait_for_msg(2000, [ping, pong]),
+    X3 = wait([ping, pong]),
     ?assertEqual(#you_are{ player = Player }, X3),
     ?tcpsend1(Socket1, #logout{}),
     gen_tcp:close(Socket1),
@@ -349,8 +584,11 @@ find_empty_game_test() ->
     {ok, Server} = server:start(Host, Port),
     timer:sleep(100),
     %% find an empty game
+    {ok, Game} = start_basic_game(),
+    gen_server:cast(Game, {'NOTE', find_empty_game}),
     find_game(Host, Port),
     %% clean up
+    ?assertEqual(ok, stop_game(Game)),
     server:stop(Server),
     ok.
 
@@ -364,20 +602,20 @@ simple_game_simulation_test() ->
     timer:sleep(100),
     %% find an empty game
     {ok, Game} = start_basic_game(),
-    cardgame:cast(Game, {'NOTE', simple_game_simulation}),
-    GID = cardgame:call(Game, 'ID'),
+    gen_server:cast(Game, {'NOTE', simple_game_simulation}),
+    GID = gen_server:call(Game, 'ID'),
     %% create dummy players
     Data
 	= [{_, ID2, _}, {_, ID1, _}, _]
 	= setup_game(Host, Port, Game,
-		      [{nick(), 1, ['BLIND', 'FOLD']},
-		       {nick(), 2, ['BLIND']}]),
+                     [{nick(), 1, ['CALL', 'FOLD']},
+                      {nick(), 2, ['CALL']}]),
     timer:sleep(1000),
     %% make sure game is started
-    ?assertEqual({'START', Game}, wait_for_msg(?START_DELAY * 2, [ping, pong])),
+    ?assertEqual({'START', GID}, wait()),
     %% wait for game to end
     Winners = gb_trees:insert(2, 15.0, gb_trees:empty()),
-    ?assertEqual({'END', GID, Winners}, wait_for_msg(?PLAYER_TIMEOUT, [ping, pong])),
+    ?assertEqual({'END', GID, Winners}, wait(?PLAYER_TIMEOUT)),
     timer:sleep(1000),
     %% check balances
     [B1] = db:read(tab_balance, ID1),
@@ -401,15 +639,19 @@ leave_after_sb_posted_test() ->
     {ok, Server} = server:start(Host, Port, true),
     timer:sleep(1000),
     {ok, Game} = start_basic_game(),
-    GID = cardgame:call(Game, 'ID'),
-    cardgame:cast(Game, {'NOTE', leave_after_sb_posted}),
+    GID = gen_server:call(Game, 'ID'),
+    gen_server:cast(Game, {'NOTE', leave_after_sb_posted}),
     %% create dummy players
     Data = setup_game(Host, Port, Game,
-		      [{nick(), 1, ['BLIND']},
+		      [{nick(), 1, ['CALL']},
 		       {nick(), 2, ['LEAVE']}]),
     %% make sure game is started
-    ?assertEqual({'START', Game}, wait_for_msg(?START_DELAY * 2, [ping, pong])),
-    ?assertEqual({'CANCEL', GID}, wait_for_msg(?START_DELAY * 2, [ping, pong])),
+    ?assertEqual({'START', GID}, wait()),
+    error_logger:info_report([{self, self()},
+                              {gid, GID},
+                              {now, now()}
+                             ]),
+    {timeout, 10000, ?_assertEqual({'CANCEL', GID}, wait([chat, ping, pong, notify_cancel_game]))},
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),
@@ -429,7 +671,7 @@ dynamic_game_start_test() ->
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend1(Socket, #login{ nick = Nick, pass = Nick}),
-    X1 = wait_for_msg(2000, [ping, pong]),
+    X1 = wait(),
     [TP] = db:read(tab_player, ID),
     Player = TP#tab_player.process,
     ?assertEqual(#you_are{ player = Player }, X1),
@@ -445,13 +687,13 @@ dynamic_game_start_test() ->
                              }),
     ?tcpsend1(Socket, Cmd),
     ?assertEqual(#bad{ cmd = ?CMD_START_GAME, error = ?ERR_START_DISABLED }, 
-                 wait_for_msg(2000, [ping, pong])),
+                 wait()),
     %% enable dynamic games
     ok = db:write(CC#tab_cluster_config{ 
                               enable_dynamic_games = true
                              }),
     ?tcpsend1(Socket, Cmd),
-    X2 = wait_for_msg(2000, [ping, pong]),
+    X2 = wait(),
     ?assertEqual(your_game, element(1, X2)),
     ?assert(util:is_process_alive(X2#your_game.game)),
     %% clean up
@@ -472,22 +714,20 @@ query_own_balance_test() ->
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend1(Socket, #login{ nick = Nick, pass = Nick }),
-    X = wait_for_msg(2000, [ping, pong]),
+    X = wait(),
     [TP] = db:read(tab_player, ID),
     Player = TP#tab_player.process,
     ?assertEqual(#you_are{ player = Player }, X),
     %% balance check 
     ?tcpsend1(Socket, #balance_query{}),
-    ?assertEqual(#balance{ amount = 10000000, inplay = 0}, 
-                 wait_for_msg(2000, [ping, pong])),
+    ?assertEqual(#balance{ amount = 10000000, inplay = 0}, wait()),
     [P1] = db:read(tab_balance, ID),
     ?assertEqual(10000000, P1#tab_balance.amount),
     %% move some money
     player:update_balance(ID, -150.00),
     %% another balance check 
     ?tcpsend1(Socket, #balance_query{}),
-    ?assertEqual(#balance{ amount = 8500000, inplay = 0}, 
-                 wait_for_msg(2000, [ping, pong])),
+    ?assertEqual(#balance{ amount = 8500000, inplay = 0}, wait()),
     [P2] = db:read(tab_balance, ID),
     ?assertEqual(8500000, P2#tab_balance.amount),
     %% clean up
@@ -499,35 +739,35 @@ query_own_balance_test() ->
 %%% Create players from the irc poker database 
 %%% and login/logout all of them.
 
-login_logout_irc_players_test_run_manually() ->
-    flush(),
-    Host = localhost, 
-    Port = port(),
-    mbu:create_players(),
-    {ok, Server} = server:start(Host, Port, true),
-    timer:sleep(100),
-    {atomic, Players} = db:find(player_info),
-    test190(Host, Port, Players),
-    server:stop(Server),
-    ok.
+%% login_logout_irc_players_test_run_manually() ->
+%%     flush(),
+%%     Host = localhost, 
+%%     Port = port(),
+%%     mbu:create_players(),
+%%     {ok, Server} = server:start(Host, Port, true),
+%%     timer:sleep(100),
+%%     {atomic, Players} = db:find(player_info),
+%%     test190(Host, Port, Players),
+%%     server:stop(Server),
+%%     ok.
 
-test190(_Host, _Port, []) ->
-    ok;
+%% test190(_Host, _Port, []) ->
+%%     ok;
 
-test190(Host, Port, [Info|Rest])
-  when is_record(Info, tab_player_info) ->
-    Nick = Info#tab_player_info.nick,
-    ID = Info#tab_player_info.pid,
-    {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
-    ?tcpsend1(Socket, #login{ nick = Nick, pass = Nick }),
-    X = wait_for_msg(2000, [ping, pong]),
-    [TP] = db:read(tab_player, ID),
-    Player = TP#tab_player.process,
-    ?assertEqual(#you_are{ player = Player }, X),
-    ?tcpsend1(Socket, #logout{}),
-    gen_tcp:close(Socket),
-    timer:sleep(100),
-    test190(Host, Port, Rest).
+%% test190(Host, Port, [Info|Rest])
+%%   when is_record(Info, tab_player_info) ->
+%%     Nick = Info#tab_player_info.nick,
+%%     ID = Info#tab_player_info.pid,
+%%     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
+%%     ?tcpsend1(Socket, #login{ nick = Nick, pass = Nick }),
+%%     X = wait([ping, pong]),
+%%     [TP] = db:read(tab_player, ID),
+%%     Player = TP#tab_player.process,
+%%     ?assertEqual(#you_are{ player = Player }, X),
+%%     ?tcpsend1(Socket, #logout{}),
+%%     gen_tcp:close(Socket),
+%%     timer:sleep(100),
+%%     test190(Host, Port, Rest).
 
 %%% Play two games in a row
 
@@ -538,27 +778,19 @@ two_games_in_a_row_test() ->
     {ok, Server} = server:start(Host, Port, true),
     timer:sleep(100),
     {ok, Game} = start_basic_game(),
-    GID = cardgame:call(Game, 'ID'),
-    cardgame:cast(Game, {'NOTE', two_games_in_a_row}),
+    GID = gen_server:call(Game, 'ID'),
+    gen_server:cast(Game, {'NOTE', two_games_in_a_row}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 2, % games to play
-                      [{nick("test200"), 1, ['BLIND', 'FOLD', 'BLIND', 'FOLD']},
-                       {nick("test200"), 2, ['BLIND', 'BLIND', 'FOLD']}]),
+                      [{nick("test200"), 1, ['CALL', 'FOLD', 'CALL', 'FOLD']},
+                       {nick("test200"), 2, ['CALL', 'CALL', 'FOLD']}]),
     %% make sure game is started
-    ?assertEqual({'START', Game}, 
-                 wait_for_msg(?START_DELAY * 2, 
-                          [chat, notify_cancel_game, ping, pong])),
+    ?assertEqual({'START', GID}, wait()),
     %% wait for game to end
-    ?assertMatch({'END', GID, _}, 
-                 wait_for_msg(?PLAYER_TIMEOUT, 
-                          [chat, notify_cancel_game, ping, pong])),
+    ?assertMatch({'END', GID, _}, wait()),
     %% and start another round
-    ?assertEqual({'START', Game}, 
-                 wait_for_msg(?START_DELAY * 2, 
-                          [chat, notify_cancel_game, ping, pong])),
-    ?assertMatch({'END', GID, _}, 
-                 wait_for_msg(?PLAYER_TIMEOUT, 
-                              [chat, notify_cancel_game, ping, pong])),
+    ?assertEqual({'START', GID}, wait()),
+    ?assertMatch({'END', GID, _}, wait()),
     flush(),
     %% clean up
     cleanup_players(Data),
@@ -577,18 +809,18 @@ two_games_with_leave_test() ->
     timer:sleep(100),
     %% find an empty game
     {ok, Game} = start_basic_game(3),
-    GID = cardgame:call(Game, 'ID'),
-    cardgame:cast(Game, {'NOTE', two_games_with_leave}),
+    GID = gen_server:call(Game, 'ID'),
+    gen_server:cast(Game, {'NOTE', two_games_with_leave}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 1, % games to play
-                      [{nick(), 1, ['BLIND', 'RAISE', 'CALL', 'CHECK', 'CHECK']},
-                       {nick(), 2, ['BLIND', 'QUIT']},
+                      [{nick(), 1, ['CALL', 'RAISE', 'CALL', 'CHECK', 'CHECK']},
+                       {nick(), 2, ['CALL', 'QUIT']},
                        {nick(), 3, ['RAISE', 'CALL', 'CALL', 'CHECK', 'CHECK']}
                       ]),
     %% make sure game is started
-    ?assertEqual({'START', Game}, wait_for_msg(?START_DELAY * 2, [ping, pong])),
+    ?assertEqual({'START', GID}, wait()),
     %% wait for game to end
-    ?assertMatch({'END', GID, _}, wait_for_msg(?PLAYER_TIMEOUT, [ping, pong])),
+    ?assertMatch({'END', GID, _}, wait()),
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),
@@ -605,100 +837,8 @@ make_winners([], Tree) ->
 make_winners([{Seat, Amount}|T], Tree) ->
     make_winners(T, gb_trees:insert(Seat, Amount, Tree)).
     
-%%% Hands weren't reset at the start of each game. This caused 
-%%% the pot to "stay split" after the first time and thus cause
-%%% the same outcome regardless of cards.
-
-set_games_to_play(_, []) ->
-    ok;
-
-set_games_to_play(N, [H|T]) ->
-    gen_server:cast(H, {'GAMES TO PLAY', N}),
-    set_games_to_play(N, T).
-    
-split_pot_test() ->
-    Host = "localhost", 
-    Port = port(),
-    {ok, Server} = server:start(Host, Port, true),
-    timer:sleep(100),
-    %% find an empty game
-    {ok, Game} = start_basic_game(),
-    GID = cardgame:call(Game, 'ID'),
-    cardgame:cast(Game, {'NOTE', split_pot}),
-    %% create dummy players
-    Actions1 = ['BLIND', 'CHECK', 'RAISE', 'CHECK', 'CHECK'],
-    Actions2 = ['BLIND', 'CHECK', 'CALL', 'CHECK', 'CHECK'],
-    Data = [ {P2, _, _}, {P1, _, _}, {Obs, _, _} ]
-	= setup_game(Host, Port, Game, 2, % games to play
-                     [{<<"split-pot-bot1">>, 1, []},
-                      {<<"split-pot-bot2">>, 2, []}
-                     ]),
-    %% make sure game is started
-    wait_for_split_pot(Game, GID, Obs, {P1, Actions1}, {P2, Actions2}, 0),
-    N = 3,
-    set_games_to_play(N, [P1, P2, Obs]),
-    check_pot(Game, GID, Obs, {P1, Actions1}, {P2, Actions2}, N),
-    flush(),
-    %% clean up
-    timer:sleep(2000),
-    cleanup_players(Data),
-    ?assertEqual(ok, stop_game(Game)),
-    server:stop(Server),
-    ok.
-
-wait_for_split_pot(_, _, _, _, _, 2) ->
-    ok;
-
-wait_for_split_pot(Game, GID, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, _) ->
-    gen_server:cast(P1, {'SET ACTIONS', Actions1}),
-    gen_server:cast(P2, {'SET ACTIONS', Actions2}),
-    set_games_to_play(3, [P1, P2, Obs]),
-    ?assertEqual({'START', Game}, 
-                 wait_for_msg(?START_DELAY * 2, 
-                              [chat, notify_cancel_game, ping, pong])),
-    %% wait for game to end
-    Winners = receive
-                  {'END', GID, Tree} ->
-                      Tree;
-                  _ ->
-                      ?assertEqual(0, 1)
-              after ?PLAYER_TIMEOUT ->
-                      ?assertEqual(0, 2)
-              end,
-    wait_for_split_pot(Game, GID, Obs, X, Y, gb_trees:size(Winners)).
-
-check_pot(_, _, _, _, _, 0) ->
-    ok;
-
-check_pot(Game, GID, Obs, X = {P1, Actions1}, Y = {P2, Actions2}, N) ->
-    gen_server:cast(P1, {'SET ACTIONS', Actions1}),
-    gen_server:cast(P2, {'SET ACTIONS', Actions2}),
-    ?assertEqual({'START', Game}, wait_for_msg(?START_DELAY * 2, [ping, pong])),
-    %% wait for game to end
-    Winners = receive
-                  {'END', GID, Tree} ->
-                      Tree;
-                  _ ->
-                      ?assertEqual(0, 1)
-              after ?PLAYER_TIMEOUT ->
-                      ?assertEqual(0, 2)
-              end,
-    io:format("--- Winners: ~w, ~w~n", [gb_trees:size(Winners), Winners]),
-    check_pot(Game, GID, Obs, X, Y, N - 1).
-
 %%% Leave out of turn
 
-leave_filter(#game_stage{ stage = ?GS_RIVER }, Bot) ->
-    ok = ?tcpsend1(Bot#bot.socket, #leave{ 
-                            player = Bot#bot.pid,
-                            game = Bot#bot.gid
-                           }),
-    ok = ?tcpsend1(Bot#bot.socket, #logout{}),
-    {done, Bot#bot{ done = true }};
-
-leave_filter(_, Bot) ->
-    {none, Bot}.
-        
 leave_out_of_turn_test() ->
     flush(),
     Host = "localhost", 
@@ -707,17 +847,17 @@ leave_out_of_turn_test() ->
     timer:sleep(100),
     %% find an empty game
     {ok, Game} = start_basic_game(3),
-    GID = cardgame:call(Game, 'ID'),
-    cardgame:cast(Game, {'NOTE', leave_out_of_turn}),
+    GID = gen_server:call(Game, 'ID'),
+    gen_server:cast(Game, {'NOTE', leave_out_of_turn}),
     %% create dummy players
     Data = setup_game(Host, Port, Game, 1, % games to play
-                      [{nick(), 1, ['BLIND', %1
+                      [{nick(), 1, ['CALL', %1
                                     'CALL', %1
                                     'CHECK', %2
                                     'CHECK', %3
                                     'CHECK'
                                    ]},
-                       {nick(), 2, ['BLIND', %1
+                       {nick(), 2, ['CALL', %1
                                     'CALL', %1
                                     'CHECK', %2
                                     'CHECK', %3
@@ -726,39 +866,87 @@ leave_out_of_turn_test() ->
                        {nick(), 3, ['RAISE', 
                                     'CALL', 
                                     'CHECK', 
-                                    {'FILTER', fun leave_filter/2}
+                                    {'FILTER', fun dumbo:leave_on_river/2}
                                    ]}
                       ]),
     %% make sure game is started
-    ?assertEqual({'START', Game}, wait_for_msg(?START_DELAY * 2, [ping, pong])),
+    ?assertEqual({'START', GID}, wait()),
     %% wait for game to end
-    ?assertMatch({'END', GID, _}, wait_for_msg(?PLAYER_TIMEOUT, [ping, pong])),
+    ?assertMatch({'END', GID, _}, wait()),
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),
     server:stop(Server),
     ok.
 
-%%% Populate a dummy game to test the client
-
-dummy_game() ->
-    Host = "localhost",
-    Port = 2000,
-    %% find an empty game
-    {ok, Game} = start_basic_game(4),
-    GID = cardgame:call(Game, 'ID'),
-    cardgame:cast(Game, {'NOTE', dummy_game}),
-    %% create dummy players
-    setup_game(Host, Port, Game,
-	       [{nick(), 1, ['SIT OUT']},
-		{nick(), 2, ['SIT OUT']},
-		{nick(), 3, ['SIT OUT']},
-		{nick(), 4, ['SIT OUT']}]),
-    GID.
-
 %%%
 %%% Utility
 %%%
+
+%%% Populate a dummy game to test the client
+
+%% dummy_game() ->
+%%     Host = "localhost",
+%%     Port = 2000,
+%%     %% find an empty game
+%%     {ok, Game} = start_basic_game(4),
+%%     GID = gen_server:call(Game, 'ID'),
+%%     gen_server:cast(Game, {'NOTE', dummy_game}),
+%%     %% create dummy players
+%%     setup_game(Host, Port, Game,
+%% 	       [{nick(), 1, ['SIT OUT']},
+%% 		{nick(), 2, ['SIT OUT']},
+%% 		{nick(), 3, ['SIT OUT']},
+%% 		{nick(), 4, ['SIT OUT']}]),
+%%     GID.
+
+modules() -> 
+    [{wait_for_players, [1000]}, 
+     {delay, [100]},
+     {blinds, []}].
+
+make_game_heads_up() ->
+    Players = make_players(2),
+    Ctx = #texas{
+      b = none,
+      sb = none,
+      bb = none
+     },
+    Game = make_test_game(Players, Ctx, modules()),
+    {Game, Players}.
+
+make_game_3_bust() ->
+    Players = test:make_players(3),
+    Ctx = #texas {
+      sb = element(2, lists:nth(2, Players)),
+      bb = element(2, lists:nth(3, Players)),
+      b = element(2, lists:nth(1, Players))
+     },
+    Game = make_test_game(Players, Ctx, modules()),
+    {Game, Players}.
+
+make_game_5_bust() ->
+    make_game_5_bust(1, 2, 3).
+
+make_game_5_bust(Button_N, SB_N, BB_N) ->
+    {A, AP} = test:make_player(test:nick()),
+    {B, BP} = test:make_player(test:nick()),
+    {C, CP} = test:make_player(test:nick()),
+    {D, DP} = test:make_player(test:nick()),
+    {E, EP} = test:make_player(test:nick()),
+    AF = fun() -> test:stop_player(A, AP) end,
+    BF = fun() -> test:stop_player(B, BP) end,
+    CF = fun() -> test:stop_player(C, CP) end,
+    DF = fun() -> test:stop_player(D, DP) end,
+    EF = fun() -> test:stop_player(E, EP) end,
+    Players = [{A, 2, AF}, {B, 4, BF}, {C, 6, CF}, {D, 8, DF}, {E, 9, EF}],
+    Ctx = #texas {
+      sb = element(2, lists:nth(SB_N, Players)),
+      bb = element(2, lists:nth(BB_N, Players)),
+      b = element(2, lists:nth(Button_N, Players))
+     },
+    Game = make_test_game(10, Players, Ctx, modules()),
+    {Game, Players}.
 
 cleanup_players([]) ->
     ok;
@@ -794,9 +982,11 @@ make_test_game(SeatCount, Players, Context, Modules) ->
       limit = #limit{ type = ?LT_FIXED_LIMIT, low = 10, high = 20 },
       seat_count = SeatCount,
       required = length(Players),
+      start_delay = 1000,
       player_timeout = 1000
      },
-    {ok, Game} = cardgame:test_start(Cmd, Context, Modules),
+    {ok, Game} = game:start(Cmd, {Context, Modules}),
+    gen_server:cast(Game, {'PARENT', self()}),
     join_game(Game, Players),
     Game.
 
@@ -812,37 +1002,39 @@ join_game(_Game, []) ->
     ok;
 
 join_game(Game, [{Player, SeatNum, _}|Rest]) ->
-    cardgame:cast(Game, _ = #join{ 
-                          game = Game,
-                          player = Player,
-                          pid = gen_server:call(Player, 'ID'),
-                          seat_num = SeatNum,
-                          amount = 1000.00,
-                          state = ?PS_PLAY
-                         }),
+    gen_server:cast(Game, _ = #join{ 
+                            game = Game,
+                            player = Player,
+                            pid = gen_server:call(Player, 'ID'),
+                            seat = SeatNum,
+                            amount = 1000.00,
+                            state = ?PS_PLAY
+                           }),
     join_game(Game, Rest).
     
-install_trigger(Fun, State, Pids) when is_list(Pids) ->
+install_trigger(Fun, State, Pids) 
+  when is_list(Pids) ->
     lists:foreach(fun({Pid, _, _}) ->
 			  sys:install(Pid, {Fun, State})
 		  end, Pids);
  
-install_trigger(Fun, State, Pid) when is_pid(Pid) ->
+install_trigger(Fun, State, Pid) 
+  when is_pid(Pid) ->
     sys:install(Pid, {Fun, State}).
 
 find_game(Host, Port) ->
-    find_game(Host, Port, ?GT_IRC_TEXAS).
+    find_game(Host, Port, ?GT_TEXAS_HOLDEM).
 
 find_game(Host, Port, GameType) ->
     {ok, Socket} = tcp_server:start_client(Host, Port, 1024),
     ?tcpsend1(Socket, _ = #game_query{
-                       game_type = GameType,
-                       limit_type = ?LT_FIXED_LIMIT,
-                       expected = #query_op{ op = ?OP_IGNORE, val = 2},
-                       joined = #query_op{ op = ?OP_EQUAL, val = 0},
-                       waiting = #query_op{ op = ?OP_IGNORE, val = 0}
-                      }),
-    X = wait_for_msg(3000, [chat, notify_cancel_game, ping, pong]),
+                        game_type = GameType,
+                        limit_type = ?LT_FIXED_LIMIT,
+                        expected = #query_op{ op = ?OP_IGNORE, val = 2},
+                        joined = #query_op{ op = ?OP_EQUAL, val = 0},
+                        waiting = #query_op{ op = ?OP_IGNORE, val = 0}
+                       }),
+    X = wait([chat, notify_cancel_game, ping, pong]),
     ?assertEqual(game_info, element(1, X)),
     ?assertEqual(?LT_FIXED_LIMIT, (X#game_info.limit)#limit.type),
     GID = X#game_info.game,
@@ -873,25 +1065,18 @@ connect_observer(Host, Port, Game) ->
 connect_observer(Host, Port, Game, Trace) ->
     connect_observer(Host, Port, Game, 1, Trace).
 
-connect_observer(Host, Port, Game, GamesToWatch, Trace) ->
-    {ok, Obs} = observer:start(self()),
-    gen_server:cast(Obs, {'TRACE', Trace}),
-    gen_server:cast(Obs, {'GAMES TO PLAY', GamesToWatch}),
-    ok = gen_server:call(Obs, {'CONNECT', Host, Port}, 15000),
-    GID = cardgame:call(Game, 'ID'),
-    gen_server:cast(Obs, #watch{ game = GID }),
-    F = fun() -> stop_proc(Obs, fun observer:stop/1) end,
+connect_observer(Host, Port, Game, N, Trace) ->
+    {ok, Obs} = bot:start(Host, Port, observer, [self(), Trace, N]),
+    GID = gen_server:call(Game, 'ID'),
+    bot:watch(Obs, GID),
+    F = fun() -> stop_proc(Obs, fun bot:stop/1) end,
     {Obs, 0, F}.
 
-connect_player(Nick, Host, Port, Game, SeatNum, GamesToPlay, Actions) ->
+connect_player(Nick, Host, Port, Game, SeatNum, N, Actions) ->
     {ok, ID} = player:create(Nick, Nick, <<"">>, 1000.0),
-    {ok, Bot} = bot:start(Nick, SeatNum, SeatNum, 1000.0),
-    gen_server:cast(Bot, {'SET ACTIONS', Actions}),
-    gen_server:cast(Bot, {'GAMES TO PLAY', GamesToPlay}),
-    GID = cardgame:call(Game, 'ID'),
-    gen_server:cast(Bot, {'WATCH', GID}),
-    ok = gen_server:call(Bot, {'CONNECT', Host, Port}, 15000),
-    gen_server:cast(Bot, #login{ nick = Nick, pass = Nick }),
+    {ok, Bot} = bot:start(Host, Port, dumbo, [Actions, N]),
+    GID = gen_server:call(Game, 'ID'),
+    bot:join(Bot, GID, Nick, Nick, SeatNum, 1000.0),
     F = fun() -> stop_proc(Bot, fun bot:stop/1) end,
     {Bot, ID, F}.
 
@@ -936,7 +1121,7 @@ port() ->
     2000 + random:uniform(20000).
 
 stop_game(Game) ->
-    stop_proc(Game, fun cardgame:stop/1).
+    stop_proc(Game, fun game:stop/1).
 
 stop_player(Player, ID) ->
     gen_server:cast(Player, #logout{}),
@@ -953,7 +1138,18 @@ stop_proc(Pid, F) ->
             {error, timeout}
     end.
 
-wait_for_msg(Timeout, Skip) ->
+wait() ->
+    wait(3000).
+
+wait(Skip) 
+  when is_list(Skip) ->
+    wait(3000, Skip);
+
+wait(Timeout)
+  when is_integer(Timeout) ->
+    wait(Timeout, ['CANCEL', chat, ping, pong, notify_cancel_game]).
+
+wait(Timeout, Skip) ->
     case receive
              {packet, M1} ->
                  M1;
@@ -970,7 +1166,7 @@ wait_for_msg(Timeout, Skip) ->
             DoSkip = lists:member(element(1, M), Skip),
             if 
                 DoSkip ->
-                    wait_for_msg(Timeout, Skip);
+                    wait(Timeout, Skip);
                 true ->
                     M
             end
@@ -980,26 +1176,26 @@ start_basic_game() ->
     start_basic_game(2).
 
 start_basic_game(N) ->
-    cardgame:start(_ = #start_game{ 
-                     type = ?GT_IRC_TEXAS,
-                     limit = #limit{ 
-                       type = ?LT_FIXED_LIMIT, 
-                       low = 10, 
-                       high = 20
-                      },
-                     start_delay = 100,
-                     player_timeout = 1000,
-                     seat_count = N
-                    }).
+    game:start(#start_game{ 
+                 type = ?GT_IRC_TEXAS,
+                 limit = #limit{ 
+                   type = ?LT_FIXED_LIMIT, 
+                   low = 10, 
+                   high = 20
+                  },
+                 start_delay = 1000,
+                 player_timeout = 1000,
+                 seat_count = N
+                }).
 
 %%% 
 
-profile() ->
-    schema:install(),
-    profile(all).
+%% profile() ->
+%%     schema:install(),
+%%     profile(all).
 
-profile(Test) ->
-    fprof:apply(test, Test, []),
-    fprof:profile([{dump, []}]),
-    fprof:analyse([{dest, []}, {cols, 150}, {totals, true}]). 
+%% profile(Test) ->
+%%     fprof:apply(test, Test, []),
+%%     fprof:profile([{dump, []}]),
+%%     fprof:analyse([{dest, []}, {cols, 150}, {totals, true}]). 
 
