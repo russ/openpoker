@@ -36,8 +36,6 @@
 	  %% time given to players 
 	  %% to make a move
 	  timeout = ?PLAYER_TIMEOUT,
-	  %% amount to call
-	  call = 0, 
 	  %% number of raises so far
 	  raise_count = 0,
 	  %% players required to start a game

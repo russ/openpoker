@@ -37,15 +37,15 @@ barrier_start(Game, Ctx, {timeout, _, _}) ->
 
 barrier_start(Game, Ctx, {'EXIT', Barrier, _})
   when Barrier == Game#game.barrier ->
-    g:notify_start(Game),
+    g:notify_start_game(Game),
     {stop, Game, Ctx};
 
 barrier_start(Game, Ctx, R = #join{}) ->
-    Game1 = g:join(Game, R, ?PS_PLAY),
+    Game1 = g:join(Game, R#join { state = ?PS_PLAY }),
     {continue, Game1, Ctx};
 
 barrier_start(Game, Ctx, R = #leave{}) ->
-    Game1 = g:leave(Game, R, ?PS_ANY),
+    Game1 = g:leave(Game, R#leave { state = ?PS_ANY }),
     {continue, Game1, Ctx};
 
 barrier_start(Game, Ctx, _) ->

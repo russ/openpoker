@@ -20,7 +20,6 @@ all() ->
     db:start(),
     schema:install(),
     ok = mnesia:wait_for_tables([tab_game_config], 10000),
-    test(),
     db:test(),
     hand:test(),
     pot:test(),
@@ -29,11 +28,11 @@ all() ->
     deck:test(),
     fixed_limit:test(),
     wait_for_players:test(),
-    barrier_start:test(),
     blinds:test(),
     betting:test(),
     showdown:test(),
     login:test(),
+    test(),
     ok.
 
 %%% Blinds
@@ -651,7 +650,7 @@ leave_after_sb_posted_test() ->
                               {gid, GID},
                               {now, now()}
                              ]),
-    {timeout, 10000, ?_assertEqual({'CANCEL', GID}, wait([chat, ping, pong, notify_cancel_game]))},
+    ?assertEqual({'CANCEL', GID}, wait([chat, ping, pong, notify_cancel_game])),
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),

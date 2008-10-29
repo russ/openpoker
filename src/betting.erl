@@ -20,31 +20,36 @@ start(Game, Ctx, [MaxRaises, Stage, HaveBlinds]) ->
              max_raises = MaxRaises,
              stage = Stage
             },
-    B = Ctx1#texas.b, 
-    Call = Ctx1#texas.call,
+    Ctx2 = if
+               not HaveBlinds ->
+                   Ctx1#texas{ call = 0 };
+               true ->
+                   Ctx1
+           end,
+    B = Ctx2#texas.b, 
     Active = g:get_seats(Game, B, ?PS_PLAY),
     PlayerCount = length(Active),
     if
 	PlayerCount < 2 ->
-            {stop, Game, Ctx};
+            {stop, Game, Ctx2};
 	true ->
             Event = #game_stage{ 
               game = Game#game.gid, 
-              stage = Ctx1#texas.stage
+              stage = Ctx2#texas.stage
              },
             Game1 = g:broadcast(Game, Event),
 	    if 
 		HaveBlinds ->
 		    %% start with the player after the big blind
-		    BB = Ctx1#texas.bb,
+		    BB = Ctx2#texas.bb,
 		    Temp = g:get_seats(Game1, BB, ?PS_PLAY),
 		    Player = hd(Temp);
 		true ->
 		    %% start with the first player after the button
 		    Player = hd(Active)
 	    end,
-            Game2 = Game1#game{ call = Call, raise_count = 0 },
-	    ask_for_bet(Game2, Ctx, Player)
+            Game2 = Game1#game{ raise_count = 0 },
+	    ask_for_bet(Game2, Ctx2, Player)
     end.
 
 betting(Game, Ctx, #call{ player = Player }) 
@@ -113,8 +118,9 @@ betting(Game, Ctx, #raise{ player = Player, raise = Amt }) ->
               total = Amt + Call
              },
             Game5 = g:broadcast(Game4, R1),
-            Game6 = Game5#game{ call = Amt + Call, raise_count = RC1 },
-            next_turn(Game6, Ctx, Ctx#texas.exp_seat)
+            Game6 = Game5#game{ raise_count = RC1 },
+            Ctx1 = Ctx#texas{ call = Ctx#texas.call + Amt },
+            next_turn(Game6, Ctx1, Ctx1#texas.exp_seat)
     end;
 
 betting(Game, Ctx, R = #fold{}) ->

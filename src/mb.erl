@@ -376,8 +376,9 @@ start_game(G, Delay, Barrier)
       seat_count = G#irc_game.player_count,
       required = G#irc_game.player_count,
       start_delay = Delay,
-      rigged_deck = rig_deck(G)
+      rigged_deck = rig_deck(G),
+      barrier = Barrier
      },
-    {ok, Game} = game:start(Cmd, Barrier),
+    {ok, Game} = game:start(Cmd),
     {ok, gen_server:call(Game, 'ID')}.
 

@@ -138,13 +138,14 @@ report(R = #game_info{}) ->
               [Limit#limit.low, 
                Limit#limit.high]);
 
-report(R = #seat_state{}) ->
-    io:format("~p: STATE: ~p @ ~p = ~p~n",
+report(R = #seat_state{ state = ?PS_FOLD }) ->
+    io:format("~p: FOLD: ~p~n",
               [R#seat_state.game, 
-               R#seat_state.player, 
-               R#seat_state.seat, 
-               R#seat_state.state
+               R#seat_state.player
               ]);
+
+report(#seat_state{}) ->
+    ok;
 
 report(R = #notify_chat{}) ->
     io:format("~w: CHAT: ~w: ~p~n",
@@ -162,6 +163,12 @@ report(R = #game_stage{}) ->
               [R#game_stage.game,
                R#game_stage.stage]);
 
+report(R = #notify_call{})
+  when R#notify_call.amount == 0 ->
+    io:format("~w: CHECK: ~w~n",
+              [R#notify_call.game, 
+               R#notify_call.player]);
+
 report(R = #notify_call{}) ->
     io:format("~w: CALL: ~w, ~-14.2. f~n",
               [R#notify_call.game, 
@@ -169,11 +176,11 @@ report(R = #notify_call{}) ->
                R#notify_call.amount / 1.0]);
 
 report(R = #notify_raise{}) ->
-    io:format("~w: RAISE: ~w, ~-14.2. f, ~-14.2. f~n",
+    io:format("~w: RAISE: ~w, ~-14.2. f + ~-14.2. f~n",
               [R#notify_raise.game, 
                R#notify_raise.player, 
                R#notify_raise.raise / 1.0, 
-               R#notify_raise.total / 1.0]);
+               (R#notify_raise.total - R#notify_raise.raise) / 1.0]);
 
 report(R = #notify_sb{}) ->
     io:format("~w: SB: ~w~n",

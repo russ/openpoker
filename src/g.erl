@@ -147,7 +147,6 @@ reset(Game) ->
     Game1 = Game#game{
               deck = Deck,
 	      board = [],
-	      call = 0,
 	      raise_count = 0,
               pot = pot:reset(Game#game.pot)
 	     },
@@ -387,11 +386,19 @@ set_state(Game, Player, State)
 set_state(Game, SeatNum, State)
   when is_integer(SeatNum) ->
     Seat = element(SeatNum, Game#game.seats),
-    Game#game {
-      seats = setelement(SeatNum,
-                         Game#game.seats,
-                         Seat#seat{ state = State })
-     }.
+    Game1 = Game#game {
+              seats = setelement(SeatNum,
+                                 Game#game.seats,
+                                 Seat#seat{ state = State })
+             },
+    Event = #seat_state{
+      game = Game1#game.gid,
+      seat = SeatNum,
+      state = State,
+      player = Seat#seat.pid,
+      inplay = Seat#seat.inplay
+     },
+    broadcast(Game1, Event).
 
 get_seat(Game, SeatNum) 
   when is_record(Game, game),

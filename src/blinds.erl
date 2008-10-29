@@ -274,14 +274,26 @@ advance_button(Game, Ctx) ->
 ask_for_blind(Game, Ctx, N, Amount, State) ->
     Seat = g:get_seat(Game, N),
     Player = Seat#seat.player,
-    Game1 = g:request_bet(Game, N, Amount, 0, 0),
-    Game2 = g:restart_timer(Game1, ?PLAYER_TIMEOUT),
+    Game1 =  if
+                 State == small_blind ->
+                     g:broadcast(Game, _ = #notify_sb{ 
+                                         game = Game#game.gid, 
+                                         sb = N
+                                        });
+                 true ->
+                     g:broadcast(Game, _ = #notify_bb{ 
+                                         game = Game#game.gid, 
+                                         bb = N
+                                        })
+             end,
+    Game2 = g:request_bet(Game1, N, Amount, 0, 0),
+    Game3 = g:restart_timer(Game2, ?PLAYER_TIMEOUT),
     Ctx1 = Ctx#texas{ 
              exp_player = Player, 
              exp_seat = N,
              exp_amt = Amount
             },
-    {next, State, Game2, Ctx1}.
+    {next, State, Game3, Ctx1}.
 
 report_unknown(_Game, _Ctx, R) ->
     error_logger:error_report([{module, ?MODULE}, 
@@ -353,10 +365,6 @@ post_bb(Game, Ctx, #call{ player = Player, amount = Amt }) ->
      },
     %% notify players
     Game4 = g:broadcast(Game3, R1),
-    R2 = #notify_sb{ game = Game4#game.gid, sb = Ctx1#texas.sb },
-    Game5 = g:broadcast(Game4, R2),
-    R3 = #notify_bb{ game = Game5#game.gid, bb = Ctx1#texas.bb },
-    Game6 = g:broadcast(Game5, R3),
-    {stop, Game6, Ctx1}.
+    {stop, Game4, Ctx1}.
 
 

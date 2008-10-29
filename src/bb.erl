@@ -8,7 +8,7 @@
 -export([init/1, handle_call/3, handle_cast/2, 
 	 handle_info/2, terminate/2, code_change/3]).
 
--export([start/0, start/1, stop/1, launch/7]).
+-export([run/0, run/1, stop/1, launch/7]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -22,10 +22,10 @@
           trace
 	 }).
 
-start() ->
-    start(false).
+run() ->
+    run(false).
 
-start(Trace) ->
+run(Trace) ->
     db:start(),
     pg2:start(),
     gen_server:start(bb, [Trace], []).
@@ -109,12 +109,9 @@ setup_players(_IRC_ID, _GID, _Host, _Port, _Players, 0, Acc) ->
 setup_players(IRC_ID, GID, Host, Port, [Player|Rest], N, Acc) ->
     %% start bot
     Nick = list_to_binary(Player#irc_player.nick),
-    {ok, Bot} = bot:start(Nick, IRC_ID, N, Player#irc_player.balance),
     Pass = <<"foo">>,
-    ok = gen_server:call(Bot, {'CONNECT', Host, Port}, infinity),
-    gen_server:cast(Bot, {'SET ACTIONS', Player#irc_player.actions}),
-    gen_server:cast(Bot, {'WATCH', GID}),
-    gen_server:cast(Bot, #login{ nick = Nick, pass = Pass }),
+    {ok, Bot} = bot:start(Host, Port, dumbo, [Player#irc_player.actions, 1]),
+    bot:join(Bot, GID, Nick, Pass, N, Player#irc_player.balance),
     setup_players(IRC_ID, GID, Host, Port, Rest, N - 1, [{Bot, N}|Acc]).
 
 setup_observer(Parent, GID, Host, Port, Trace) 
@@ -124,10 +121,7 @@ setup_observer(Parent, GID, Host, Port, Trace)
     
 setup_observer(Parent, GID, Host, Port, Trace) ->
     %% setup observer bot
-    {ok, Observer} = observer:start(Parent),
-    gen_server:cast(Observer, {'TRACE', Trace}),
+    {ok, Obs} = bot:start(Host, Port, observer, [Parent, Trace, 1]),
     %% watch game
-    ok = gen_server:call(Observer, {'CONNECT', Host, Port}, infinity),
-    gen_server:cast(Observer, #watch{ game = GID }),
-    Observer.
-
+    bot:watch(Obs, GID),
+    Obs.

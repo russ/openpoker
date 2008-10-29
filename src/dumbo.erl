@@ -77,6 +77,28 @@ play(R = #bet_req{}, Data = #dumbo{ actions = [H|T] }) ->
 play(_, Data) ->
     {skip, Data}.
 
+%%% Handle old actions
+
+react(R = #bet_req{}, 'BLIND', Data) ->
+    react(R, 'CALL', Data);
+
+react(R = #bet_req{}, {'BLIND', allin}, Data) ->
+    react(R, 'ALL IN', Data);
+
+react(R = #bet_req{}, {'CALL', allin}, Data) ->
+    react(R, 'ALL IN', Data);
+
+react(R = #bet_req{}, {'RAISE', allin}, Data) ->
+    react(R, 'RAISE ALL', Data);
+
+react(R = #bet_req{}, 'BET', Data) ->
+    react(R, 'RAISE', Data);
+
+react(R = #bet_req{}, {'BET', allin}, Data) ->
+    react(R, 'RAISE ALL', Data);
+
+%%% New actions
+
 react(#bet_req{ game = GID }, 'MUCK', Data) ->
     {continue, Data, [#muck{ game = GID }]};
 
