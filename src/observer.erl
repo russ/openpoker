@@ -218,7 +218,7 @@ report(R = #notify_end_game{}) ->
     io:format("~w: END~n", [R#notify_end_game.game]);
 
 report(R = #notify_hand{}) ->
-    H = hand:describe(R#notify_hand.hand),
+    H = hand:to_string(R#notify_hand.hand),
     io:format("~w: HAND: ~w, with ~p~n", 
               [R#notify_hand.game, 
                R#notify_hand.player, 
