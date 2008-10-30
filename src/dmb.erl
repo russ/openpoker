@@ -203,7 +203,7 @@ start_game_slaves(N) ->
     start_game_slaves(N - 1).
 
 common_args() ->
-    "+K true +P 134217727 -smp disable".
+    "+K true -smp disable".
 
 start_slave_node(Name, Args) ->
     case slave:start_link(net_adm:localhost(), Name, Args) of
