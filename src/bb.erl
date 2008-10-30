@@ -39,6 +39,7 @@ launch(Bb, Parent, GID, Game, Host, Port, Trace)
 init([Trace]) ->
     process_flag(trap_exit, true),
     pg2:create(?LAUNCHERS),
+    pg2:get_members(?LAUNCHERS),
     ok = pg2:join(?LAUNCHERS, self()),
     {ok, #bb{ trace = Trace }}.
 
