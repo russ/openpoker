@@ -650,7 +650,7 @@ leave_after_sb_posted_test() ->
                               {gid, GID},
                               {now, now()}
                              ]),
-    ?assertEqual({'CANCEL', GID}, wait([chat, ping, pong, notify_cancel_game])),
+    ?assertEqual({'CANCEL', GID}, wait([chat, ping, pong])),
     %% clean up
     cleanup_players(Data),
     ?assertEqual(ok, stop_game(Game)),
@@ -1138,11 +1138,11 @@ stop_proc(Pid, F) ->
     end.
 
 wait() ->
-    wait(3000).
+    wait(5000).
 
 wait(Skip) 
   when is_list(Skip) ->
-    wait(3000, Skip);
+    wait(5000, Skip);
 
 wait(Timeout)
   when is_integer(Timeout) ->
