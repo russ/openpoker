@@ -36,8 +36,8 @@ notify_hands(Game, [H|T]) ->
       game = Game#game.gid,
       hand = Hand
      },
-    g:broadcast(Game, Event),
-    notify_hands(Game, T).
+    Game1 = g:broadcast(Game, Event),
+    notify_hands(Game1, T).
 
 notify_winners(Game, []) ->
     Game;
@@ -72,14 +72,15 @@ winners(Ranks, [{Total, Members}|Rest], Winners) ->
     M3 = lists:reverse(lists:keysort(6, M2)),
     TopHigh1 = element(6, hd(M3)),
     M4 = lists:filter(fun(R) -> element(6, R) == TopHigh1 end, M3),
-    TopHigh2 = element(7, hd(M4)),
-    M5 = lists:filter(fun(R) -> element(7, R) == TopHigh2 end, M4),
+    M5 = lists:reverse(lists:keysort(7, M4)),
+    TopHigh2 = element(7, hd(M5)),
+    M6 = lists:filter(fun(R) -> element(7, R) == TopHigh2 end, M5),
     %% sort by top score and leave top scores only
-    M6 = lists:reverse(lists:keysort(8, M5)),
-    TopScore = element(8, hd(M6)),
-    M7 = lists:filter(fun(R) -> element(8, R) == TopScore end, M6),
-    Win = Total / length(M7),
-    Winners1 = update_winners(M7, Win, Winners),
+    M7 = lists:reverse(lists:keysort(8, M6)),
+    TopScore = element(8, hd(M7)),
+    M8 = lists:filter(fun(R) -> element(8, R) == TopScore end, M7),
+    Win = Total / length(M8),
+    Winners1 = update_winners(M8, Win, Winners),
     winners(Ranks, Rest, Winners1).
 
 update_winners([], _Amount, Tree) ->
