@@ -232,6 +232,8 @@ wait_for_group(Name) ->
             ok
     end.
 
+%%% Largest memory hogs first!
+
 dump_procs() ->
     F = fun(Pid) ->
                 Name = case process_info(Pid, registered_name) of
@@ -244,7 +246,7 @@ dump_procs() ->
                 Stack = element(2, process_info(Pid, stack_size)),
                 {Name, {Heap, Stack}}
         end,
-    lists:keysort(2, lists:map(F, processes())).
+    lists:reverse(lists:keysort(2, lists:map(F, processes()))).
 
 
     
