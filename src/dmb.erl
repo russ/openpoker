@@ -171,6 +171,9 @@ run(Games, GameServers, BotServers, Interval) ->
     start_bot_slaves(BotServers),
     start_game_slaves(GameServers),
     io:format("cluster: ~p~n", [nodes()]),
+    wait_for_group(?LAUNCHERS),
+    wait_for_group(?MULTIBOTS),
+    wait_for_group(?GAME_SERVERS),
     io:format("bot launchers  : ~p~n", [pg2:get_members(?LAUNCHERS)]),
     io:format("game launchers : ~p~n", [pg2:get_members(?MULTIBOTS)]),
     io:format("game servers   : ~p~n", [pg2:get_members(?GAME_SERVERS)]),
@@ -185,7 +188,7 @@ start_bot_slaves(N) ->
     Args = common_args(),
     Node = start_slave_node(Name, Args),
     timer:sleep(100),
-    rpc:call(Node, bb, start, []),
+    rpc:call(Node, bb, run, []),
     start_bot_slaves(N - 1).
 
 start_game_slaves(0) ->
@@ -211,3 +214,13 @@ start_slave_node(Name, Args) ->
     timer:sleep(1000),
     Node.
 
+wait_for_group(Name) ->
+    case pg2:get_members(Name) of
+        {error, _} ->
+            io:format("Group ~p is not available. Retrying in 1 second.~n",
+                     [Name]),
+            timer:sleep(1000),
+            wait_for_group(Name);
+        _ ->
+            ok
+    end.
