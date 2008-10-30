@@ -150,7 +150,7 @@ handle_info({'END', GID, Winners}, Data) ->
 			true ->
 			    ok
 		    end,
-                    Failed = {Game#test_game.irc_id, Game#test_game.winners},
+                    Failed = Game#test_game.irc_id,
 		    Data#mb { failed = [Failed|Data#mb.failed] }
 	    end,
     %% clean up
