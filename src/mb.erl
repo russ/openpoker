@@ -61,8 +61,7 @@ handle_cast(stop, Data) ->
     {stop, normal, Data};
 
 handle_cast({'RUN', Game, Barrier, Delay, Trace}, Data) 
-  when is_record(Game, irc_game),
-       is_pid(Barrier) ->
+  when is_record(Game, irc_game) ->
     T1 = now(),
     Game1 = mbu:fix_nicks(Game),
     mbu:update_players(Game1),
@@ -151,9 +150,8 @@ handle_info({'END', GID, Winners}, Data) ->
 			true ->
 			    ok
 		    end,
-		    Data#mb {
-		      failed = [Game#test_game.irc_id|Data#mb.failed]
-		     }
+                    Failed = {Game#test_game.irc_id, Game#test_game.winners},
+		    Data#mb { failed = [Failed|Data#mb.failed] }
 	    end,
     %% clean up
     Games1 = gb_trees:delete(GID, Games),
