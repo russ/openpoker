@@ -17,17 +17,6 @@
 -include("pp.hrl").
 -include("schema.hrl").
 
-%% These events need "metadata"
-
-%% leave: pid, state
-%% muck, wait_bb, fold, sit_out, come_back, chat: pid
-%% call: expected amt,pid
-%% raise:           call, % internal
-%%           min, % internal
-%%           max, % internal
-%%           pid % internal
-%% start_game: barrier
-
 -record(pdata, {
 	  pid,
 	  socket = none,
