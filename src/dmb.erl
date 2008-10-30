@@ -3,7 +3,7 @@
 -module(dmb).
 
 -export([run/3, run/4, test/1, test/2, test/3, 
-         setup/0, cleanup/0]).
+         debug/1, setup/0, cleanup/0]).
 
 -include("ircdb.hrl").
 -include("common.hrl").
@@ -21,6 +21,25 @@
 	  player_count = 0,
 	  finished = 0
          }).
+
+debug(GameID) ->
+    process_flag(trap_exit, true),
+    bb:run(),
+    mb:run(),
+    gateway:start(node(), 4000, 500000),
+    io:format("Debugging ~p~n", [GameID]),
+    DB = mbu:opendb(),
+    Data = #dmb{
+      start_time = now(),
+      trace = true,
+      max_games = 1,
+      start_delay = 1000,
+      barrier = undefined,
+      started = length(pg2:get_members(?MULTIBOTS))
+     },
+    Data1 = test(DB, GameID, 1, 0, Data),
+    io:format("dmb: waiting for games to end...~n"),
+    wait_for_games(Data1).
 
 test(MaxGames) ->
     test(MaxGames, ?START_DELAY, false).
