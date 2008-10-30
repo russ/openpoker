@@ -3,7 +3,7 @@
 -module(dmb).
 
 -export([run/3, run/4, test/1, test/2, test/3, 
-         debug/1, setup/0, cleanup/0, dump_procs/0]).
+         debug/1, setup/0, cleanup/0, procs/0]).
 
 -include("ircdb.hrl").
 -include("common.hrl").
@@ -234,7 +234,7 @@ wait_for_group(Name) ->
 
 %%% Largest memory hogs first!
 
-dump_procs() ->
+procs() ->
     F = fun(Pid) ->
                 Name = case process_info(Pid, registered_name) of
                            [] ->
