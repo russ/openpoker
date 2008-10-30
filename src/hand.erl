@@ -136,7 +136,8 @@ is_full_house(Hand, Rep) ->
                     Hand2#hand{ 
                       rank = ?HC_FULL_HOUSE, 
                       high1 = High3,
-                      high2 = High2
+                      high2 = High2,
+                      score = 0
                      }
             end
     end.
