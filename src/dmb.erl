@@ -206,13 +206,20 @@ common_args() ->
     "+K true +P 134217727 -smp disable".
 
 start_slave_node(Name, Args) ->
-    {ok, Node} = slave:start_link(net_adm:localhost(), Name, Args),
-    timer:sleep(1000),
-    %%mnesia:add_table_copy(schema, Node, ram_copies),
-    rpc:call(Node, mnesia, start, []),
-    rpc:call(Node, mnesia, change_config, [extra_db_nodes, [node()]]),
-    timer:sleep(1000),
-    Node.
+    case slave:start_link(net_adm:localhost(), Name, Args) of
+        {ok, Node} ->
+            timer:sleep(1000),
+            %%mnesia:add_table_copy(schema, Node, ram_copies),
+            rpc:call(Node, mnesia, start, []),
+            rpc:call(Node, mnesia, change_config, [extra_db_nodes, [node()]]),
+            timer:sleep(1000),
+            Node;
+        Reason ->
+            io:format("Failed to start slave node: ~p. Retrying in 1 second.~n",
+                      [Reason]),
+            timer:sleep(1000),
+            start_slave_node(Name, Args)
+    end.
 
 wait_for_group(Name) ->
     case pg2:get_members(Name) of
