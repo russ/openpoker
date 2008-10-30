@@ -359,7 +359,8 @@ kick(Game, Seats, N) ->
                     %% notify others
                     Game1 = broadcast(Game, #notify_leave{
                                         game = Game#game.gid,
-                                        player = Seat#seat.pid
+                                        player = Seat#seat.pid,
+                                        proc = self()
                                        }),
                     XRef1 = gb_trees:delete(Player, XRef),
                     Game1#game {
