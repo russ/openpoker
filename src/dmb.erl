@@ -25,7 +25,7 @@
 debug(GameID) ->
     process_flag(trap_exit, true),
     bb:run(),
-    mb:run(),
+    mb:run(localhost, true),
     gateway:start(node(), 4000, 500000),
     io:format("Debugging ~p~n", [GameID]),
     DB = mbu:opendb(),
