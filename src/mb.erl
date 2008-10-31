@@ -339,7 +339,7 @@ next_port(Host) ->
     pg2:create(?GAME_SERVERS),
     pg2:get_members(?GAME_SERVERS),
     timer:sleep(100),
-    case pg2:get_members(?GAME_SERVERS) of
+    case pg2:get_local_members(?GAME_SERVERS) of
         {error, X} ->
             io:format("next_port: ~p~n", [X]),
             3000;
