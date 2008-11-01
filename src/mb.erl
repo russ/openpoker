@@ -223,46 +223,46 @@ handle_info(Info, Data) ->
 code_change(_OldVsn, Data, _Extra) ->
     {ok, Data}.
 
-setup_players(Game, GID, Host, Port) 
-  when is_pid(GID) ->
-    GID1 = gen_server:call(GID, 'ID'),
-    setup_players(Game, GID1, Host, Port);
+%% setup_players(Game, GID, Host, Port) 
+%%   when is_pid(GID) ->
+%%     GID1 = gen_server:call(GID, 'ID'),
+%%     setup_players(Game, GID1, Host, Port);
 
-setup_players(Game, GID, Host, Port) ->
-    Players = lists:reverse(tuple_to_list(Game#irc_game.players)),
-    setup_players(Game#irc_game.id, GID, Host, Port, 
-		  Players, size(Game#irc_game.players), []).
+%% setup_players(Game, GID, Host, Port) ->
+%%     Players = lists:reverse(tuple_to_list(Game#irc_game.players)),
+%%     setup_players(Game#irc_game.id, GID, Host, Port, 
+%% 		  Players, size(Game#irc_game.players), []).
 
-setup_players(_IRC_ID, _GID, _Host, _Port, _Players, 0, Acc) ->
-    Acc;
+%% setup_players(_IRC_ID, _GID, _Host, _Port, _Players, 0, Acc) ->
+%%     Acc;
 
-setup_players(IRC_ID, GID, Host, Port, [Player|Rest], N, Acc) ->
-    %% start bot
-    Nick = list_to_binary(Player#irc_player.nick),
-    {ok, Bot} = bot:start(Nick, IRC_ID, N, Player#irc_player.balance),
-    Pass = <<"foo">>,
-    ok = gen_server:call(Bot, {'CONNECT', Host, Port}, infinity),
-    gen_server:cast(Bot, {'SET ACTIONS', Player#irc_player.actions}),
-    gen_server:cast(Bot, {'WATCH', GID}),
-    gen_server:cast(Bot, #login{ nick = Nick, pass = Pass }),
-    setup_players(IRC_ID, GID, Host, Port, Rest, N - 1, [{Bot, N}|Acc]).
+%% setup_players(IRC_ID, GID, Host, Port, [Player|Rest], N, Acc) ->
+%%     %% start bot
+%%     Nick = list_to_binary(Player#irc_player.nick),
+%%     {ok, Bot} = bot:start(Nick, IRC_ID, N, Player#irc_player.balance),
+%%     Pass = <<"foo">>,
+%%     ok = gen_server:call(Bot, {'CONNECT', Host, Port}, infinity),
+%%     gen_server:cast(Bot, {'SET ACTIONS', Player#irc_player.actions}),
+%%     gen_server:cast(Bot, {'WATCH', GID}),
+%%     gen_server:cast(Bot, #login{ nick = Nick, pass = Pass }),
+%%     setup_players(IRC_ID, GID, Host, Port, Rest, N - 1, [{Bot, N}|Acc]).
 
-setup_observer(Parent, GID, Host, Port, Trace) 
-  when is_pid(GID) ->
-    GID1 = gen_server:call(GID, 'ID'),
-    setup_observer(Parent, GID1, Host, Port, Trace);
+%% setup_observer(Parent, GID, Host, Port, Trace) 
+%%   when is_pid(GID) ->
+%%     GID1 = gen_server:call(GID, 'ID'),
+%%     setup_observer(Parent, GID1, Host, Port, Trace);
     
-setup_observer(Parent, GID, Host, Port, Trace) ->
-    %% setup observer bot
-    {ok, Observer} = observer:start(Parent),
-    gen_server:cast(Observer, {'TRACE', Trace}),
-    %% watch game
-    ok = gen_server:call(Observer, {'CONNECT', Host, Port}, infinity),
-    %% XXX temp fix
-    %% [Game] = db:read(tab_game_xref, GID),
-    %% gen_server:cast(Observer, #watch{ game = Game#tab_game_xref.process }),
-    gen_server:cast(Observer, #watch{ game = GID }),
-    Observer.
+%% setup_observer(Parent, GID, Host, Port, Trace) ->
+%%     %% setup observer bot
+%%     {ok, Observer} = observer:start(Parent),
+%%     gen_server:cast(Observer, {'TRACE', Trace}),
+%%     %% watch game
+%%     ok = gen_server:call(Observer, {'CONNECT', Host, Port}, infinity),
+%%     %% XXX temp fix
+%%     %% [Game] = db:read(tab_game_xref, GID),
+%%     %% gen_server:cast(Observer, #watch{ game = Game#tab_game_xref.process }),
+%%     gen_server:cast(Observer, #watch{ game = GID }),
+%%     Observer.
 
 rig_deck(Game) 
   when is_record(Game, irc_game) ->
