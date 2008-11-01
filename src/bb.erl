@@ -56,13 +56,16 @@ handle_cast({'LAUNCH', Parent, GID, Game, Host, Port, Trace}, Data)
   when is_record(Game, irc_game),
        is_integer(GID),
        is_pid(Parent) ->
-    T1 = now(),
-    _Observer = setup_observer(Parent, GID, Host, Port, Trace),
-    _Players = setup_players(Game, GID, Host, Port),
-    T2 = now(),
-    Delta = timer:now_diff(T2, T1),
-    stats:max(player_connect_time, Delta),
-    stats:avg(player_connect_time, Delta),
+    F = fun() ->
+                T1 = now(),
+                _Observer = setup_observer(Parent, GID, Host, Port, Trace),
+                _Players = setup_players(Game, GID, Host, Port),
+                T2 = now(),
+                Delta = timer:now_diff(T2, T1),
+                stats:max(player_connect_time, Delta),
+                stats:avg(player_connect_time, Delta)
+        end,
+    spawn(F),
     {noreply, Data};
 
 handle_cast(Event, Data) ->
