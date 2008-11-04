@@ -195,7 +195,7 @@ ask_for_bet(Game, Ctx, N) ->
     Call = Ctx#texas.call - Bet,
     {Min, Max} = limit:raise_size(Game#game.limit, PotSize, Inplay, Stage),
     Game1 = g:request_bet(Game, N, Call, Min, Max),
-    Game2 = g:restart_timer(Game1, ?PLAYER_TIMEOUT),
+    Game2 = g:restart_timer(Game1, Game1#game.timeout),
     Ctx1 = Ctx#texas{ 
              exp_player = Player, 
              exp_seat = N,

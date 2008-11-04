@@ -329,7 +329,7 @@ ask_for_blind(Game, Ctx, N, Amount, State) ->
                                         })
              end,
     Game2 = g:request_bet(Game1, N, Amount, 0, 0),
-    Game3 = g:restart_timer(Game2, ?PLAYER_TIMEOUT),
+    Game3 = g:restart_timer(Game2, Game2#game.timeout),
     Ctx1 = Ctx#texas{ 
              exp_player = Player, 
              exp_seat = N,
