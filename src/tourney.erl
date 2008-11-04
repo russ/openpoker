@@ -1,6 +1,6 @@
-%%% Copyright (C) 2005-2008 Wager Labs, SA
+%%%% Copyright (C) 2005-2008 Wager Labs, SA
 
--module(game).
+-module(tourney).
 -behaviour(gen_server).
 
 -export([init/1, handle_call/3, handle_cast/2, 
@@ -17,19 +17,17 @@
 -include("schema.hrl").
 -include("lang.hrl").
 
-start(R = #start_game{}) ->
-    start(R, g:config(R)).
-    
-start(R = #start_game{}, Config) ->
-    GID = counter:bump(game),
-    gen_server:start({global, {game, GID}}, game, [GID, R, Config], []).
+start(Config) ->
+    TID = counter:bump(tourney),
+    gen_server:start({global, {tourney, TID}}, tourney, [TID, Config], []).
 
-init([GID, R, C]) ->
+init([TID, C]) ->
     process_flag(trap_exit, true),
     store_game_info(GID, R),
     Game = #game {
       gid = GID,
       type = R#start_game.type, 
+      updater = C#game_config.updater,
       deck = deck:new(R#start_game.rigged_deck),
       pot = pot:new(),
       seats = g:create_seats(R#start_game.seat_count),
@@ -49,38 +47,19 @@ init([GID, R, C]) ->
             {ok, Game1}
     end.
 
-stop(Game)
-  when is_pid(Game) ->
-    gen_server:cast(Game, stop);
+stop(Pid)
+  when is_pid(Pid) ->
+    gen_server:cast(Pid, stop);
 
-stop(GID)
-  when is_number(GID) ->
-    gen_server:cast({global, {game, GID}}, stop).
+stop(TID)
+  when is_number(TID) ->
+    gen_server:cast({global, {tourney, TID}}, stop).
 
-terminate(_, Game) 
-  when is_record(Game, game) ->
-    Game1 = g:cancel_timer(Game),
-    %% force players to leave
-    g:kick(Game1),
-    %% remove ourselves from the db
-    ok = db:delete(tab_game_xref, Game1#game.gid).
-
-%%% Debugging tools
-
-handle_cast({'PARENT', Pid}, Game) ->
-    {noreply, Game#game{ parent = Pid }};
-    
-handle_cast({'SET STATE', Player, State}, Game) ->
-    Game1 = g:set_state(Game, Player, State),
-    {noreply, Game1};
-
-handle_cast({'NOTE', Note}, Game) ->
-    {noreply, Game#game{ note = Note }};
-
-%%% Blinds change during the course of a tournament
-
-handle_cast({'SET LIMIT', Limit}, Game) ->
-    {noreply, Game#game{ limit = Limit }};
+terminate(_, Tour) 
+  when is_record(Tour, tourney) ->
+    Tour1 = cancel_break_timer(Tour),
+    Tour2 = cancel_level_timer(Tour1),
+    ok = db:delete(tab_tourney, Tour2#tourney.tid).
 
 %%% Watch the game without joining
 

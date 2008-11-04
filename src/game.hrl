@@ -15,7 +15,13 @@
           %% auto-play queue
           cmd_que = []
 	 }).
-	
+
+-record(game_config, {
+          context,
+          modules,
+          tourney
+         }).
+
 -record(game, {
 	  gid, 
 	  %% game type
@@ -25,6 +31,7 @@
 	  %% seats tuple
 	  seats,
 	  limit,
+          ante,
 	  %% card deck
 	  deck, 
 	  %% shared cards list
@@ -40,6 +47,8 @@
 	  raise_count = 0,
 	  %% players required to start a game
 	  required_player_count = 2,
+          %% tournament info
+          tourney,
           timer,
           barrier,
           note,
@@ -51,3 +60,4 @@
           orig_ctx,
           parent
 	 }).
+

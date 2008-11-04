@@ -357,6 +357,73 @@
           proc % internal
          }).
 
+-define(CMD_TOURNEY_WATCH, 46).
+
+-record(tourney_watch, {
+          tourney,
+          player
+         }).
+
+-define(CMD_TOURNEY_UNWATCH, 47).
+
+-record(tourney_unwatch, {
+          tourney,
+          player
+         }).
+
+
+-define(CMD_TOURNEY_JOIN, 48).
+
+-record(tourney_join, {
+          tourney,
+          player,
+          amount
+         }).
+
+-define(CMD_NOTIFY_TOURNEY_JOIN, 49).
+
+-record(notify_tourney_join, {
+          tourney,
+          player,
+          amount
+         }).
+
+-define(CMD_TOURNEY_LEAVE, 50).
+
+-record(tourney_leave, {
+          tourney,
+          player
+         }).
+
+-define(CMD_NOTIFY_TOURNEY_LEAVE, 51).
+
+-record(notify_tourney_leave, {
+          tourney,
+          player
+         }).
+
+-define(CMD_TOURNEY_QUERY, 52).
+
+-record(tourney_query, {
+         }).
+
+-define(CMD_TOURNEY_INFO, 53).
+
+-record(tourney_info, {
+          tourney,
+          type,
+          seat_count,
+          max_players,
+          player_count,
+          start_time,
+          buyin,
+          chips,
+          rake,
+          ante,
+          break_duration,
+          break_frequency
+         }).
+
 -define(CMD_PING, 253).
 
 -record(ping, {

@@ -46,6 +46,9 @@ port() ->
 game_type() ->
     byte().
 
+tourney_type() ->
+    byte().
+
 table_name() ->
     string().
 
@@ -186,6 +189,22 @@ player(true) ->
 
 player(_) ->
     wrap({fun player_to_id/1, fun id_to_player/1}, int()).
+
+tourney_to_id(TID) 
+  when is_integer(TID) ->
+    TID.
+
+id_to_tourney(TID) ->
+    global:whereis_name({tourney, TID}).
+    
+tourney() ->
+    tourney(get(pass_through)).
+
+tourney(true) ->
+    int();
+
+tourney(_) ->
+    wrap({fun tourney_to_id/1, fun id_to_tourney/1}, int()).
 
 seat() ->
     byte().
@@ -502,6 +521,64 @@ show_cards() ->
              cards()
             }).
 
+tourney_watch() ->
+    record(tourney_watch, {
+             tourney(),
+             player()
+            }).
+
+tourney_unwatch() ->
+    record(tourney_unwatch, {
+             tourney(),
+             player()
+            }).
+
+tourney_join() ->
+    record(tourney_join, {
+             tourney(),
+             player(),
+             amount()
+            }).
+
+notify_tourney_join() ->
+    record(notify_tourney_join, {
+             tourney(),
+             player(),
+             amount()
+            }).
+
+tourney_leave() ->
+    record(tourney_leave, {
+             tourney(),
+             player()
+            }).
+
+notify_tourney_leave() ->
+    record(notify_tourney_leave, {
+             tourney(),
+             player()
+            }).
+
+tourney_query() ->
+    record(tourney_query, {
+            }).
+
+tourney_info() ->
+    record(tourney_info, {
+             tourney(),
+             tourney_type(),
+             seat_count(),
+             int(),
+             int(),
+             start_time???,
+             amount(),
+             amount(),
+             amount(),
+             amount(),
+             byte(),
+             byte()
+            }).
+
 ping() ->
     record(ping, {
              timestamp()
@@ -654,12 +731,35 @@ write(R) when is_record(R, your_game) ->
 write(R) when is_record(R, show_cards) ->
     [?CMD_SHOW_CARDS|pickle(show_cards(), R)];
 
+write(R) when is_record(R, notify_tourney_leave) ->
+    [?CMD_NOTIFY_TOURNEY_LEAVE|pickle(notify_tourney_leave(), R)];
+
+write(R) when is_record(R, tourney_leave) ->
+    [?CMD_TOURNEY_LEAVE|pickle(tourney_leave(), R)];
+
+write(R) when is_record(R, notify_tourney_join) ->
+    [?CMD_NOTIFY_TOURNEY_JOIN|pickle(notify_tourney_join(), R)];
+
+write(R) when is_record(R, tourney_watch) ->
+    [?CMD_TOURNEY_WATCH|pickle(tourney_watch(), R)];
+
+write(R) when is_record(R, tourney_unwatch) ->
+    [?CMD_TOURNEY_UNWATCH|pickle(tourney_unwatch(), R)];
+
+write(R) when is_record(R, tourney_join) ->
+    [?CMD_TOURNEY_JOIN|pickle(tourney_join(), R)];
+
+write(R) when is_record(R, tourney_query) ->
+    [?CMD_TOURNEY_QUERY|pickle(tourney_query(), R)];
+
+write(R) when is_record(R, tourney_info) ->
+    [?CMD_TOURNEY_INFO|pickle(tourney_info(), R)];
+
 write(R) when is_record(R, ping) ->
     [?CMD_PING|pickle(ping(), R)];
 
 write(R) when is_record(R, pong) ->
     [?CMD_PONG|pickle(pong(), R)].
-
 
 %%% Unpickle
 
@@ -800,6 +900,30 @@ read(<<?CMD_YOUR_GAME, Bin/binary>>) ->
 
 read(<<?CMD_SHOW_CARDS, Bin/binary>>) ->
     unpickle(show_cards(), Bin);
+
+read(<<?CMD_NOTIFY_TOURNEY_LEAVE, Bin/binary>>) ->
+    unpickle(notify_tourney_leave(), Bin);
+
+read(<<?CMD_TOURNEY_LEAVE, Bin/binary>>) ->
+    unpickle(tourney_leave(), Bin);
+
+read(<<?CMD_NOTIFY_TOURNEY_JOIN, Bin/binary>>) ->
+    unpickle(notify_tourney_join(), Bin);
+
+read(<<?CMD_TOURNEY_WATCH, Bin/binary>>) ->
+    unpickle(tourney_watch(), Bin);
+
+read(<<?CMD_TOURNEY_UNWATCH, Bin/binary>>) ->
+    unpickle(tourney_unwatch(), Bin);
+
+read(<<?CMD_TOURNEY_JOIN, Bin/binary>>) ->
+    unpickle(tourney_join(), Bin);
+
+read(<<?CMD_TOURNEY_QUERY, Bin/binary>>) ->
+    unpickle(tourney_query(), Bin);
+
+read(<<?CMD_TOURNEY_INFO, Bin/binary>>) ->
+    unpickle(tourney_info(), Bin);
 
 read(<<?CMD_PING, Bin/binary>>) ->
     unpickle(ping(), Bin);

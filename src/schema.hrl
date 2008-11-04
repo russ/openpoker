@@ -26,6 +26,11 @@
           amount % integer
          }).
 
+-record(tab_tourney_balance, {
+          tidpid, 
+          amount % integer
+         }).
+
 -record(tab_inplay, {
           gidpid, 
           amount % integer
@@ -75,15 +80,38 @@
           id,
           type, % normal or sit&go
           max_players,
-          max_players_per_table,
-          start_date_time,
-          buy_in,
-          chips_per_player,
-          time_per_level, % minutes
-          blind_bump_per_level, % multiplier
-          level_1_blinds, % e.g. {10, 20}
+          seat_count, % per table
+          start_time,
+          buyin, % 
+          chips, % amount each player gets for their buy-in
+          rake,
+          level_duration, % minutes
+          blinds_factor, % per level multiplier
+          starting_blinds, % e.g. {10, 20}
+          ante,
           ante_start_level,
-          time_per_break, % minutes
-          break_frequency % number
+          break_duration, % minutes
+          break_frequency, % number
+          prize_winners,
+          prize_struct
+         }).
+
+-record(tab_tourney, {
+          tid,
+          config,
+          level,
+          break_timer,
+          level_timer,
+          empty_seats
+         }).
+
+-record(tab_tourney_table, {
+          tid,
+          gid
+         }).
+
+-record(tab_tourney_player, {
+          tid,
+          pid
          }).
 

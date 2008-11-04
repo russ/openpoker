@@ -120,6 +120,13 @@ small_blind(Game, Ctx, #fold{}) ->
     Game1 = g:cancel_timer(Game),
     timeout(Game1, Ctx, small_blind);
 
+small_blind(Game, Ctx, R)
+  when is_record(R, join), Game#game.tourney /= none;
+       is_record(R, join), Game#game.tourney /= none;
+       is_record(R, sit_out), Game#game.tourney /= none;
+       is_record(R, come_back), Game#game.tourney /= none ->
+    {skip, Game, Ctx};
+
 small_blind(Game, Ctx, R = #join{}) ->
     join(Game, Ctx, R);
 
@@ -171,6 +178,13 @@ big_blind(Game, Ctx, #fold{ player = Player })
 big_blind(Game, Ctx, #fold{}) ->
     Game1 = g:cancel_timer(Game),
     timeout(Game1, Ctx, big_blind);
+
+big_blind(Game, Ctx, R)
+  when is_record(R, join), Game#game.tourney /= none;
+       is_record(R, join), Game#game.tourney /= none;
+       is_record(R, sit_out), Game#game.tourney /= none;
+       is_record(R, come_back), Game#game.tourney /= none ->
+    {skip, Game, Ctx};
 
 big_blind(Game, Ctx, #sit_out{}) ->
     {skip, Game, Ctx};
@@ -270,6 +284,34 @@ advance_button(Game, Ctx) ->
 	    Bust = ?PS_FOLD == Seat#seat.state
     end,
     {Button, Bust}.
+
+%%% force blinds in tournament mode
+
+ask_for_blind(Game, Ctx, N, Amount, State)
+  when Game#game.tourney /= none ->
+    Seat = g:get_seat(Game, N),
+    Player = Seat#seat.player,
+    Ctx1 = Ctx#texas{ 
+             exp_player = Player, 
+             exp_seat = N,
+             exp_amt = Amount
+            },
+    R = #call{ player = Player, amount = Amount },
+    Game1 = g:cancel_timer(Game),
+    if
+        State == small_blind ->
+            g:broadcast(Game1, _ = #notify_sb{ 
+                                 game = Game1#game.gid, 
+                                 sb = N
+                                }),
+            post_sb(Game1, Ctx1, R);
+        true ->
+            g:broadcast(Game1, _ = #notify_bb{ 
+                                 game = Game1#game.gid, 
+                                 bb = N
+                                }),
+            post_bb(Game1, Ctx1, R)
+    end;
 
 ask_for_blind(Game, Ctx, N, Amount, State) ->
     Seat = g:get_seat(Game, N),

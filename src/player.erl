@@ -8,7 +8,7 @@
 
 -export([start/1, stop/1, stop/2]).
 
--export([create/4, delete_balance/1, update_balance/2]).
+-export([create/4]).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -333,7 +333,7 @@ create(Nick, Pass, Location, Balance)
               location = Location
              },
             ok = db:write(Info),
-            update_balance(ID, Balance),
+            db:update_balance(tab_balance, ID, Balance),
             {ok, ID}
     end.
 
@@ -367,11 +367,11 @@ leave_games(Data, [Game|Rest]) ->
                            }),
     leave_games(Data, Rest).
 
-delete_balance(PID) ->
-    db:delete(tab_balance, PID).
+%% delete_balance(PID) ->
+%%     db:delete(tab_balance, PID).
 
-update_balance(PID, Amount) ->
-    db:update_balance(tab_balance, PID, Amount).
+%% update_balance(PID, Amount) ->
+%%     db:update_balance(tab_balance, PID, Amount).
 
 forward_to_client(Event, Data) ->    
     if 

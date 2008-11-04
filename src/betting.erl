@@ -142,6 +142,13 @@ betting(Game, Ctx, {timeout, _, _}) ->
                                 ]),
     betting(Game1, Ctx, #fold{ player = Player });
 
+betting(Game, Ctx, R)
+  when is_record(R, join), Game#game.tourney /= none;
+       is_record(R, join), Game#game.tourney /= none;
+       is_record(R, sit_out), Game#game.tourney /= none;
+       is_record(R, come_back), Game#game.tourney /= none ->
+    {skip, Game, Ctx};
+
 betting(Game, Ctx, R = #join{}) ->
     Game1 = g:join(Game, R#join{ state = ?PS_FOLD }),
     {continue, Game1, Ctx};

@@ -90,6 +90,7 @@
 -define(PS_RESERVED, 128). % reserved seat
 -define(PS_AUTOPLAY, 256).
 -define(PS_MUCK, 512). % will show cards
+-define(PS_OUT, 1024). % can't play anymore
 
 -define(PS_ANY, 
 	?PS_PLAY bor
@@ -182,4 +183,3 @@
           high1 = ?CF_NONE,
           high2 = ?CF_NONE
          }).
-
