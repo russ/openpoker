@@ -189,7 +189,7 @@ handle_cast(R = #start_game{}, Data) ->
     [CC] = db:read(tab_cluster_config, 0),
     R1 = if
              CC#tab_cluster_config.enable_dynamic_games ->
-                 case game:start(R#start_game{ rigged_deck = [] }) of
+                 case g:make(R#start_game{ rigged_deck = [] }) of
                      {ok, Pid} ->
                          GID = gen_server:call(Pid, 'ID'),
                          #your_game{ game = GID };

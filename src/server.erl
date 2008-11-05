@@ -304,13 +304,13 @@ start_games(_Game, 0) ->
     ok;
 
 start_games(Game, N) ->
-    game:start(_ = #start_game{ 
-                 type = Game#tab_game_config.type, 
-                 limit = Game#tab_game_config.limit, 
-                 start_delay = Game#tab_game_config.start_delay,
-                 player_timeout = Game#tab_game_config.player_timeout,
-                 seat_count = Game#tab_game_config.seat_count
-                }),
+    g:make(_ = #start_game{ 
+             type = Game#tab_game_config.type, 
+             limit = Game#tab_game_config.limit, 
+             start_delay = Game#tab_game_config.start_delay,
+             player_timeout = Game#tab_game_config.player_timeout,
+             seat_count = Game#tab_game_config.seat_count
+            }),
     start_games(Game, N - 1).
 
 kill_games() ->
@@ -321,7 +321,7 @@ kill_games([]) ->
     ok;
 
 kill_games([H|T]) ->
-    game:stop(H#tab_game_xref.process),
+    gen_server:cast(H#tab_game_xref.process, stop),
     kill_games(T).
 
 start_test_game(R) ->

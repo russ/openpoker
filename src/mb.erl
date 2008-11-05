@@ -377,6 +377,6 @@ start_game(G, Delay, Barrier)
       rigged_deck = rig_deck(G),
       barrier = Barrier
      },
-    {ok, Game} = game:start(Cmd),
+    {ok, Game} = g:make(Cmd),
     {ok, gen_server:call(Game, 'ID')}.
 

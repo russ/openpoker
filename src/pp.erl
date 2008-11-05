@@ -570,7 +570,7 @@ tourney_info() ->
              seat_count(),
              int(),
              int(),
-             start_time???,
+             int(), %% start_time???,
              amount(),
              amount(),
              amount(),

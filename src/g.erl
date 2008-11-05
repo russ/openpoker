@@ -7,13 +7,13 @@
          notify_start_game/1, notify_cancel_game/1,
          join/2, leave/2, kick/1, set_state/3,
          get_seat/2, find/8, seat_query/1, 
-         setup/6, config/1, create_seats/1,
+         setup/6, create_seats/1,
          request_bet/5, process_autoplay/2,
          cancel_timer/1, restart_timer/2, 
          add_bet/3, new_stage/1, reset_player_state/3,
          pot_size/1, draw/3, draw_shared/2, 
          inplay_plus/3, show_cards/2, rank_hands/1, 
-         pots/1
+         pots/1, make/1, make/3
         ]).
 
 -include_lib("eunit/include/eunit.hrl").
@@ -25,6 +25,23 @@
 -include("texas.hrl").
 -include("lang.hrl").
 -include("schema.hrl").
+
+make(R = #start_game{}) ->
+    %% create game stack. context is used to propagate 
+    %% game information from module to module, e.g. button
+    %% and blinds position for texas hold'em.
+    Mods = case R#start_game.type of
+               ?GT_IRC_TEXAS ->
+                   irc_texas_mods(R#start_game.start_delay,
+                                  R#start_game.barrier);
+               ?GT_TEXAS_HOLDEM ->
+                   texas_holdem_mods(R#start_game.start_delay) 
+           end,
+    make(R, #texas{}, Mods).
+
+make(R = #start_game{}, Ctx, Mods) ->
+    Game = exch:new(game, Ctx, Mods),
+    Game:start(self(), [R]).
 
 %%% Initialize seats
 
@@ -724,7 +741,7 @@ debit_player(GID, PID, Amount)
        is_number(PID),
        is_number(Amount) ->
     BuyIn = trunc(Amount * 10000),
-    case db:read(Table, PID) of
+    case db:read(tab_balance, PID) of
         [] ->
             {error, no_balance_found};
         [B] when BuyIn > B#tab_balance.amount ->
@@ -738,51 +755,34 @@ debit_player(GID, PID, Amount)
             Any
     end.
 
-config(R = #start_game{}) ->
-    %% create game stack. context is used to propagate 
-    %% game information from module to module, e.g. button
-    %% and blinds position for texas hold'em.
-    case R#start_game.type of
-	?GT_IRC_TEXAS ->
-            irc_texas_config(R#start_game.start_delay,
-                             R#start_game.barrier);
-	?GT_TEXAS_HOLDEM ->
-            texas_holdem_config(R#start_game.start_delay) 
-    end.
-
-texas_holdem_config(StartDelay) ->
-    Modules = [
-               %% start delay
-               {wait_for_players, [StartDelay]}, 
-               %% blind rules
-               {blinds, []},
-               %% deal 2 cards to each player
-               {deal_cards, [2, private]}, 
-               %% start after BB, 3 raises
-               {betting, [?MAX_RAISES, ?GS_PREFLOP, true]}, 
-               %% show 3 shared cards
-               {deal_cards, [3, shared]}, 
-               %% flop
-               {betting, [?MAX_RAISES, ?GS_FLOP]}, 
-               %% show 1 more shared card
-               {deal_cards, [1, shared]}, 
-               %% turn
-               {betting, [?MAX_RAISES, ?GS_TURN]}, 
-               %% show 1 more shared card
-               {deal_cards, [1, shared]}, 
-               %% river
-               {betting, [?MAX_RAISES, ?GS_RIVER]}, 
-               %% showdown
-               {showdown, []},
-               {restart, []}
-              ],
-    _ = #game_config{
-      context = #texas{},
-      modules = Modules,
-      tourney = none
-     }.
+texas_holdem_mods(StartDelay) ->
+    [
+     %% start delay
+     {wait_for_players, [StartDelay]}, 
+     %% blind rules
+     {blinds, []},
+     %% deal 2 cards to each player
+     {deal_cards, [2, private]}, 
+     %% start after BB, 3 raises
+     {betting, [?MAX_RAISES, ?GS_PREFLOP, true]}, 
+     %% show 3 shared cards
+     {deal_cards, [3, shared]}, 
+     %% flop
+     {betting, [?MAX_RAISES, ?GS_FLOP]}, 
+     %% show 1 more shared card
+     {deal_cards, [1, shared]}, 
+     %% turn
+     {betting, [?MAX_RAISES, ?GS_TURN]}, 
+     %% show 1 more shared card
+     {deal_cards, [1, shared]}, 
+     %% river
+     {betting, [?MAX_RAISES, ?GS_RIVER]}, 
+     %% showdown
+     {showdown, []},
+     {restart, []}
+    ].
     
-irc_texas_config(StartDelay, Barrier) ->
+irc_texas_mods(StartDelay, Barrier) ->
     %% irc texas differs slightly in application of button 
     %% rules as well as the number of raises allowed
     Mods = [
@@ -807,50 +807,45 @@ irc_texas_config(StartDelay, Barrier) ->
             %% showdown
             {showdown, []}
            ],
-    Modules = if 
-                  is_pid(Barrier) ->
-                      %% all games run together
-                      [{game_start, [Barrier]}|Mods]
-                          ++ [{delayed_exit, []}];
-                  true ->
-                      %% start delay
-                      [{wait_for_players, [StartDelay]}|Mods]
-                          ++ [{restart, []}]
-              end,
-    _ = #game_config{
-      context = #texas{},
-      modules = Modules,
-      tourney = none
-     }.
+    if 
+        is_pid(Barrier) ->
+            %% all games run together
+            [{game_start, [Barrier]}|Mods]
+                ++ [{delayed_exit, []}];
+        true ->
+            %% start delay
+            [{wait_for_players, [StartDelay]}|Mods]
+                ++ [{restart, []}]
+    end.
     
-texas_tourney_config(StartDelay) ->
-    Modules = [
-               %% start delay
-               {wait_for_players, [StartDelay]}, 
-               %% blind rules
-               {blinds, []},
-               %% deal 2 cards to each player
-               {deal_cards, [2, private]}, 
-               %% start after BB, 3 raises
-               {betting, [?MAX_RAISES, ?GS_PREFLOP, true]}, 
-               %% show 3 shared cards
-               {deal_cards, [3, shared]}, 
-               %% flop
-               {betting, [?MAX_RAISES, ?GS_FLOP]}, 
-               %% show 1 more shared card
-               {deal_cards, [1, shared]}, 
-               %% turn
-               {betting, [?MAX_RAISES, ?GS_TURN]}, 
-               %% show 1 more shared card
-               {deal_cards, [1, shared]}, 
-               %% river
-               {betting, [?MAX_RAISES, ?GS_RIVER]}, 
-               %% showdown
-               {showdown, []},
-               {restart, []}
-              ],
-    _ = #game_config{
-      context = #texas{},
-      modules = Modules,
-      tourney = none
-     }.
+%% texas_tourney_config(StartDelay) ->
+%%     Modules = [
+%%                %% start delay
+%%                {wait_for_players, [StartDelay]}, 
+%%                %% blind rules
+%%                {blinds, []},
+%%                %% deal 2 cards to each player
+%%                {deal_cards, [2, private]}, 
+%%                %% start after BB, 3 raises
+%%                {betting, [?MAX_RAISES, ?GS_PREFLOP, true]}, 
+%%                %% show 3 shared cards
+%%                {deal_cards, [3, shared]}, 
+%%                %% flop
+%%                {betting, [?MAX_RAISES, ?GS_FLOP]}, 
+%%                %% show 1 more shared card
+%%                {deal_cards, [1, shared]}, 
+%%                %% turn
+%%                {betting, [?MAX_RAISES, ?GS_TURN]}, 
+%%                %% show 1 more shared card
+%%                {deal_cards, [1, shared]}, 
+%%                %% river
+%%                {betting, [?MAX_RAISES, ?GS_RIVER]}, 
+%%                %% showdown
+%%                {showdown, []},
+%%                {restart, []}
+%%               ],
+%%     _ = #game_config{
+%%       context = #texas{},
+%%       modules = Modules,
+%%       tourney = none
+%%      }.

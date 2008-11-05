@@ -193,7 +193,9 @@ ask_for_bet(Game, Ctx, N) ->
     Stage = Ctx#texas.stage,
     PotSize = g:pot_size(Game),
     Call = Ctx#texas.call - Bet,
-    {Min, Max} = limit:raise_size(Game#game.limit, PotSize, Inplay, Stage),
+    Low = Game#game.low,
+    High = Game#game.high,
+    {Min, Max} = (Game#game.limit):raise(Low, High, PotSize, Inplay, Stage),
     Game1 = g:request_bet(Game, N, Call, Min, Max),
     Game2 = g:restart_timer(Game1, Game1#game.timeout),
     Ctx1 = Ctx#texas{ 

@@ -50,8 +50,8 @@ create_players([Player|Rest])
                                  Nick, #tab_player_info.nick) of
 	[Info] ->
             PID = Info#tab_player_info.pid,
-            player:delete_balance(PID),
-            player:update_balance(PID, Balance);
+            db:delete(tab_balance, PID),
+            db:update_balance(tab_balance, PID, Balance);
         [] ->
 	    player:create(Nick, <<"foo">>, <<"">>, Balance)
     end,

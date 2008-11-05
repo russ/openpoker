@@ -16,12 +16,6 @@
           cmd_que = []
 	 }).
 
--record(game_config, {
-          context,
-          modules,
-          tourney
-         }).
-
 -record(game, {
 	  gid, 
 	  %% game type
@@ -31,6 +25,8 @@
 	  %% seats tuple
 	  seats,
 	  limit,
+          low,
+          high,
           ante,
 	  %% card deck
 	  deck, 

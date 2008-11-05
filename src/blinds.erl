@@ -37,7 +37,9 @@ start(Game, Ctx, []) ->
     start(Game, Ctx, [normal]);
 
 start(Game, Ctx, [Type]) ->
-    {Small, Big} = limit:blinds(Game#game.limit),
+    Low = Game#game.low,
+    High = Game#game.high,
+    {Small, Big} = (Game#game.limit):blinds(Low, High),
     Ctx1 = Ctx#texas{
              sb_amt = Small,
              bb_amt = Big,

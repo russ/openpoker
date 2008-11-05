@@ -11,6 +11,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -include("common.hrl").
+-include("game.hrl").
 -include("pp.hrl").
 -include("texas.hrl").
 -include("schema.hrl").
@@ -26,7 +27,6 @@ all() ->
     player:test(),
     game:test(),
     deck:test(),
-    fixed_limit:test(),
     wait_for_players:test(),
     blinds:test(),
     betting:test(),
@@ -82,10 +82,10 @@ headsup_test() ->
       bb = element(2, B),
       call = 10
      },
-    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
     ?assertEqual(ctx(Ctx), ctx(Ctx1)),
-    game:stop(Game),
+    game_stop(Game),
     test:cleanup_players(Players),
     ok.
 
@@ -105,10 +105,10 @@ three_players_button_bust_test() ->
       bb = element(2, B),
       call = 10
      },
-    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
     ?assertEqual(ctx(Ctx), ctx(Ctx1)),
-    game:stop(Game),
+    game_stop(Game),
     test:cleanup_players(Players),
     ok.
 
@@ -126,10 +126,10 @@ three_players_sb_bust_test() ->
       bb = element(2, A),
       call = 10
      },
-    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
     ?assertEqual(ctx(Ctx), ctx(Ctx1)),
-    game:stop(Game),
+    game_stop(Game),
     test:cleanup_players(Players),
     ok.
 
@@ -147,10 +147,10 @@ three_players_bb_bust_test() ->
       bb = element(2, A),
       call = 10
      },
-    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
     ?assertEqual(ctx(Ctx), ctx(Ctx1)),
-    game:stop(Game),
+    game_stop(Game),
     test:cleanup_players(Players),
     ok.
 
@@ -168,10 +168,10 @@ five_players_sb_bust_test() ->
       bb = element(2, D),
       call = 10
      },
-    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
     ?assertEqual(ctx(Ctx), ctx(Ctx1)),
-    game:stop(Game),
+    game_stop(Game),
     test:cleanup_players(Players),
     ok.
 
@@ -187,10 +187,10 @@ five_players_bust_test() ->
       bb = element(2, E),
       call = 10
      },
-    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
     ?assertEqual(ctx(Ctx), ctx(Ctx1)),
-    game:stop(Game),
+    game_stop(Game),
     test:cleanup_players(Players),
     ok.
 
@@ -208,10 +208,10 @@ five_players_bb_bust_test() ->
       bb = element(2, D),
       call = 10
      },
-    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
     ?assertEqual(ctx(Ctx), ctx(Ctx1)),
-    game:stop(Game),
+    game_stop(Game),
     test:cleanup_players(Players),
     ok.
 
@@ -227,10 +227,10 @@ five_players_bust1_test() ->
       bb = element(2, E),
       call = 10
      },
-    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
     ?assertEqual(ctx(Ctx), ctx(Ctx1)),
-    game:stop(Game),
+    game_stop(Game),
     test:cleanup_players(Players),
     ok.
 
@@ -249,10 +249,10 @@ five_players_blinds_bust_test() ->
       bb = element(2, D),
       call = 10
      },
-    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
     ?assertEqual(ctx(Ctx), ctx(Ctx1)),
-    game:stop(Game),
+    game_stop(Game),
     test:cleanup_players(Players),
     ok.
 
@@ -269,10 +269,10 @@ five_players_blinds_bust1_test() ->
       bb = element(2, E),
       call = 10
      },
-    {'CARDGAME EXIT', Game1, Ctx1} = wait(),
+    {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
     ?assertEqual(ctx(Ctx), ctx(Ctx1)),
-    game:stop(Game),
+    game_stop(Game),
     test:cleanup_players(Players),
     ok.
 
@@ -303,7 +303,7 @@ create_game_test() ->
     ?assertEqual(0, gen_server:call(Game, 'JOINED')),
     [Xref] = db:read(tab_game_xref, GID),
     ?assertEqual(Game, Xref#tab_game_xref.process),
-    game:stop(Game),
+    game_stop(Game),
     timer:sleep(100),
     ?assertEqual([], db:read(tab_game_xref, GID)),
     ok.
@@ -383,7 +383,7 @@ wait_for_players_test() ->
 			  Ctx,
 			  [{wait_for_players, [0]}]),
     gen_server:cast(Game, {'NOTE', wait_for_players}),
-    ?assertEqual({'CARDGAME EXIT', Game, Ctx}, wait()), 
+    ?assertEqual({'EXCH EXIT', Game, Ctx}, wait()), 
     cleanup_players(Players),
     ?assertEqual(ok, stop_game(Game)),
     ok.
@@ -646,10 +646,6 @@ leave_after_sb_posted_test() ->
 		       {nick(), 2, ['LEAVE']}]),
     %% make sure game is started
     ?assertEqual({'START', GID}, wait()),
-    error_logger:info_report([{self, self()},
-                              {gid, GID},
-                              {now, now()}
-                             ]),
     ?assertEqual({'CANCEL', GID}, wait([chat, ping, pong])),
     %% clean up
     cleanup_players(Data),
@@ -984,8 +980,7 @@ make_test_game(SeatCount, Players, Context, Modules) ->
       start_delay = 1000,
       player_timeout = 1000
      },
-    {ok, Game} = game:start(Cmd, {Context, Modules}),
-    gen_server:cast(Game, {'PARENT', self()}),
+    {ok, Game} = g:make(Cmd, Context, Modules),
     join_game(Game, Players),
     Game.
 
@@ -1120,7 +1115,7 @@ port() ->
     2000 + random:uniform(20000).
 
 stop_game(Game) ->
-    stop_proc(Game, fun game:stop/1).
+    stop_proc(Game, fun game_stop/1).
 
 stop_player(Player, ID) ->
     gen_server:cast(Player, #logout{}),
@@ -1175,17 +1170,17 @@ start_basic_game() ->
     start_basic_game(2).
 
 start_basic_game(N) ->
-    game:start(#start_game{ 
-                 type = ?GT_IRC_TEXAS,
-                 limit = #limit{ 
-                   type = ?LT_FIXED_LIMIT, 
-                   low = 10, 
-                   high = 20
-                  },
-                 start_delay = 1000,
-                 player_timeout = 1000,
-                 seat_count = N
-                }).
+    g:make(_ = #start_game{ 
+             type = ?GT_IRC_TEXAS,
+             limit = #limit{ 
+               type = ?LT_FIXED_LIMIT, 
+               low = 10, 
+               high = 20
+              },
+             start_delay = 1000,
+             player_timeout = 1000,
+             seat_count = N
+            }).
 
 %%% 
 
@@ -1198,3 +1193,5 @@ start_basic_game(N) ->
 %%     fprof:profile([{dump, []}]),
 %%     fprof:analyse([{dest, []}, {cols, 150}, {totals, true}]). 
 
+game_stop(Game) ->
+    gen_server:cast(Game, stop).

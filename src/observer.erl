@@ -84,13 +84,6 @@ process(R = #notify_cancel_game{}, Data) ->
         Data#obs.games_started > 0 ->
             Data#obs.parent ! {'CANCEL', GID},
             timer:sleep(50),
-            error_logger:info_report([{self, self()},
-                                      {games_started, Data#obs.games_started},
-                                      {parent, Data#obs.parent},
-                                      {gid, GID},
-                                      {messages, process_info(Data#obs.parent, messages)},
-                                      {now, now()}
-                                     ]),            
             Data#obs{ stop = true, events = [#unwatch{ game = GID }] };
         true ->
             Data#obs{ cancel_count = N + 1 }
