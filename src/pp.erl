@@ -85,9 +85,6 @@ amount() ->
 total_inplay_amount() ->
     amount().
 
-total_amount() ->
-    amount().
-
 call_amount() ->
     amount().
 
@@ -253,20 +250,6 @@ wait_bb() ->
              internal()
             }).
 
-call() ->
-    record(call, {
-             game(),
-             internal(),
-             amount()
-            }).
-
-notify_call() ->
-    record(notify_call, {
-             game(),
-             player(),
-             amount()
-            }).
-
 raise() ->
     record(raise, {
              game(),
@@ -279,7 +262,7 @@ notify_raise() ->
              game(),
              player(),
              raise_amount(),
-             total_amount()
+						 call_amount()
             }).
 
 fold() ->
@@ -614,12 +597,6 @@ write(R) when is_record(R, unwatch) ->
 write(R) when is_record(R, wait_bb) ->
     [?CMD_WAIT_BB|pickle(wait_bb(), R)];
 
-write(R) when is_record(R, call) ->
-    [?CMD_CALL|pickle(call(), R)];
-
-write(R) when is_record(R, notify_call) ->
-    [?CMD_NOTIFY_CALL|pickle(notify_call(), R)];
-
 write(R) when is_record(R, raise) ->
     [?CMD_RAISE|pickle(raise(), R)];
 
@@ -783,12 +760,6 @@ read(<<?CMD_UNWATCH, Bin/binary>>) ->
 
 read(<<?CMD_WAIT_BB, Bin/binary>>) ->
     unpickle(wait_bb(), Bin);
-
-read(<<?CMD_CALL, Bin/binary>>) ->
-    unpickle(call(), Bin);
-
-read(<<?CMD_NOTIFY_CALL, Bin/binary>>) ->
-    unpickle(notify_call(), Bin);
 
 read(<<?CMD_RAISE, Bin/binary>>) ->
     unpickle(raise(), Bin);
@@ -957,7 +928,7 @@ send(Socket, Data, Ping) ->
 ping(_, _, false) ->
     ok;
 
-ping(Socket, Size, true) ->
+ping(Socket, _Size, true) ->
     Bin = list_to_binary(write(#ping{})),
     case catch gen_tcp:send(Socket, Bin) of
         ok ->

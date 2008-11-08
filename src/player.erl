@@ -142,7 +142,6 @@ handle_cast(R = #join{ game = Game }, Data) ->
 
 handle_cast(R, Data) 
   when is_record(R, wait_bb);
-       is_record(R, call);
        is_record(R, raise);
        is_record(R, leave);
        is_record(R, chat);
@@ -227,7 +226,6 @@ handle_cast(R, Data)
        is_record(R, notify_shared);
        is_record(R, notify_leave);
        is_record(R, notify_leave);
-       is_record(R, notify_call);
        is_record(R, notify_raise);
        is_record(R, notify_win);
        is_record(R, notify_hand);

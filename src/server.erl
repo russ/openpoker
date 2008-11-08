@@ -97,7 +97,7 @@ terminate(normal, Server) ->
     tcp_server:stop(Server#server.port),
     ok.
 
-handle_cast({'BUMP', Size}, Server) ->
+handle_cast({'BUMP', _Size}, Server) ->
     %%stats:sum(packets_in, 1),
     %%stats:sum(bytes_in, Size),
     {noreply, Server};

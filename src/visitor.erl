@@ -50,8 +50,7 @@ handle_cast(R = #unwatch{}, Data) ->
     {noreply, Data};
 
 handle_cast(R, Data)
-  when is_record(R, call);
-       is_record(R, raise);
+  when is_record(R, raise);
        is_record(R, join);
        is_record(R, leave);
        is_record(R, fold);

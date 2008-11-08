@@ -43,7 +43,7 @@ start(Game, Ctx, [Type]) ->
     Ctx1 = Ctx#texas{
              sb_amt = Small,
              bb_amt = Big,
-             sb_bet = 0,
+             sb_bet = 0.0,
              no_sb = false,
              sb_all_in = false,
              blind_type = Type
@@ -101,14 +101,15 @@ start(Game, Ctx, [Type]) ->
 	    ask_for_blind(Game1, Ctx3, Seat, Amt, small_blind)
     end.
 
-small_blind(Game, Ctx, #call{ player = Player }) 
+small_blind(Game, Ctx, #raise{ player = Player }) 
   when Ctx#texas.exp_player /= Player ->
+		io:format("not our player!~n"),
     {continue, Game, Ctx};
 
-small_blind(Game, Ctx, R = #call{ amount = Amt }) ->
+small_blind(Game, Ctx, R = #raise{}) ->
     Game1 = g:cancel_timer(Game),
     if 
-        Ctx#texas.exp_amt /= Amt ->
+        R#raise.raise /= 0.0 ->
             timeout(Game1, Ctx, small_blind);
         true ->
             post_sb(Game1, Ctx, R)
@@ -160,14 +161,14 @@ small_blind(Game, Ctx, R) ->
 
 %%% Big blind
 
-big_blind(Game, Ctx, #call{ player = Player }) 
+big_blind(Game, Ctx, #raise{ player = Player }) 
   when Ctx#texas.exp_player /= Player ->
     {continue, Game, Ctx};
 
-big_blind(Game, Ctx, R = #call{ amount = Amt }) ->
+big_blind(Game, Ctx, R = #raise{}) ->
     Game1 = g:cancel_timer(Game),
     if 
-        Ctx#texas.exp_amt /= Amt ->
+        R#raise.raise /= 0.0 ->
             timeout(Game1, Ctx, big_blind);
         true ->
             post_bb(Game1, Ctx, R)
@@ -225,24 +226,24 @@ timeout(Game, Ctx, State) ->
     Game1 = g:cancel_timer(Game),
     Seat = Ctx#texas.exp_seat,
     case State of
-	small_blind ->
-	    Players = g:get_seats(Game1, Seat, ?PS_ACTIVE),
-	    Amount = Ctx#texas.sb_amt,
-	    Wanted = 2;
-	_ ->
-	    Temp = g:get_seats(Game, Seat, ?PS_BB_ACTIVE),
-	    %% remove small blind
-	    Players = lists:delete(Ctx#texas.sb, Temp),
-	    Amount = Ctx#texas.bb_amt,
-	    Wanted = 1
+        small_blind ->
+            Players = g:get_seats(Game1, Seat, ?PS_ACTIVE),
+            Amount = Ctx#texas.sb_amt,
+            Wanted = 2;
+        _ ->
+            Temp = g:get_seats(Game, Seat, ?PS_BB_ACTIVE),
+            %% remove small blind
+            Players = lists:delete(Ctx#texas.sb, Temp),
+            Amount = Ctx#texas.bb_amt,
+            Wanted = 1
     end,
     Players1 = lists:delete(Seat, Players),
     Game2 = g:set_state(Game, Seat, ?PS_SIT_OUT),
     if
-	length(Players1) < Wanted ->
-	    {goto, top, Game2, Ctx};
-	true ->
-	    ask_for_blind(Game2, Ctx, hd(Players1), Amount, State)
+        length(Players1) < Wanted ->
+            {goto, top, Game2, Ctx};
+        true ->
+            ask_for_blind(Game2, Ctx, hd(Players1), Amount, State)
     end.
 
 join(Game, Ctx, R) ->
@@ -298,7 +299,7 @@ ask_for_blind(Game, Ctx, N, Amount, State)
              exp_seat = N,
              exp_amt = Amount
             },
-    R = #call{ player = Player, amount = Amount },
+    R = #raise{ player = Player, raise = 0.0 },
     Game1 = g:cancel_timer(Game),
     if
         State == small_blind ->
@@ -330,7 +331,7 @@ ask_for_blind(Game, Ctx, N, Amount, State) ->
                                          bb = N
                                         })
              end,
-    Game2 = g:request_bet(Game1, N, Amount, 0, 0),
+    Game2 = g:request_bet(Game1, N, Amount, 0.0, 0.0),
     Game3 = g:restart_timer(Game2, Game2#game.timeout),
     Ctx1 = Ctx#texas{ 
              exp_player = Player, 
@@ -346,8 +347,9 @@ report_unknown(_Game, _Ctx, R) ->
                                {self, self()}
                               ]).
     
-post_sb(Game, Ctx, #call{ player = Player, amount = Amt }) ->
+post_sb(Game, Ctx, #raise{ player = Player, raise = 0.0 }) ->
     N = Ctx#texas.exp_seat,
+		Amt = Ctx#texas.exp_amt,
     Seat = g:get_seat(Game, N),
     Inplay = Seat#seat.inplay,
     Ctx1 = if
@@ -359,17 +361,19 @@ post_sb(Game, Ctx, #call{ player = Player, amount = Amt }) ->
     %% process small blind
     Ctx2 = Ctx1#texas{ sb = N, sb_bet = Amt },
     Game1 = g:add_bet(Game, Player, Amt),
-    R1 = #notify_call{ 
+    R1 = #notify_raise{ 
       game = Game1#game.gid, 
       player = Seat#seat.pid,
-      amount = Amt
+			call = Amt,
+			raise = 0.0
      },
     Game2 = g:broadcast(Game1, R1),
     BBPlayers = g:get_seats(Game2, N, ?PS_BB_ACTIVE),
     ask_for_blind(Game2, Ctx2, hd(BBPlayers), Ctx#texas.bb_amt, big_blind).
 
-post_bb(Game, Ctx, #call{ player = Player, amount = Amt }) ->
+post_bb(Game, Ctx, #raise{ player = Player, raise = 0.0 }) ->
     N = Ctx#texas.exp_seat,
+		Amt = Ctx#texas.exp_amt,
     Seat = g:get_seat(Game, N),
     Inplay = Seat#seat.inplay,
     Game1 = if
@@ -398,14 +402,15 @@ post_bb(Game, Ctx, #call{ player = Player, amount = Amt }) ->
              call = Amt,
              exp_seat = none,
              exp_player = none,
-             exp_amt = 0
+             exp_amt = 0.0
             },
     %% record blind bets
     Game3 = g:add_bet(Game2, Player, Amt),
-    R1 = #notify_call{ 
+    R1 = #notify_raise{ 
       game = Game3#game.gid, 
       player = Seat#seat.pid,
-      amount = Amt
+			call = Amt,
+      raise = 0.0
      },
     %% notify players
     Game4 = g:broadcast(Game3, R1),

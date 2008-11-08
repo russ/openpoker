@@ -22,7 +22,7 @@ start(Game, Ctx, [MaxRaises, Stage, HaveBlinds]) ->
             },
     Ctx2 = if
                not HaveBlinds ->
-                   Ctx1#texas{ call = 0 };
+                   Ctx1#texas{ call = 0.0 };
                true ->
                    Ctx1
            end,
@@ -52,34 +52,35 @@ start(Game, Ctx, [MaxRaises, Stage, HaveBlinds]) ->
 	    ask_for_bet(Game2, Ctx2, Player)
     end.
 
-betting(Game, Ctx, #call{ player = Player }) 
+betting(Game, Ctx, #raise{ player = Player }) 
   when Ctx#texas.exp_player /= Player ->
     {continue, Game, Ctx};
 
-betting(Game, Ctx, #call{ player = Player, amount = Amt }) ->
+%%% Call
+
+betting(Game, Ctx, #raise{ player = Player, raise = 0.0 }) ->
     Game1 = g:cancel_timer(Game),
-    Call = Ctx#texas.exp_amt,
+    Amt = Ctx#texas.exp_amt,
     Seat = g:get_seat(Game1, Ctx#texas.exp_seat),
     Inplay = Seat#seat.inplay,
     if 
-        (Amt > Inplay) or (Amt > Call)  ->
+        Amt > Inplay ->
             betting(Game, Ctx, #fold{ player = Player });
         true ->
             %% proper bet
             Game2 = g:set_state(Game1, Player, ?PS_BET),
             Game3 = g:add_bet(Game2, Player, Amt),
-            R1 = #notify_call{ 
+            R1 = #notify_raise{ 
               game = Game3#game.gid, 
               player = Seat#seat.pid,
-              amount = Amt
+							raise = 0.0,
+              call = Amt
              },
             Game4 = g:broadcast(Game3, R1),
             next_turn(Game4, Ctx, Ctx#texas.exp_seat)
     end;
 
-betting(Game, Ctx, #raise{ player = Player }) 
-  when Ctx#texas.exp_player /= Player ->
-    {continue, Game, Ctx};
+%%% Raise
 
 betting(Game, Ctx, #raise{ player = Player, raise = Amt }) ->
     Game1 = g:cancel_timer(Game),
@@ -92,13 +93,13 @@ betting(Game, Ctx, #raise{ player = Player, raise = Amt }) ->
     if 
         (Amt > Inplay) or 
         (Amt > Max) or
-        (Max == 0) or % should have sent CALL
+        (Max == 0.0) or % should have sent CALL
         ((Amt < Min) and ((Amt + Call) /= Inplay)) ->
             betting(Game1, Ctx, #fold{ player = Player });
         true ->
             %% proper raise
             RC1 = if 
-                      Call /= 0 ->
+                      Call /= 0.0 ->
                           RC + 1;
                       true ->
                           RC
@@ -115,7 +116,7 @@ betting(Game, Ctx, #raise{ player = Player, raise = Amt }) ->
               game = Game4#game.gid,
               player = Seat#seat.pid,
               raise = Amt,
-              total = Amt + Call
+              call = Call
              },
             Game5 = g:broadcast(Game4, R1),
             Game6 = Game5#game{ raise_count = RC1 },
@@ -171,18 +172,18 @@ next_turn(Game, Ctx, N) ->
     ActiveCount = length(Active),
     StandingCount = length(Standing),
     if 
-	StandingCount < 2 ->
-	    %% last man standing wins
-	    {goto, showdown, Game, Ctx};
- 	ActiveCount == 0 ->
- 	    %% we are done with this stage
+				StandingCount < 2 ->
+						%% last man standing wins
+						{goto, showdown, Game, Ctx};
+				ActiveCount == 0.0 ->
+						%% we are done with this stage
             Game1 = g:reset_player_state(Game, ?PS_BET, ?PS_PLAY),
             Game2 = g:new_stage(Game1),
-            Ctx1 = Ctx#texas{ call = 0 },
+            Ctx1 = Ctx#texas{ call = 0.0 },
             {stop, Game2, Ctx1 };
- 	true ->
- 	    %% next player
- 	    ask_for_bet(Game, Ctx, hd(Active))
+				true ->
+						%% next player
+						ask_for_bet(Game, Ctx, hd(Active))
     end.
 
 ask_for_bet(Game, Ctx, N) ->

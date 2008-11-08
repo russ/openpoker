@@ -23,10 +23,11 @@ post_ante(Game, _, []) ->
 post_ante(Game, Ante, [H|T]) ->
     Seat = g:get_seat(Game, H),
     Game1 = g:add_bet(Game, H, Ante),
-    R = #notify_call{ 
+    R = #notify_raise{ 
       game = Game1#game.gid, 
       player = Seat#seat.pid,
-      amount = Ante
+			raise = 0,
+      call = Ante
      },
     Game2 = g:broadcast(Game1, R),
     post_ante(Game2, Ante, T).

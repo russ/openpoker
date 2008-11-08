@@ -51,18 +51,13 @@ bust_trigger(Game, Event, RegName) ->
 
 post_blinds_trigger({Game, GID}, Event, RegName) ->
     case Event of 
-	{in, {'$gen_cast', #bet_req{ 
-                game = GID, 
-                call = Amount, 
-                min = 0, 
-                max = 0
-               }}} ->
-	    %% post the blind
+				{in, {'$gen_cast', #bet_req{ game = GID, min = 0.0, max = 0.0 }}} ->
+						%% post the blind
             Pid = global:whereis_name(RegName),
-	    gen_server:cast(Game, #call{ player = Pid, amount = Amount }),
+						gen_server:cast(Game, #raise{ player = Pid, raise = 0.0 }),
             done;
-	_ ->
-	    {Game, GID}
+				_ ->
+						{Game, GID}
     end.
 
 ctx(Ctx) ->
@@ -80,7 +75,7 @@ headsup_test() ->
       b = element(2, A),
       sb = element(2, A), 
       bb = element(2, B),
-      call = 10
+      call = 10.0
      },
     {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
@@ -103,7 +98,7 @@ three_players_button_bust_test() ->
       b = element(2, C),
       sb = element(2, C),
       bb = element(2, B),
-      call = 10
+      call = 10.0
      },
     {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
@@ -124,7 +119,7 @@ three_players_sb_bust_test() ->
       b = element(2, C),
       sb = element(2, C),
       bb = element(2, A),
-      call = 10
+      call = 10.0
      },
     {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
@@ -145,7 +140,7 @@ three_players_bb_bust_test() ->
       b = element(2, B),
       sb = element(2, B),
       bb = element(2, A),
-      call = 10
+      call = 10.0
      },
     {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
@@ -166,7 +161,7 @@ five_players_sb_bust_test() ->
       b = element(2, B),
       sb = element(2, C),
       bb = element(2, D),
-      call = 10
+      call = 10.0
      },
     {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
@@ -185,7 +180,7 @@ five_players_bust_test() ->
       b = element(2, C),
       sb = element(2, D),
       bb = element(2, E),
-      call = 10
+      call = 10.0
      },
     {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
@@ -206,7 +201,7 @@ five_players_bb_bust_test() ->
       b = element(2, B),
       sb = element(2, C),
       bb = element(2, D),
-      call = 10
+      call = 10.0
      },
     {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
@@ -225,7 +220,7 @@ five_players_bust1_test() ->
       b = element(2, C),
       sb = element(2, D),
       bb = element(2, E),
-      call = 10
+      call = 10.0
      },
     {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
@@ -247,7 +242,7 @@ five_players_blinds_bust_test() ->
       b = element(2, B),
       sb = element(2, C),
       bb = element(2, D),
-      call = 10
+      call = 10.0
      },
     {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
@@ -267,7 +262,7 @@ five_players_blinds_bust1_test() ->
       b = element(2, C),
       sb = element(2, D),
       bb = element(2, E),
-      call = 10
+      call = 10.0
      },
     {'EXCH EXIT', Game1, Ctx1} = wait(),
     ?assertEqual(Game, Game1),
@@ -283,7 +278,7 @@ create_player_test() ->
     Nick = nick(),
     %% player does not exist
     ?assertEqual({error, []}, player:start(<<"blah">>)),
-    {ok, ID} = player:create(Nick, Nick, <<"">>, 100),
+    {ok, ID} = player:create(Nick, Nick, <<"">>, 100.0),
     ?assert(is_number(ID)),
     {ok, Pid} = player:start(Nick),
     [P] = db:read(tab_player, ID),
@@ -673,7 +668,7 @@ dynamic_game_start_test() ->
     Cmd = #start_game{ 
       type = ?GT_IRC_TEXAS,
       seat_count = 1,
-      limit = #limit{ type = ?LT_FIXED_LIMIT, low = 10, high = 20 }
+      limit = #limit{ type = ?LT_FIXED_LIMIT, low = 10.0, high = 20.0 }
      },
     %% disable dynamic games
     [CC] = db:read(tab_cluster_config, 0),
@@ -974,7 +969,7 @@ make_test_game(SeatCount, Players, Context, Modules) ->
     Cmd = #start_game{
       table_name = <<"test game">>,
       type = ?GT_IRC_TEXAS,
-      limit = #limit{ type = ?LT_FIXED_LIMIT, low = 10, high = 20 },
+      limit = #limit{ type = ?LT_FIXED_LIMIT, low = 10.0, high = 20.0 },
       seat_count = SeatCount,
       required = length(Players),
       start_delay = 1000,
@@ -1174,8 +1169,8 @@ start_basic_game(N) ->
              type = ?GT_IRC_TEXAS,
              limit = #limit{ 
                type = ?LT_FIXED_LIMIT, 
-               low = 10, 
-               high = 20
+               low = 10.0, 
+               high = 20.0
               },
              start_delay = 1000,
              player_timeout = 1000,

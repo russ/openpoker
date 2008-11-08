@@ -41,13 +41,7 @@
           player
          }).
 
--define(CMD_CALL, 5).
-
--record(call, {
-          game,
-          player,
-          amount
-         }).
+%%% 5 NOT USED
 
 -define(CMD_RAISE, 6).
 
@@ -314,13 +308,7 @@
           cards
          }).
 
--define(CMD_NOTIFY_CALL, 41).
-
--record(notify_call, {
-          game,
-          player,
-          amount
-         }).
+%%% 41 NOT USED
 
 -define(CMD_NOTIFY_RAISE, 42).
 
@@ -328,7 +316,7 @@
           game,
           player,
           raise,
-          total
+					call
          }).
 
 -define(CMD_NOTIFY_CHAT, 43).

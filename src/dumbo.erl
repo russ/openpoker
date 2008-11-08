@@ -110,14 +110,15 @@ react(#bet_req{ game = GID }, 'COME BACK', Data) ->
 
 react(#bet_req{ game = GID, call = Call }, 'CALL', Data) ->
     Data1 = Data#dumbo{ inplay = Data#dumbo.inplay - Call },
-    {continue, Data1, [#call{ game = GID, amount = Call }]};
+    {continue, Data1, [#raise{ game = GID, raise = 0 }]};
 
 react(#bet_req{ game = GID }, 'CHECK', Data) ->
-    {continue, Data, [#call{ game = GID, amount = 0 }]};
+    {continue, Data, [#raise{ game = GID, raise = 0 }]};
 
-react(#bet_req{ game = GID }, 'ALL IN', Data) ->
+react(R = #bet_req{ game = GID }, 'ALL IN', Data) ->
     Data1 = Data#dumbo{ inplay = 0 },
-    {continue, Data1, [#call{ game = GID, amount = Data#dumbo.inplay }]};
+		Amt = Data#dumbo.inplay - R#bet_req.call,
+    {continue, Data1, [#raise{ game = GID, raise = Amt }]};
 
 react(#bet_req{ game = GID }, 'FOLD', Data) ->
     {continue, Data, [#fold{ game = GID }]};

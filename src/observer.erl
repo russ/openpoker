@@ -156,24 +156,25 @@ report(R = #game_stage{}) ->
               [R#game_stage.game,
                R#game_stage.stage]);
 
-report(R = #notify_call{})
-  when R#notify_call.amount == 0 ->
+report(R = #notify_raise{})
+  when R#notify_raise.raise == 0,
+       R#notify_raise.call == 0 ->
     io:format("~w: CHECK: ~w~n",
-              [R#notify_call.game, 
-               R#notify_call.player]);
+              [R#notify_raise.game, 
+               R#notify_raise.player]);
 
-report(R = #notify_call{}) ->
+report(R = #notify_raise{})
+	when R#notify_raise.call == 0 ->
     io:format("~w: CALL: ~w, ~-14.2. f~n",
-              [R#notify_call.game, 
-               R#notify_call.player,
-               R#notify_call.amount / 1.0]);
+              [R#notify_raise.game, 
+               R#notify_raise.player,
+               R#notify_raise.raise / 1.0]);
 
 report(R = #notify_raise{}) ->
-    io:format("~w: RAISE: ~w, ~-14.2. f + ~-14.2. f~n",
+    io:format("~w: RAISE: ~w, ~-14.2. f~n",
               [R#notify_raise.game, 
                R#notify_raise.player, 
-               R#notify_raise.raise / 1.0, 
-               (R#notify_raise.total - R#notify_raise.raise) / 1.0]);
+               R#notify_raise.raise / 1.0]);
 
 report(R = #notify_sb{}) ->
     io:format("~w: SB: ~w~n",
