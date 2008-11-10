@@ -1,6 +1,6 @@
 %%%% Copyright (C) 2005-2008 Wager Labs, SA
 
--module(wait_for_players).
+-module(game_wait_players).
 
 -export([start/3, wait_for_players/3]).
 

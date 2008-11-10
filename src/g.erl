@@ -758,7 +758,7 @@ debit_player(GID, PID, Amount)
 texas_holdem_mods(StartDelay) ->
 		[
 		 %% start delay
-		 {wait_for_players, [StartDelay]}, 
+		 {game_wait_players, [StartDelay]}, 
 		 %% blind rules
 		 {blinds, []},
 		 %% deal 2 cards to each player
@@ -814,14 +814,14 @@ irc_texas_mods(StartDelay, Barrier) ->
 								++ [{delayed_exit, []}];
 				true ->
 						%% start delay
-						[{wait_for_players, [StartDelay]}|Mods]
+						[{game_wait_players, [StartDelay]}|Mods]
 								++ [{restart, []}]
 		end.
 
 %% texas_tourney_config(StartDelay) ->
 %%		 Modules = [
 %%								%% start delay
-%%								{wait_for_players, [StartDelay]}, 
+%%								{game_wait_players, [StartDelay]}, 
 %%								%% blind rules
 %%								{blinds, []},
 %%								%% deal 2 cards to each player
