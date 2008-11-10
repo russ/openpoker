@@ -1,6 +1,6 @@
 %%%% Copyright (C) 2005-2008 Wager Labs, SA
 
--module(tourney_start).
+-module(tourney_game_start).
 
 -export([start/3, tourney_start/3]).
 
@@ -12,18 +12,18 @@
 %%% Wait to be bumped by the tournament controller
 
 start(Game, Ctx, [Barrier]) ->
-    process_flag(trap_exit, true),
-    link(Barrier),
-    Game1 = Game#game{ barrier = Barrier },
-    %% reset call amount
-    Ctx1 = Ctx#texas{ call = 0 },    
-    {next, tourney_start, Game1, Ctx1}.
+		process_flag(trap_exit, true),
+		link(Barrier),
+		Game1 = Game#game{ barrier = Barrier },
+		%% reset call amount
+		Ctx1 = Ctx#texas{ call = 0 },		 
+		{next, tourney_start, Game1, Ctx1}.
 
 tourney_start(Game, Ctx, {'EXIT', Barrier, _})
-  when Barrier == Game#game.barrier ->
-    g:notify_start_game(Game),
-    {stop, Game, Ctx};
+	when Barrier == Game#game.barrier ->
+		g:notify_start_game(Game),
+		{stop, Game, Ctx};
 
 tourney_start(Game, Ctx, _) ->
-    {skip, Game, Ctx}.
+		{skip, Game, Ctx}.
 

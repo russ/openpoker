@@ -1,9 +1,9 @@
 -record(connect, {
-          socket
-         }).
+					socket
+				 }).
 
 -record(our_game, {
-          game,
-          seat
-         }).
+					game,
+					seat
+				 }).
 

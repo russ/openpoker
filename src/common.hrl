@@ -16,11 +16,11 @@
 -define(STATS, {global, stats}).
 
 -record(test_game, {
-	  irc_id,
-	  winners,
-	  nicks,
-	  trace
-	 }).
+					irc_id,
+					winners,
+					nicks,
+					trace
+				 }).
 
 -define(PLAYER_TIMEOUT, 15000).
 -define(START_DELAY, 14000).
@@ -60,10 +60,10 @@
 -define(LT_POT_LIMIT, 2).
 
 -record(limit, {
-          type,
-          low,
-          high
-          }).
+					type,
+					low,
+					high
+				 }).
 
 %%% Query operator
 
@@ -73,9 +73,9 @@
 -define(OP_GREATER, 3).
 
 -record(query_op, {
-          op,
-          val
-         }).
+					op,
+					val
+				 }).
 
 %%% Player state
 
@@ -93,44 +93,44 @@
 -define(PS_OUT, 1024). % can't play anymore
 
 -define(PS_ANY, 
-	?PS_PLAY bor
-	?PS_FOLD bor
-	?PS_WAIT_BB bor
-	?PS_SIT_OUT bor
-	?PS_MAKEUP_BB bor
-	?PS_ALL_IN bor
-	?PS_BET bor 
-        ?PS_AUTOPLAY).
+				?PS_PLAY bor
+				?PS_FOLD bor
+				?PS_WAIT_BB bor
+				?PS_SIT_OUT bor
+				?PS_MAKEUP_BB bor
+				?PS_ALL_IN bor
+				?PS_BET bor 
+				?PS_AUTOPLAY).
 
 -define(PS_ACTIVE, 
-	?PS_PLAY bor 
-	?PS_MAKEUP_BB).
+				?PS_PLAY bor 
+				?PS_MAKEUP_BB).
 
 -define(PS_BB_ACTIVE, 
-	?PS_PLAY bor
-	?PS_WAIT_BB bor
-	?PS_MAKEUP_BB).
+				?PS_PLAY bor
+				?PS_WAIT_BB bor
+				?PS_MAKEUP_BB).
 
 -define(PS_READY,
-         ?PS_STANDING bor
-         ?PS_BB_ACTIVE bor
-         ?PS_FOLD).
+				?PS_STANDING bor
+				?PS_BB_ACTIVE bor
+				?PS_FOLD).
 
 -define(PS_SHOWDOWN, 
-	?PS_PLAY bor
-	?PS_BET bor
-	?PS_ALL_IN).
+				?PS_PLAY bor
+				?PS_BET bor
+				?PS_ALL_IN).
 
 -define(PS_STANDING, 
-	?PS_PLAY bor
-	?PS_ALL_IN bor
-	?PS_BET).
+				?PS_PLAY bor
+				?PS_ALL_IN bor
+				?PS_BET).
 
 -define(PS_CAN_LEAVE,
-        ?PS_FOLD bor
-        ?PS_WAIT_BB bor
-        ?PS_SIT_OUT bor
-        ?PS_MAKEUP_BB).
+				?PS_FOLD bor
+				?PS_WAIT_BB bor
+				?PS_SIT_OUT bor
+				?PS_MAKEUP_BB).
 
 %%% Face
 
@@ -169,17 +169,17 @@
 -define(HC_STRAIGHT_FLUSH, 8).
 
 -record(hand, {
-	  player = none,
-          pid = none,
-	  cards = [], 
-	  rank = none,
-	  high1 = none,
-          high2 = none,
-	  score = 0
-	 }).
+					player = none,
+					pid = none,
+					cards = [], 
+					rank = none,
+					high1 = none,
+					high2 = none,
+					score = 0
+				 }).
 
 -record(player_hand, {
-          rank = ?HC_HIGH_CARD,
-          high1 = ?CF_NONE,
-          high2 = ?CF_NONE
-         }).
+					rank = ?HC_HIGH_CARD,
+					high1 = ?CF_NONE,
+					high2 = ?CF_NONE
+				 }).
