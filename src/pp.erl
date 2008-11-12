@@ -22,6 +22,33 @@ internal() ->
 		{fun(Acc, _) -> Acc end, 
 		 fun(Bin) -> {undefined, Bin} end}.
 
+year() ->
+		int().
+
+month() ->
+		byte().
+
+day() ->
+		byte().
+
+date() ->
+		tuple({year(), month(), day()}).
+
+hour() ->
+		byte().
+
+minute() ->
+		byte().
+
+second() ->
+		byte().
+
+time() ->
+		tuple({hour(), minute(), second()}).
+
+datetime() ->
+		tuple({date(), time()}).
+
 timestamp() ->
 		tuple({int(), int(), int()}).
 
@@ -56,16 +83,16 @@ rigged_deck() ->
 		cards().
 
 seat_count() ->
-		int().
+		int(). % XXX byte()
 
 required_players() ->
-		int().
+		int(). % XXX byte()
 
 joined_players() ->
-		int().
+		int(). % XXX byte()
 
 waiting_players() ->
-		int().
+		int(). % XXX byte()
 
 player_timeout() ->
 		int().
@@ -553,7 +580,7 @@ tourney_info() ->
 						 seat_count(),
 						 int(),
 						 int(),
-						 int(), %% start_time???,
+						 datetime(), 
 						 amount(),
 						 amount(),
 						 amount(),

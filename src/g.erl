@@ -755,10 +755,8 @@ debit_player(GID, PID, Amount)
 						Any
 		end.
 
-texas_holdem_mods(StartDelay) ->
+core_texas_mods() ->
 		[
-		 %% start delay
-		 {game_wait_players, [StartDelay]}, 
 		 %% blind rules
 		 {blinds, []},
 		 %% deal 2 cards to each player
@@ -778,9 +776,20 @@ texas_holdem_mods(StartDelay) ->
 		 %% river
 		 {betting, [?MAX_RAISES, ?GS_RIVER]}, 
 		 %% showdown
-		 {showdown, []},
-		 {restart, []}
+		 {showdown, []}
 		].
+		 
+tourney_texas_mods(T) ->
+		[ {tourney_game_start, [T]},
+			{ante, []} ] 
+				++ core_texas_mods() 
+				++ [ {tourney_game_end, []},
+						 {restart, []} ].
+		
+texas_holdem_mods(StartDelay) ->
+		[ {game_wait_players, [StartDelay]} ] 
+				++ core_texas_mods() 
+				++ [ {restart, []} ].
 
 irc_texas_mods(StartDelay, Barrier) ->
 		%% irc texas differs slightly in application of button 

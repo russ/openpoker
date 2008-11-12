@@ -79,7 +79,7 @@
 -record(tab_tourney_config, {
 					id,
 					type, % normal or sit&go
-					max_players,
+					max_players, % # players required to start
 					seat_count, % per table
 					start_time,
 					buyin, % 
