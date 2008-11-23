@@ -1,5 +1,6 @@
 -record(tourney, {
 					tid,
 					config,
-					barrier
+					barrier,
+          joined
 				 }).

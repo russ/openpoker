@@ -1,5 +1,7 @@
 %%%% Copyright (C) 2005-2008 Wager Labs, SA
 
+%%% Main tournament module. Analogous to game.
+
 -module(tourney).
 -behaviour(exch).
 
@@ -14,6 +16,7 @@
 -include("schema.hrl").
 -include("lang.hrl").
 -include("tourney.hrl").
+-include("texas.hrl").
 
 id() ->
 		counter:bump(tourney).
@@ -24,10 +27,10 @@ make(R = #start_game{}) ->
 		%% and blinds position for texas hold'em.
 		Mods = case R#start_game.type of
 							 ?GT_IRC_TEXAS ->
-									 irc_texas_mods(R#start_game.start_delay,
-																	R#start_game.barrier);
+									 g:irc_texas_mods(R#start_game.start_delay,
+                                    R#start_game.barrier);
 							 ?GT_TEXAS_HOLDEM ->
-									 texas_holdem_mods(R#start_game.start_delay) 
+									 g:texas_holdem_mods(R#start_game.start_delay) 
 					 end,
 		make(R, #texas{}, Mods).
 
@@ -39,7 +42,7 @@ make(R = #start_game{}, Ctx, Mods) ->
 start([TID, Config]) ->
 		#tourney{ tid = TID, config = Config }.
 
-stop(Tour) 
+stop(T) 
 	when is_record(T, tourney) ->
 		ok = db:delete (tab_tourney, T#tourney.tid).
 

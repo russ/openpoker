@@ -2,21 +2,22 @@
 
 -module(tourney_wait_timer).
 
--export([start/3, game_start/3]).
+-export([start/3, wait/3]).
 
 -include("common.hrl").
 -include("pp.hrl").
+-include("schema.hrl").
 -include("tourney.hrl").
 
--define(?TIMEOUT, 300000).
+-define(TIMEOUT, 300000).
 
-start(T, Ctx, []) ->
+start(T, _, []) ->
 		StartTime = (T#tourney.config)#tab_tourney_config.start_time,
-		Future = datetime_to_now(StarTime),
+		Future = datetime_to_now(StartTime),
 		erlang:start_timer(?TIMEOUT, self(), none),
-		{next, wait_for_players, T, Future}.
+		{next, wait, T, Future}.
 
-wait_for_players(T, Future, {timeout, _, _}) ->
+wait(T, Future, {timeout, _, _}) ->
 		Now = now(),
 		if
 				Now > Future ->
@@ -24,9 +25,9 @@ wait_for_players(T, Future, {timeout, _, _}) ->
 				true ->
 						erlang:start_timer(?TIMEOUT, self(), none),
 						{continue, T, Future}
-		end.
+		end;
 
-wait_for_players(T, Ctx, _) ->
+wait(T, Ctx, _) ->
 		{skip, T, Ctx}.
 
 %%% calendar:datetime_to_gregorian_seconds({{1970,1,1}, {0,0,0}})
