@@ -2,7 +2,8 @@
 
 -module(pp).
 
--export([read/1, write/1, test/0, id_to_game/1, send/3]).
+-export([read/1, write/1, test/0, send/3]).
+-export([id_to_player/1, id_to_game/1, id_to_tourney/1]).
 
 -include("test.hrl").
 -include("common.hrl").
@@ -31,7 +32,7 @@ month() ->
 day() ->
 		byte().
 
-date() ->
+date_() ->
 		tuple({year(), month(), day()}).
 
 hour() ->
@@ -43,11 +44,11 @@ minute() ->
 second() ->
 		byte().
 
-time() ->
+time_() ->
 		tuple({hour(), minute(), second()}).
 
 datetime() ->
-		tuple({date(), time()}).
+		tuple({date_(), time_()}).
 
 timestamp() ->
 		tuple({int(), int(), int()}).
