@@ -27,7 +27,7 @@ all() ->
 		player:test(),
 		game:test(),
 		deck:test(),
-		wait_for_players:test(),
+		game_wait_players:test(),
 		blinds:test(),
 		betting:test(),
 		showdown:test(),
@@ -376,8 +376,8 @@ wait_for_players_test() ->
 		Ctx = #texas{},
 		Game = make_test_game(Players, 
 													Ctx,
-													[{wait_for_players, [0]}]),
-		gen_server:cast(Game, {'NOTE', wait_for_players}),
+													[{game_wait_players, [0]}]),
+		gen_server:cast(Game, {'NOTE', game_wait_players}),
 		?assertEqual({'EXCH EXIT', Game, Ctx}, wait()), 
 		cleanup_players(Players),
 		?assertEqual(ok, stop_game(Game)),
@@ -891,7 +891,7 @@ leave_out_of_turn_test() ->
 %%		 GID.
 
 modules() -> 
-		[{wait_for_players, [1000]}, 
+		[{game_wait_players, [1000]}, 
 		 {delay, [100]},
 		 {blinds, []}].
 
