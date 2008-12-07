@@ -8,12 +8,12 @@
 -include("common.hrl").
 
 raise(Low, _, Pot, _, Stage)
-	when ?GS_PREFLOP == Stage ->
-		{Low, Pot};
+  when ?GS_PREFLOP == Stage ->
+    {Low, Pot};
 
 raise(_, High, Pot, _, _) ->
-		{High, Pot}.
+    {High, Pot}.
 
 blinds(Low, High) ->
-		{Low, High}.
+    {Low, High}.
 

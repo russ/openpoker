@@ -12,23 +12,23 @@
 -define(TIMEOUT, 300000).
 
 start(T, _, []) ->
-		StartTime = (T#tourney.config)#tab_tourney_config.start_time,
-		Future = datetime_to_now(StartTime),
-		erlang:start_timer(?TIMEOUT, self(), none),
-		{next, wait, T, Future}.
+    StartTime = (T#tourney.config)#tab_tourney_config.start_time,
+    Future = datetime_to_now(StartTime),
+    erlang:start_timer(?TIMEOUT, self(), none),
+    {next, wait, T, Future}.
 
 wait(T, Future, {timeout, _, _}) ->
-		Now = now(),
-		if
-				Now > Future ->
-						{stop, T, Future};
-				true ->
-						erlang:start_timer(?TIMEOUT, self(), none),
-						{continue, T, Future}
-		end;
+    Now = now(),
+    if
+        Now > Future ->
+            {stop, T, Future};
+        true ->
+            erlang:start_timer(?TIMEOUT, self(), none),
+            {continue, T, Future}
+    end;
 
 wait(T, Ctx, _) ->
-		{skip, T, Ctx}.
+    {skip, T, Ctx}.
 
 %%% calendar:datetime_to_gregorian_seconds({{1970,1,1}, {0,0,0}})
 

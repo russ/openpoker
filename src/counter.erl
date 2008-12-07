@@ -7,14 +7,14 @@
 -include("schema.hrl").
 
 bump(Type) ->
-		bump(Type, 1).
+    bump(Type, 1).
 
 bump(Type, Inc) ->
-		mnesia:dirty_update_counter(tab_counter, Type, Inc).		
+    mnesia:dirty_update_counter(tab_counter, Type, Inc).    
 
 reset(Type) ->
-		Counter = #tab_counter {
-			type = Type,
-			value = 0
-		 },
-		ok = db:write(Counter).
+    Counter = #tab_counter {
+      type = Type,
+      value = 0
+     },
+    ok = db:write(Counter).

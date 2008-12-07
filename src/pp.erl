@@ -11,975 +11,975 @@
 -include("schema.hrl").
 
 -import(pickle, [pickle/2, unpickle/2, byte/0, 
-								 short/0, sshort/0, int/0, sint/0, 
-								 long/0, slong/0, list/2, choice/2, 
-								 optional/1, wrap/2, tuple/1, record/2, 
-								 binary/1, string/0, wstring/0
-								]).
+                 short/0, sshort/0, int/0, sint/0, 
+                 long/0, slong/0, list/2, choice/2, 
+                 optional/1, wrap/2, tuple/1, record/2, 
+                 binary/1, string/0, wstring/0
+                ]).
 
 -define(PP_VER, 1).
 
 internal() -> 
-		{fun(Acc, _) -> Acc end, 
-		 fun(Bin) -> {undefined, Bin} end}.
+    {fun(Acc, _) -> Acc end, 
+     fun(Bin) -> {undefined, Bin} end}.
 
 year() ->
-		int().
+    int().
 
 month() ->
-		byte().
+    byte().
 
 day() ->
-		byte().
+    byte().
 
 date_() ->
-		tuple({year(), month(), day()}).
+    tuple({year(), month(), day()}).
 
 hour() ->
-		byte().
+    byte().
 
 minute() ->
-		byte().
+    byte().
 
 second() ->
-		byte().
+    byte().
 
 time_() ->
-		tuple({hour(), minute(), second()}).
+    tuple({hour(), minute(), second()}).
 
 datetime() ->
-		tuple({date_(), time_()}).
+    tuple({date_(), time_()}).
 
 timestamp() ->
-		tuple({int(), int(), int()}).
+    tuple({int(), int(), int()}).
 
 nick() ->
-		string().
+    string().
 
 pass() ->
-		string().
+    string().
 
 message() ->
-		string().
+    string().
 
 location() ->
-		string().
+    string().
 
 host() ->
-		string().
+    string().
 
 port() ->
-		short().
+    short().
 
 game_type() ->
-		byte().
+    byte().
 
 tourney_type() ->
-		byte().
+    byte().
 
 table_name() ->
-		string().
+    string().
 
 rigged_deck() ->
-		cards().
+    cards().
 
 seat_count() ->
-		int(). % XXX byte()
+    int(). % XXX byte()
 
 required_players() ->
-		int(). % XXX byte()
+    int(). % XXX byte()
 
 joined_players() ->
-		int(). % XXX byte()
+    int(). % XXX byte()
 
 waiting_players() ->
-		int(). % XXX byte()
+    int(). % XXX byte()
 
 player_timeout() ->
-		int().
+    int().
 
 start_delay() ->
-		int().
+    int().
 
 amount_to_int(Amount) ->
-		trunc(Amount * 10000).
+    trunc(Amount * 10000).
 
-int_to_amount(Int) ->		 
-		Int / 10000.0.
+int_to_amount(Int) ->    
+    Int / 10000.0.
 
 amount() ->
-		wrap({fun amount_to_int/1, fun int_to_amount/1}, int()).
+    wrap({fun amount_to_int/1, fun int_to_amount/1}, int()).
 
 total_inplay_amount() ->
-		amount().
+    amount().
 
 call_amount() ->
-		amount().
+    amount().
 
 raise_amount() ->
-		amount().
+    amount().
 
 raise_min() ->
-		amount().
+    amount().
 
 raise_max() ->
-		amount().
+    amount().
 
 stage() ->
-		byte().
+    byte().
 
 button() ->
-		byte().
+    byte().
 
 sb() ->
-		byte().
+    byte().
 
 bb() ->
-		byte().
+    byte().
 
 cards() ->
-		list(byte(), card()).
+    list(byte(), card()).
 
 card() -> 
-		short().
+    short().
 
 face() ->
-		byte().
+    byte().
 
 rank() ->
-		byte().
+    byte().
 
 player_hand() ->
-		record(player_hand, {
-						 rank(),
-						 face(),
-						 face()
-						}).
+    record(player_hand, {
+             rank(),
+             face(),
+             face()
+            }).
 
 limit_type() ->
-		byte().
+    byte().
 
 limit() ->
-		record(limit, {
-						 limit_type(),
-						 int(),
-						 int()
-						}).
+    record(limit, {
+             limit_type(),
+             int(),
+             int()
+            }).
 
 query_op() ->
-		record(query_op, {
-						 byte(),
-						 byte()
-						}).
+    record(query_op, {
+             byte(),
+             byte()
+            }).
 
 game_to_id(G) 
-	when is_pid(G) ->
-		erlang:process_display(self(), backtrace);
+  when is_pid(G) ->
+    erlang:process_display(self(), backtrace);
 
 game_to_id(GID) 
-	when is_integer(GID) ->
-		GID.
+  when is_integer(GID) ->
+    GID.
 
 id_to_game(GID) ->
-		global:whereis_name({game, GID}).
+    global:whereis_name({game, GID}).
 
 game() ->
-		game(get(pass_through)).
+    game(get(pass_through)).
 
 game(true) ->
-		int();
+    int();
 
 game(_) ->
-		wrap({fun game_to_id/1, fun id_to_game/1}, int()).
+    wrap({fun game_to_id/1, fun id_to_game/1}, int()).
 
 player_to_id(undefined) ->
-		0;
+    0;
 player_to_id(none) ->
-		0;
+    0;
 player_to_id(PID) 
-	when is_integer(PID) ->
-		PID.
+  when is_integer(PID) ->
+    PID.
 
 id_to_player(0) ->
-		undefined;
+    undefined;
 
 id_to_player(PID) ->
-		global:whereis_name({player, PID}).
+    global:whereis_name({player, PID}).
 
 player() ->
-		player(get(pass_through)).
+    player(get(pass_through)).
 
 player(true) ->
-		int();
+    int();
 
 player(_) ->
-		wrap({fun player_to_id/1, fun id_to_player/1}, int()).
+    wrap({fun player_to_id/1, fun id_to_player/1}, int()).
 
 tourney_to_id(TID) 
-	when is_integer(TID) ->
-		TID.
+  when is_integer(TID) ->
+    TID.
 
 id_to_tourney(TID) ->
-		global:whereis_name({tourney, TID}).
+    global:whereis_name({tourney, TID}).
 
 tourney() ->
-		tourney(get(pass_through)).
+    tourney(get(pass_through)).
 
 tourney(true) ->
-		int();
+    int();
 
 tourney(_) ->
-		wrap({fun tourney_to_id/1, fun id_to_tourney/1}, int()).
+    wrap({fun tourney_to_id/1, fun id_to_tourney/1}, int()).
 
 seat() ->
-		byte().
+    byte().
 
 state() ->
-		byte().
+    byte().
 
 %%% Commands 
 
 bad() ->
-		record(bad, {
-						 byte(),
-						 byte()
-						}).
+    record(bad, {
+             byte(),
+             byte()
+            }).
 
 good() ->
-		record(good, {
-						 byte()
-						}).
+    record(good, {
+             byte()
+            }).
 
 login() ->
-		record(login, {
-						 nick(),
-						 pass()
-						}).
+    record(login, {
+             nick(),
+             pass()
+            }).
 
 logout() ->
-		record(logout, {
-						}).
+    record(logout, {
+            }).
 
 watch() ->
-		record(watch, {
-						 game(),
-						 internal()
-						}).
+    record(watch, {
+             game(),
+             internal()
+            }).
 
 unwatch() ->
-		record(unwatch, {
-						 game(),
-						 internal()
-						}).
+    record(unwatch, {
+             game(),
+             internal()
+            }).
 
 wait_bb() ->
-		record(wait_bb, {
-						 game(),
-						 internal()
-						}).
+    record(wait_bb, {
+             game(),
+             internal()
+            }).
 
 raise() ->
-		record(raise, {
-						 game(),
-						 internal(),
-						 raise_amount()
-						}).
+    record(raise, {
+             game(),
+             internal(),
+             raise_amount()
+            }).
 
 notify_raise() ->
-		record(notify_raise, {
-						 game(),
-						 player(),
-						 raise_amount(),
-						 call_amount()
-						}).
+    record(notify_raise, {
+             game(),
+             player(),
+             raise_amount(),
+             call_amount()
+            }).
 
 fold() ->
-		record(fold, {
-						 game(),
-						 internal()
-						}).
+    record(fold, {
+             game(),
+             internal()
+            }).
 
 join() ->
-		record(join, {
-						 game(),
-						 internal(),
-						 seat(),
-						 amount(),
-						 internal(),
-						 internal()
-						}).
+    record(join, {
+             game(),
+             internal(),
+             seat(),
+             amount(),
+             internal(),
+             internal()
+            }).
 
 leave() ->
-		record(leave, {
-						 game(),
-						 internal(),
-						 internal()
-						}).
+    record(leave, {
+             game(),
+             internal(),
+             internal()
+            }).
 
 notify_join() ->
-		record(notify_join, {
-						 game(),
-						 player(),
-						 seat(),
-						 amount(),
-						 internal()
-						}).
+    record(notify_join, {
+             game(),
+             player(),
+             seat(),
+             amount(),
+             internal()
+            }).
 
 notify_leave() ->
-		record(notify_leave, {
-						 game(),
-						 player(),
-						 internal()
-						}).
+    record(notify_leave, {
+             game(),
+             player(),
+             internal()
+            }).
 
 sit_out() ->
-		record(sit_out, {
-						 game(),
-						 internal()
-						}).
+    record(sit_out, {
+             game(),
+             internal()
+            }).
 
 come_back() ->
-		record(come_back, {
-						 game(),
-						 internal()
-						}).
+    record(come_back, {
+             game(),
+             internal()
+            }).
 
 chat() ->
-		record(chat, {
-						 game(),
-						 internal(),
-						 message()
-						}).
+    record(chat, {
+             game(),
+             internal(),
+             message()
+            }).
 
 notify_chat() ->
-		record(notify_chat, {
-						 game(),
-						 player(),
-						 message()
-						}).
+    record(notify_chat, {
+             game(),
+             player(),
+             message()
+            }).
 
 game_query() ->
-		record(game_query, {
-						 game_type(),
-						 limit_type(),
-						 query_op(), % query op
-						 query_op(), % query op
-						 query_op()
-						}).
+    record(game_query, {
+             game_type(),
+             limit_type(),
+             query_op(), % query op
+             query_op(), % query op
+             query_op()
+            }).
 
 seat_query() ->
-		record(seat_query, {
-						 game()
-						}).
+    record(seat_query, {
+             game()
+            }).
 
 player_query() ->
-		record(player_query, {
-						 player()
-						}).
+    record(player_query, {
+             player()
+            }).
 
 balance_query() ->
-		record(balance_query, {
-						}).
+    record(balance_query, {
+            }).
 
 start_game() ->
-		record(start_game, {
-						 table_name(),
-						 game_type(),
-						 limit(),
-						 seat_count(),
-						 required_players(),
-						 start_delay(),
-						 player_timeout(),
-						 rigged_deck(),
-						 internal()
-						}).
+    record(start_game, {
+             table_name(),
+             game_type(),
+             limit(),
+             seat_count(),
+             required_players(),
+             start_delay(),
+             player_timeout(),
+             rigged_deck(),
+             internal()
+            }).
 
 game_info() ->
-		record(game_info, {
-						 game(),
-						 table_name(),
-						 game_type(),
-						 limit(),
-						 seat_count(),
-						 required_players(),
-						 joined_players(),
-						 waiting_players()
-						}).
+    record(game_info, {
+             game(),
+             table_name(),
+             game_type(),
+             limit(),
+             seat_count(),
+             required_players(),
+             joined_players(),
+             waiting_players()
+            }).
 
 player_info() ->
-		record(player_info, {
-						 player(),
-						 total_inplay_amount(), 
-						 nick(),
-						 location()
-						}).
+    record(player_info, {
+             player(),
+             total_inplay_amount(), 
+             nick(),
+             location()
+            }).
 
 bet_req() ->
-		record(bet_req, {
-						 game(),
-						 call_amount(),
-						 raise_min(),
-						 raise_max()
-						}).
+    record(bet_req, {
+             game(),
+             call_amount(),
+             raise_min(),
+             raise_max()
+            }).
 
 notify_draw() ->
-		record(notify_draw, {
-						 game(), 
-						 player(),
-						 card()
-						}).
+    record(notify_draw, {
+             game(), 
+             player(),
+             card()
+            }).
 
 notify_shared() ->
-		record(notify_shared, {
-						 game(),
-						 card()
-						}).
+    record(notify_shared, {
+             game(),
+             card()
+            }).
 
 notify_start_game() ->
-		record(notify_start_game, {
-						 game()
-						}).
+    record(notify_start_game, {
+             game()
+            }).
 
 notify_button() ->
-		record(notify_button, {
-						 game(),
-						 button()
-						}).
+    record(notify_button, {
+             game(),
+             button()
+            }).
 
 notify_sb() ->
-		record(notify_sb, {
-						 game(),
-						 sb()
-						}).
+    record(notify_sb, {
+             game(),
+             sb()
+            }).
 
 notify_bb() ->
-		record(notify_bb, {
-						 game(),
-						 bb()
-						}).
+    record(notify_bb, {
+             game(),
+             bb()
+            }).
 
 notify_end_game() ->
-		record(notify_end_game, {
-						 int()
-						}).
+    record(notify_end_game, {
+             int()
+            }).
 
 notify_cancel_game() ->
-		record(notify_cancel_game, {
-						 int()
-						}).
+    record(notify_cancel_game, {
+             int()
+            }).
 
 notify_win() ->
-		record(notify_win, {
-						 game(),
-						 player(),
-						 amount()
-						}).
+    record(notify_win, {
+             game(),
+             player(),
+             amount()
+            }).
 
 notify_hand() ->
-		record(notify_hand, {
-						 game(),
-						 player(),
-						 player_hand()
-						}).
+    record(notify_hand, {
+             game(),
+             player(),
+             player_hand()
+            }).
 
 muck() ->
-		record(muck, {
-						 game(),
-						 internal()
-						}).
+    record(muck, {
+             game(),
+             internal()
+            }).
 
 game_stage() ->
-		record(game_stage, {
-						 game(),
-						 stage()
-						}).
+    record(game_stage, {
+             game(),
+             stage()
+            }).
 
 seat_state() ->
-		record(seat_state, {
-						 game(), 
-						 seat(),
-						 state(),
-						 player(),
-						 amount()
-						}).
+    record(seat_state, {
+             game(), 
+             seat(),
+             state(),
+             player(),
+             amount()
+            }).
 
 you_are() ->
-		record(you_are, {
-						 player()
-						}).
+    record(you_are, {
+             player()
+            }).
 
 goto() ->
-		record(goto, {
-						 host(), 
-						 port()
-						}).
+    record(goto, {
+             host(), 
+             port()
+            }).
 
 balance() ->
-		record(balance, {
-						 int(),
-						 int()
-						}).
+    record(balance, {
+             int(),
+             int()
+            }).
 
 your_game() ->
-		record(your_game, {
-						 game()
-						}).
+    record(your_game, {
+             game()
+            }).
 
 show_cards() ->
-		record(show_cards, {
-						 game(),
-						 player(),
-						 cards()
-						}).
+    record(show_cards, {
+             game(),
+             player(),
+             cards()
+            }).
 
 tourney_watch() ->
-		record(tourney_watch, {
-						 tourney(),
-						 player()
-						}).
+    record(tourney_watch, {
+             tourney(),
+             player()
+            }).
 
 tourney_unwatch() ->
-		record(tourney_unwatch, {
-						 tourney(),
-						 player()
-						}).
+    record(tourney_unwatch, {
+             tourney(),
+             player()
+            }).
 
 tourney_join() ->
-		record(tourney_join, {
-						 tourney(),
-						 player(),
-						 amount()
-						}).
+    record(tourney_join, {
+             tourney(),
+             player(),
+             amount()
+            }).
 
 notify_tourney_join() ->
-		record(notify_tourney_join, {
-						 tourney(),
-						 player(),
-						 amount()
-						}).
+    record(notify_tourney_join, {
+             tourney(),
+             player(),
+             amount()
+            }).
 
 tourney_leave() ->
-		record(tourney_leave, {
-						 tourney(),
-						 player()
-						}).
+    record(tourney_leave, {
+             tourney(),
+             player()
+            }).
 
 notify_tourney_leave() ->
-		record(notify_tourney_leave, {
-						 tourney(),
-						 player()
-						}).
+    record(notify_tourney_leave, {
+             tourney(),
+             player()
+            }).
 
 tourney_query() ->
-		record(tourney_query, {
-						}).
+    record(tourney_query, {
+            }).
 
 tourney_info() ->
-		record(tourney_info, {
-						 tourney(),
-						 tourney_type(),
-						 seat_count(),
-						 int(),
-						 int(),
-						 datetime(), 
-						 amount(),
-						 amount(),
-						 amount(),
-						 amount(),
-						 byte(),
-						 byte()
-						}).
+    record(tourney_info, {
+             tourney(),
+             tourney_type(),
+             seat_count(),
+             int(),
+             int(),
+             datetime(), 
+             amount(),
+             amount(),
+             amount(),
+             amount(),
+             byte(),
+             byte()
+            }).
 
 ping() ->
-		record(ping, {
-						 timestamp()
-						}).
+    record(ping, {
+             timestamp()
+            }).
 
 pong() ->
-		record(pong, {
-						 timestamp(),
-						 timestamp(),
-						 timestamp()
-						}).
+    record(pong, {
+             timestamp(),
+             timestamp(),
+             timestamp()
+            }).
 
 %%% Pickle
 
 write(R) when is_record(R, bad) ->
-		[?CMD_BAD|pickle(bad(), R)];
+    [?CMD_BAD|pickle(bad(), R)];
 
 write(R) when is_record(R, good) ->
-		[?CMD_GOOD|pickle(good(), R)];
+    [?CMD_GOOD|pickle(good(), R)];
 
 write(R) when is_record(R, login) ->
-		[?CMD_LOGIN|pickle(login(), R)];
+    [?CMD_LOGIN|pickle(login(), R)];
 
 write(R) when is_record(R, logout) ->
-		[?CMD_LOGOUT|pickle(logout(), R)];
+    [?CMD_LOGOUT|pickle(logout(), R)];
 
 write(R) when is_record(R, watch) ->
-		[?CMD_WATCH|pickle(watch(), R)];
+    [?CMD_WATCH|pickle(watch(), R)];
 
 write(R) when is_record(R, unwatch) ->
-		[?CMD_UNWATCH|pickle(unwatch(), R)];
+    [?CMD_UNWATCH|pickle(unwatch(), R)];
 
 write(R) when is_record(R, wait_bb) ->
-		[?CMD_WAIT_BB|pickle(wait_bb(), R)];
+    [?CMD_WAIT_BB|pickle(wait_bb(), R)];
 
 write(R) when is_record(R, raise) ->
-		[?CMD_RAISE|pickle(raise(), R)];
+    [?CMD_RAISE|pickle(raise(), R)];
 
 write(R) when is_record(R, notify_raise) ->
-		[?CMD_NOTIFY_RAISE|pickle(notify_raise(), R)];
+    [?CMD_NOTIFY_RAISE|pickle(notify_raise(), R)];
 
 write(R) when is_record(R, fold) ->
-		[?CMD_FOLD|pickle(fold(), R)];
+    [?CMD_FOLD|pickle(fold(), R)];
 
 write(R) when is_record(R, join) ->
-		[?CMD_JOIN|pickle(join(), R)];
+    [?CMD_JOIN|pickle(join(), R)];
 
 write(R) when is_record(R, notify_join) ->
-		[?CMD_NOTIFY_JOIN|pickle(notify_join(), R)];
+    [?CMD_NOTIFY_JOIN|pickle(notify_join(), R)];
 
 write(R) when is_record(R, leave) ->
-		[?CMD_LEAVE|pickle(leave(), R)];
+    [?CMD_LEAVE|pickle(leave(), R)];
 
 write(R) when is_record(R, notify_leave) ->
-		[?CMD_NOTIFY_LEAVE|pickle(notify_leave(), R)];
+    [?CMD_NOTIFY_LEAVE|pickle(notify_leave(), R)];
 
 write(R) when is_record(R, sit_out) ->
-		[?CMD_SIT_OUT|pickle(sit_out(), R)];
+    [?CMD_SIT_OUT|pickle(sit_out(), R)];
 
 write(R) when is_record(R, come_back) ->
-		[?CMD_COME_BACK|pickle(come_back(), R)];
+    [?CMD_COME_BACK|pickle(come_back(), R)];
 
 write(R) when is_record(R, chat) ->
-		[?CMD_CHAT|pickle(chat(), R)];
+    [?CMD_CHAT|pickle(chat(), R)];
 
 write(R) when is_record(R, notify_chat) ->
-		[?CMD_NOTIFY_CHAT|pickle(notify_chat(), R)];
+    [?CMD_NOTIFY_CHAT|pickle(notify_chat(), R)];
 
 write(R) when is_record(R, game_query) ->
-		[?CMD_GAME_QUERY|pickle(game_query(), R)];
+    [?CMD_GAME_QUERY|pickle(game_query(), R)];
 
 write(R) when is_record(R, seat_query) ->
-		[?CMD_SEAT_QUERY|pickle(seat_query(), R)];
+    [?CMD_SEAT_QUERY|pickle(seat_query(), R)];
 
 write(R) when is_record(R, player_query) ->
-		[?CMD_PLAYER_QUERY|pickle(player_query(), R)];
+    [?CMD_PLAYER_QUERY|pickle(player_query(), R)];
 
 write(R) when is_record(R, balance_query) ->
-		[?CMD_BALANCE_QUERY|pickle(balance_query(), R)];
+    [?CMD_BALANCE_QUERY|pickle(balance_query(), R)];
 
 write(R) when is_record(R, start_game) ->
-		[?CMD_START_GAME|pickle(start_game(), R)];
+    [?CMD_START_GAME|pickle(start_game(), R)];
 
 write(R) when is_record(R, game_info) ->
-		[?CMD_GAME_INFO|pickle(game_info(), R)];
+    [?CMD_GAME_INFO|pickle(game_info(), R)];
 
 write(R) when is_record(R, player_info) ->
-		[?CMD_PLAYER_INFO|pickle(player_info(), R)];
+    [?CMD_PLAYER_INFO|pickle(player_info(), R)];
 
 write(R) when is_record(R, bet_req) ->
-		[?CMD_BET_REQ|pickle(bet_req(), R)];
+    [?CMD_BET_REQ|pickle(bet_req(), R)];
 
 write(R) when is_record(R, notify_draw) ->
-		[?CMD_NOTIFY_DRAW|pickle(notify_draw(), R)];
+    [?CMD_NOTIFY_DRAW|pickle(notify_draw(), R)];
 
 write(R) when is_record(R, notify_shared) ->
-		[?CMD_NOTIFY_SHARED|pickle(notify_shared(), R)];
+    [?CMD_NOTIFY_SHARED|pickle(notify_shared(), R)];
 
 write(R) when is_record(R, notify_start_game) ->
-		[?CMD_NOTIFY_START_GAME|pickle(notify_start_game(), R)];
+    [?CMD_NOTIFY_START_GAME|pickle(notify_start_game(), R)];
 
 write(R) when is_record(R, notify_end_game) ->
-		[?CMD_NOTIFY_END_GAME|pickle(notify_end_game(), R)];
+    [?CMD_NOTIFY_END_GAME|pickle(notify_end_game(), R)];
 
 write(R) when is_record(R, notify_cancel_game) ->
-		[?CMD_NOTIFY_CANCEL_GAME|pickle(notify_cancel_game(), R)];
+    [?CMD_NOTIFY_CANCEL_GAME|pickle(notify_cancel_game(), R)];
 
 write(R) when is_record(R, notify_win) ->
-		[?CMD_NOTIFY_WIN|pickle(notify_win(), R)];
+    [?CMD_NOTIFY_WIN|pickle(notify_win(), R)];
 
 write(R) when is_record(R, notify_hand) ->
-		[?CMD_NOTIFY_HAND|pickle(notify_hand(), R)];
+    [?CMD_NOTIFY_HAND|pickle(notify_hand(), R)];
 
 write(R) when is_record(R, muck) ->
-		[?CMD_MUCK|pickle(muck(), R)];
+    [?CMD_MUCK|pickle(muck(), R)];
 
 write(R) when is_record(R, game_stage) ->
-		[?CMD_GAME_STAGE|pickle(game_stage(), R)];
+    [?CMD_GAME_STAGE|pickle(game_stage(), R)];
 
 write(R) when is_record(R, seat_state) ->
-		[?CMD_SEAT_STATE|pickle(seat_state(), R)];
+    [?CMD_SEAT_STATE|pickle(seat_state(), R)];
 
 write(R) when is_record(R, you_are) ->
-		[?CMD_YOU_ARE|pickle(you_are(), R)];
+    [?CMD_YOU_ARE|pickle(you_are(), R)];
 
 write(R) when is_record(R, goto) ->
-		[?CMD_GOTO|pickle(goto(), R)];
+    [?CMD_GOTO|pickle(goto(), R)];
 
 write(R) when is_record(R, balance) ->
-		[?CMD_BALANCE|pickle(balance(), R)];
+    [?CMD_BALANCE|pickle(balance(), R)];
 
 write(R) when is_record(R, notify_button) ->
-		[?CMD_NOTIFY_BUTTON|pickle(notify_button(), R)];
+    [?CMD_NOTIFY_BUTTON|pickle(notify_button(), R)];
 
 write(R) when is_record(R, notify_sb) ->
-		[?CMD_NOTIFY_SB|pickle(notify_sb(), R)];
+    [?CMD_NOTIFY_SB|pickle(notify_sb(), R)];
 
 write(R) when is_record(R, notify_bb) ->
-		[?CMD_NOTIFY_BB|pickle(notify_bb(), R)];
+    [?CMD_NOTIFY_BB|pickle(notify_bb(), R)];
 
 write(R) when is_record(R, your_game) ->
-		[?CMD_YOUR_GAME|pickle(your_game(), R)];
+    [?CMD_YOUR_GAME|pickle(your_game(), R)];
 
 write(R) when is_record(R, show_cards) ->
-		[?CMD_SHOW_CARDS|pickle(show_cards(), R)];
+    [?CMD_SHOW_CARDS|pickle(show_cards(), R)];
 
 write(R) when is_record(R, notify_tourney_leave) ->
-		[?CMD_NOTIFY_TOURNEY_LEAVE|pickle(notify_tourney_leave(), R)];
+    [?CMD_NOTIFY_TOURNEY_LEAVE|pickle(notify_tourney_leave(), R)];
 
 write(R) when is_record(R, tourney_leave) ->
-		[?CMD_TOURNEY_LEAVE|pickle(tourney_leave(), R)];
+    [?CMD_TOURNEY_LEAVE|pickle(tourney_leave(), R)];
 
 write(R) when is_record(R, notify_tourney_join) ->
-		[?CMD_NOTIFY_TOURNEY_JOIN|pickle(notify_tourney_join(), R)];
+    [?CMD_NOTIFY_TOURNEY_JOIN|pickle(notify_tourney_join(), R)];
 
 write(R) when is_record(R, tourney_watch) ->
-		[?CMD_TOURNEY_WATCH|pickle(tourney_watch(), R)];
+    [?CMD_TOURNEY_WATCH|pickle(tourney_watch(), R)];
 
 write(R) when is_record(R, tourney_unwatch) ->
-		[?CMD_TOURNEY_UNWATCH|pickle(tourney_unwatch(), R)];
+    [?CMD_TOURNEY_UNWATCH|pickle(tourney_unwatch(), R)];
 
 write(R) when is_record(R, tourney_join) ->
-		[?CMD_TOURNEY_JOIN|pickle(tourney_join(), R)];
+    [?CMD_TOURNEY_JOIN|pickle(tourney_join(), R)];
 
 write(R) when is_record(R, tourney_query) ->
-		[?CMD_TOURNEY_QUERY|pickle(tourney_query(), R)];
+    [?CMD_TOURNEY_QUERY|pickle(tourney_query(), R)];
 
 write(R) when is_record(R, tourney_info) ->
-		[?CMD_TOURNEY_INFO|pickle(tourney_info(), R)];
+    [?CMD_TOURNEY_INFO|pickle(tourney_info(), R)];
 
 write(R) when is_record(R, ping) ->
-		[?CMD_PING|pickle(ping(), R)];
+    [?CMD_PING|pickle(ping(), R)];
 
 write(R) when is_record(R, pong) ->
-		[?CMD_PONG|pickle(pong(), R)].
+    [?CMD_PONG|pickle(pong(), R)].
 
 %%% Unpickle
 
 read(<<?CMD_BAD, Bin/binary>>) ->
-		unpickle(bad(), Bin);
+    unpickle(bad(), Bin);
 
 read(<<?CMD_GOOD, Bin/binary>>) ->
-		unpickle(good(), Bin);
+    unpickle(good(), Bin);
 
 read(<<?CMD_LOGIN, Bin/binary>>) ->
-		unpickle(login(), Bin);
+    unpickle(login(), Bin);
 
 read(<<?CMD_LOGOUT, Bin/binary>>) ->
-		unpickle(logout(), Bin);
+    unpickle(logout(), Bin);
 
 read(<<?CMD_WATCH, Bin/binary>>) ->
-		unpickle(watch(), Bin);
+    unpickle(watch(), Bin);
 
 read(<<?CMD_UNWATCH, Bin/binary>>) ->
-		unpickle(unwatch(), Bin);
+    unpickle(unwatch(), Bin);
 
 read(<<?CMD_WAIT_BB, Bin/binary>>) ->
-		unpickle(wait_bb(), Bin);
+    unpickle(wait_bb(), Bin);
 
 read(<<?CMD_RAISE, Bin/binary>>) ->
-		unpickle(raise(), Bin);
+    unpickle(raise(), Bin);
 
 read(<<?CMD_NOTIFY_RAISE, Bin/binary>>) ->
-		unpickle(notify_raise(), Bin);
+    unpickle(notify_raise(), Bin);
 
 read(<<?CMD_FOLD, Bin/binary>>) ->
-		unpickle(fold(), Bin);
+    unpickle(fold(), Bin);
 
 read(<<?CMD_JOIN, Bin/binary>>) ->
-		unpickle(join(), Bin);
+    unpickle(join(), Bin);
 
 read(<<?CMD_NOTIFY_JOIN, Bin/binary>>) ->
-		unpickle(notify_join(), Bin);
+    unpickle(notify_join(), Bin);
 
 read(<<?CMD_LEAVE, Bin/binary>>) ->
-		unpickle(leave(), Bin);
+    unpickle(leave(), Bin);
 
 read(<<?CMD_NOTIFY_LEAVE, Bin/binary>>) ->
-		unpickle(notify_leave(), Bin);
+    unpickle(notify_leave(), Bin);
 
 read(<<?CMD_SIT_OUT, Bin/binary>>) ->
-		unpickle(sit_out(), Bin);
+    unpickle(sit_out(), Bin);
 
 read(<<?CMD_COME_BACK, Bin/binary>>) ->
-		unpickle(come_back(), Bin);
+    unpickle(come_back(), Bin);
 
 read(<<?CMD_CHAT, Bin/binary>>) ->
-		unpickle(chat(), Bin);
+    unpickle(chat(), Bin);
 
 read(<<?CMD_NOTIFY_CHAT, Bin/binary>>) ->
-		unpickle(notify_chat(), Bin);
+    unpickle(notify_chat(), Bin);
 
 read(<<?CMD_GAME_QUERY, Bin/binary>>) ->
-		unpickle(game_query(), Bin);
+    unpickle(game_query(), Bin);
 
 read(<<?CMD_SEAT_QUERY, Bin/binary>>) ->
-		unpickle(seat_query(), Bin);
+    unpickle(seat_query(), Bin);
 
 read(<<?CMD_PLAYER_QUERY, Bin/binary>>) ->
-		unpickle(player_query(), Bin);
+    unpickle(player_query(), Bin);
 
 read(<<?CMD_BALANCE_QUERY, Bin/binary>>) ->
-		unpickle(balance_query(), Bin);
+    unpickle(balance_query(), Bin);
 
 read(<<?CMD_START_GAME, Bin/binary>>) ->
-		unpickle(start_game(), Bin);
+    unpickle(start_game(), Bin);
 
 read(<<?CMD_GAME_INFO, Bin/binary>>) ->
-		unpickle(game_info(), Bin);
+    unpickle(game_info(), Bin);
 
 read(<<?CMD_PLAYER_INFO, Bin/binary>>) ->
-		unpickle(player_info(), Bin);
+    unpickle(player_info(), Bin);
 
 read(<<?CMD_BET_REQ, Bin/binary>>) ->
-		unpickle(bet_req(), Bin);
+    unpickle(bet_req(), Bin);
 
 read(<<?CMD_NOTIFY_DRAW, Bin/binary>>) ->
-		unpickle(notify_draw(), Bin);
+    unpickle(notify_draw(), Bin);
 
 read(<<?CMD_NOTIFY_SHARED, Bin/binary>>) ->
-		unpickle(notify_shared(), Bin);
+    unpickle(notify_shared(), Bin);
 
 read(<<?CMD_NOTIFY_START_GAME, Bin/binary>>) ->
-		unpickle(notify_start_game(), Bin);
+    unpickle(notify_start_game(), Bin);
 
 read(<<?CMD_NOTIFY_END_GAME, Bin/binary>>) ->
-		unpickle(notify_end_game(), Bin);
+    unpickle(notify_end_game(), Bin);
 
 read(<<?CMD_NOTIFY_CANCEL_GAME, Bin/binary>>) ->
-		unpickle(notify_cancel_game(), Bin);
+    unpickle(notify_cancel_game(), Bin);
 
 read(<<?CMD_NOTIFY_WIN, Bin/binary>>) ->
-		unpickle(notify_win(), Bin);
+    unpickle(notify_win(), Bin);
 
 read(<<?CMD_NOTIFY_HAND, Bin/binary>>) ->
-		unpickle(notify_hand(), Bin);
+    unpickle(notify_hand(), Bin);
 
 read(<<?CMD_MUCK, Bin/binary>>) ->
-		unpickle(muck(), Bin);
+    unpickle(muck(), Bin);
 
 read(<<?CMD_GAME_STAGE, Bin/binary>>) ->
-		unpickle(game_stage(), Bin);
+    unpickle(game_stage(), Bin);
 
 read(<<?CMD_SEAT_STATE, Bin/binary>>) ->
-		unpickle(seat_state(), Bin);
+    unpickle(seat_state(), Bin);
 
 read(<<?CMD_YOU_ARE, Bin/binary>>) ->
-		unpickle(you_are(), Bin);
+    unpickle(you_are(), Bin);
 
 read(<<?CMD_GOTO, Bin/binary>>) ->
-		unpickle(goto(), Bin);
+    unpickle(goto(), Bin);
 
 read(<<?CMD_BALANCE, Bin/binary>>) ->
-		unpickle(balance(), Bin);
+    unpickle(balance(), Bin);
 
 read(<<?CMD_NOTIFY_BUTTON, Bin/binary>>) ->
-		unpickle(notify_button(), Bin);
+    unpickle(notify_button(), Bin);
 
 read(<<?CMD_NOTIFY_SB, Bin/binary>>) ->
-		unpickle(notify_sb(), Bin);
+    unpickle(notify_sb(), Bin);
 
 read(<<?CMD_NOTIFY_BB, Bin/binary>>) ->
-		unpickle(notify_bb(), Bin);
+    unpickle(notify_bb(), Bin);
 
 read(<<?CMD_YOUR_GAME, Bin/binary>>) ->
-		unpickle(your_game(), Bin);
+    unpickle(your_game(), Bin);
 
 read(<<?CMD_SHOW_CARDS, Bin/binary>>) ->
-		unpickle(show_cards(), Bin);
+    unpickle(show_cards(), Bin);
 
 read(<<?CMD_NOTIFY_TOURNEY_LEAVE, Bin/binary>>) ->
-		unpickle(notify_tourney_leave(), Bin);
+    unpickle(notify_tourney_leave(), Bin);
 
 read(<<?CMD_TOURNEY_LEAVE, Bin/binary>>) ->
-		unpickle(tourney_leave(), Bin);
+    unpickle(tourney_leave(), Bin);
 
 read(<<?CMD_NOTIFY_TOURNEY_JOIN, Bin/binary>>) ->
-		unpickle(notify_tourney_join(), Bin);
+    unpickle(notify_tourney_join(), Bin);
 
 read(<<?CMD_TOURNEY_WATCH, Bin/binary>>) ->
-		unpickle(tourney_watch(), Bin);
+    unpickle(tourney_watch(), Bin);
 
 read(<<?CMD_TOURNEY_UNWATCH, Bin/binary>>) ->
-		unpickle(tourney_unwatch(), Bin);
+    unpickle(tourney_unwatch(), Bin);
 
 read(<<?CMD_TOURNEY_JOIN, Bin/binary>>) ->
-		unpickle(tourney_join(), Bin);
+    unpickle(tourney_join(), Bin);
 
 read(<<?CMD_TOURNEY_QUERY, Bin/binary>>) ->
-		unpickle(tourney_query(), Bin);
+    unpickle(tourney_query(), Bin);
 
 read(<<?CMD_TOURNEY_INFO, Bin/binary>>) ->
-		unpickle(tourney_info(), Bin);
+    unpickle(tourney_info(), Bin);
 
 read(<<?CMD_PING, Bin/binary>>) ->
-		unpickle(ping(), Bin);
+    unpickle(ping(), Bin);
 
 read(<<?CMD_PONG, Bin/binary>>) ->
-		unpickle(pong(), Bin).
+    unpickle(pong(), Bin).
 
 send(Socket, Data, Ping) ->
-		Bin = list_to_binary(write(Data)),
-		io:format("SND ~p~n", [Bin]),
-		case catch gen_tcp:send(Socket, Bin) of
-				ok ->
-						ok;
-				{error, closed} ->
-						ok;
-				{error,econnaborted} ->
-						ok;
-				Any ->
-						error_logger:error_report([
-																			 {message, "gen_tcp:send error"},
-																			 {module, ?MODULE}, 
-																			 {line, ?LINE},
-																			 {socket, Socket}, 
-																			 {port_info, erlang:port_info(Socket, connected)},
-																			 {data, Data},
-																			 {bin, Bin},
-																			 {error, Any}
-																			])
-		end,
-		ping(Socket, size(Bin), Ping).
+    Bin = list_to_binary(write(Data)),
+    io:format("SND ~p~n", [Bin]),
+    case catch gen_tcp:send(Socket, Bin) of
+        ok ->
+            ok;
+        {error, closed} ->
+            ok;
+        {error,econnaborted} ->
+            ok;
+        Any ->
+            error_logger:error_report([
+                                       {message, "gen_tcp:send error"},
+                                       {module, ?MODULE}, 
+                                       {line, ?LINE},
+                                       {socket, Socket}, 
+                                       {port_info, erlang:port_info(Socket, connected)},
+                                       {data, Data},
+                                       {bin, Bin},
+                                       {error, Any}
+                                      ])
+    end,
+    ping(Socket, size(Bin), Ping).
 
 ping(_, _, false) ->
-		ok;
+    ok;
 
 ping(Socket, _Size, true) ->
-		Bin = list_to_binary(write(#ping{})),
-		case catch gen_tcp:send(Socket, Bin) of
-				ok ->
-						ok;
-				{error, closed} ->
-						ok;
-				{error,econnaborted} ->
-						ok;
-				Any ->
-						error_logger:error_report([
-																			 {message, "gen_tcp:ping error"},
-																			 {module, ?MODULE}, 
-																			 {line, ?LINE},
-																			 {socket, Socket}, 
-																			 {port_info, erlang:port_info(Socket, connected)},
-																			 {bin, Bin},
-																			 {error, Any}
-																			])
-		end,
-		%%stats:sum(packets_out, 2),
-		%%stats:sum(bytes_out, Size + size(Bin)),
-		ok.
+    Bin = list_to_binary(write(#ping{})),
+    case catch gen_tcp:send(Socket, Bin) of
+        ok ->
+            ok;
+        {error, closed} ->
+            ok;
+        {error,econnaborted} ->
+            ok;
+        Any ->
+            error_logger:error_report([
+                                       {message, "gen_tcp:ping error"},
+                                       {module, ?MODULE}, 
+                                       {line, ?LINE},
+                                       {socket, Socket}, 
+                                       {port_info, erlang:port_info(Socket, connected)},
+                                       {bin, Bin},
+                                       {error, Any}
+                                      ])
+    end,
+    %%stats:sum(packets_out, 2),
+    %%stats:sum(bytes_out, Size + size(Bin)),
+    ok.
 
 test() ->
-		ok.
+    ok.
